@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Golf — GDD</title><style>
+:root{--grass:#3faa2f;--grass-d:#2b7d21;--sand:#e8c79a;--sand-d:#c99e66;--ink:#13210f;--paper:#fbfdf8;--blue:#2f6fd0;--red:#e2452f;--yellow:#f2c31b;--muted:#5d6b56;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#eef5ea;--paper:#12180f;--muted:#9bad93;--sand:#7a5f3c;}}
+:root[data-theme="dark"]{--ink:#eef5ea;--paper:#12180f;--muted:#9bad93;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+.wrap{max-width:820px;margin:0 auto;padding:0 16px 96px}
+header{background:linear-gradient(170deg,var(--grass) 0%,var(--grass-d) 100%);color:#fff;padding:72px 16px 56px;margin-bottom:48px;
+background-image:repeating-linear-gradient(95deg,rgba(255,255,255,.07) 0 42px,transparent 42px 84px),linear-gradient(170deg,var(--grass) 0%,var(--grass-d) 100%);}
+header .wrap{padding-bottom:0}
+h1{font-size:clamp(40px,8vw,68px);margin:0 0 6px;letter-spacing:-.02em;line-height:1}
+.kicker{font-size:13px;text-transform:uppercase;letter-spacing:.16em;opacity:.8;margin:0 0 20px}
+.promise{font-size:clamp(19px,3.4vw,25px);line-height:1.4;font-weight:600;margin:24px 0 0;max-width:20em}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:56px 0 14px;font-weight:700;border-top:1px solid color-mix(in srgb,var(--muted) 30%,transparent);padding-top:18px}
+h3{font-size:17px;margin:28px 0 8px}
+p{margin:0 0 14px;max-width:66ch}
+table{border-collapse:collapse;width:100%;margin:8px 0 20px;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid color-mix(in srgb,var(--muted) 25%,transparent)}
+th{color:var(--muted);font-weight:600;white-space:nowrap}
+td:first-child{white-space:nowrap;font-weight:600}
+.loop td:first-child{white-space:normal}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;letter-spacing:.03em}
+.open{background:color-mix(in srgb,var(--yellow) 35%,transparent);color:var(--ink)}
+.hyp{background:color-mix(in srgb,var(--blue) 30%,transparent);color:var(--ink)}
+.mine{background:color-mix(in srgb,var(--red) 25%,transparent);color:var(--ink)}
+ol.pillars{padding-left:0;list-style:none;counter-reset:p;margin:0}
+ol.pillars li{counter-increment:p;padding:14px 0 14px 54px;position:relative;border-bottom:1px solid color-mix(in srgb,var(--muted) 20%,transparent)}
+ol.pillars li::before{content:counter(p);position:absolute;left:0;top:12px;width:34px;height:34px;border-radius:50%;background:var(--grass);color:#fff;display:grid;place-items:center;font-weight:800}
+figure{margin:20px 0}
+img{width:100%;height:auto;border-radius:10px;display:block;background:var(--grass-d)}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+.stamp{margin-top:72px;padding-top:18px;border-top:1px solid color-mix(in srgb,var(--muted) 30%,transparent);font-size:12.5px;color:var(--muted)}
+.note{background:color-mix(in srgb,var(--sand) 30%,transparent);border-left:3px solid var(--sand-d);padding:12px 16px;border-radius:0 8px 8px 0;font-size:14.5px;margin:20px 0}
+blockquote{margin:0;padding:14px 18px;border-left:3px solid var(--grass);background:color-mix(in srgb,var(--grass) 9%,transparent);border-radius:0 8px 8px 0;font-size:17px}
+main h1{font-size:clamp(40px,8vw,64px);margin:48px 0 8px;line-height:1}
+main h2{font-size:22px;text-transform:none;letter-spacing:0;color:var(--ink);margin:56px 0 14px}
+main h3{font-size:16px}
+main table td:first-child{white-space:normal}
+main blockquote p{margin:0}
+.pill{white-space:normal;font-weight:600}
+</style></head><body><main class="wrap">
+<h1>Pixel Golf</h1>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Public experience title</td>
+<td>Pixel Golf — IP &amp; Content Policy self-check: clear (original name from the studio's own Pixel Arcade ecosystem; Topgolf appears only as a comparable)</td>
+</tr>
+<tr>
+<td>Deployment target</td>
+<td>World: pixelgolf.dcl.eth</td>
+</tr>
+<tr>
+<td>Studio / team name</td>
+<td>Big Yellow Fishes</td>
+</tr>
+<tr>
+<td>Date</td>
+<td>2026-09-21</td>
+</tr>
+<tr>
+<td>Contact (Discord + email)</td>
+<td>Discord: mkswoodbigyellowfishes · hello@bigyellowfishes.com</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>0. TL;DR</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Player promise</strong></td>
+<td>Ten balls, ten targets, one of them worth double. You choose where every ball goes.</td>
+</tr>
+<tr>
+<td><strong>Primary player</strong></td>
+<td>For players who already enjoy cosy, nostalgic games and being social in Decentraland, arriving alone or with friends, looking for relaxed, fun golf rather than a simulation.</td>
+</tr>
+<tr>
+<td><strong>Current status</strong></td>
+<td>sketches: a look render of the range (<code>assets/look-reference-2026-09-18.png</code>); no playable build yet</td>
+</tr>
+<tr>
+<td><strong>Requested round</strong></td>
+<td>v0: a playable core loop completed by week 2 of the build, then v1 at week 4 to 5</td>
+</tr>
+<tr>
+<td><strong>Live at end of the round</strong></td>
+<td>Players play ten-ball rounds in their own bay, chase the hot target, climb daily to monthly leaderboards, and level up towards cosmetic clubs and balls.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>1. Player Promise ⛳</h2>
+<p><strong>One-line promise</strong></p>
+<blockquote>
+<p>Ten balls, ten targets, one of them worth double. You choose where every ball goes.</p>
+</blockquote>
+<hr />
+<h2>2. First Minutes &amp; How to Play 🏌️</h2>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Player experience</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>0–5 seconds after control</strong></td>
+<td>You spawn in a free bay, ball already on the tee, ready to go. Before you is the range: ten coloured target areas, the furthest almost too far to see.</td>
+</tr>
+<tr>
+<td><strong>5–10 seconds</strong></td>
+<td>Your first swing is the tutorial. One target is highlighted, with its points and an arrow above it, so you know exactly where to hit. You aim at it and confirm.</td>
+</tr>
+<tr>
+<td><strong>10–60 seconds</strong></td>
+<td>A Power bar slides from 0 to 10 and you stop it to set distance. Then an Accuracy bar slides between −10 and +10: the closer to 0 you stop it, the straighter the ball flies.</td>
+</tr>
+<tr>
+<td><strong>1–3 minutes</strong></td>
+<td>The tutorial ends when your tenth ball lands. Your total posts to the daily board and you see exactly where you sit on it.</td>
+</tr>
+<tr>
+<td><strong>3–10 minutes</strong></td>
+<td>You can leave the bay and look around, or play another round. Mid-round, one target lights up worth double and you go for it. Every round earns XP, and you notice the far targets pay more XP than the near ones.</td>
+</tr>
+<tr>
+<td><strong>Natural stopping point</strong></td>
+<td>Your name on the daily board, with the clock on it counting down to tomorrow's reset.</td>
+</tr>
+</tbody>
+</table>
+<p>The first minute is designed to meet the programme's 5/10 rule: at least 80% of players take their first useful action within 5 seconds and can state the immediate goal by 10, without help. <span class="pill open">TBD: measured in the week-2 playtest</span></p>
+<p><strong>Player-facing How to Play</strong></p>
+<ul>
+<li>Aim at a target, complete the swing cycle.</li>
+<li>Ten balls a round, points build your score.</li>
+<li>Hot targets pay double points.</li>
+</ul>
+<hr />
+<h2>3. Core Loop 🏌️</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step (verb)</th>
+<th>What the player does (Player input → what they see or hear → what changes)</th>
+<th>Why do it again?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Target</strong></td>
+<td>You choose one of the 10 target areas → it lights up and shows what it is worth, and an arrow appears whose length shows the distance to it → your distance is set</td>
+<td>Every area is a different score, and what you should go for changes as your total changes.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Aim</strong></td>
+<td>The arrow rotates left and right, and you set it at the angle you want → a faint ghost line shows roughly where the ball will go → your line is set</td>
+<td>Reading distance is a skill you feel improving over time.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Swing</strong></td>
+<td>You stop the Power bar (0 to 10) for distance, then the Accuracy bar (−10 to +10) as close to 0 as you can → the club swings, with sound → the ball launches on your line at your power</td>
+<td>The bars never change, so getting closer to the centre is improvement you can see.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Score</strong></td>
+<td>You watch the ball land → points count up, and more XP for further targets → your bay board and the leaderboards update</td>
+<td>You get to decide your next shot, and the board tells you what it needs to be.</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>One complete loop takes</strong></td>
+<td>One loop is one ball. Ten balls make one round, and the round closes when the 10th ball lands: your total posts to the leaderboards and your personal best either moves or it doesn't. Intended at roughly 20 to 30 seconds per ball, which puts a round near 4 minutes; exact timing <span class="pill open">TBD: measured once the round is playable</span>.</td>
+</tr>
+<tr>
+<td><strong>Decision, challenge, or expression</strong></td>
+<td>Which of the 10 areas to spend each ball on. Close areas are safe and cheap, far areas pay more and are easier to miss entirely. With three balls left and a personal best in reach, the choice between banking and gambling is the game.</td>
+</tr>
+<tr>
+<td><strong>Shortest satisfying visit / typical session</strong></td>
+<td>A typical session: log in and collect the daily bonus, play one ten-ball round, then either head to the AFK practice range or log off for the day. The shortest satisfying visit is that one round, intended at about 4 minutes; exact minutes <span class="pill open">TBD: measured once the round is playable</span>.</td>
+</tr>
+<tr>
+<td><strong>Why repetition 10 differs from repetition 1</strong></td>
+<td>Two sources. The player's own target choice, which changes with their running total, so no two rounds spend their balls the same way. And a <strong>hot target</strong>: one of the 10 areas lights up for everyone on the range at once, is worth double, and rotates every 30 seconds or so.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Pillars</strong></p>
+<ol>
+<li><strong>Easy to understand mechanics that can be picked up on the first use.</strong></li>
+<li><strong>Every ball is a choice.</strong> The range is a series of small bets, not a series of repetitions.</li>
+<li><strong>Nobody waits.</strong> No turns, no queue, no lobby. You walk up and swing.</li>
+</ol>
+<hr />
+<h2>4. Why Players Come Back 🔁</h2>
+<h3>4.1 The next-day (D1) sentence</h3>
+<blockquote>
+<p>"A player who enjoyed their first session returns the next day (D1) because <strong>their daily XP resets</strong> 24 hours after they last logged in, so a fresh day of XP towards their next level and unlock is waiting."</p>
+</blockquote>
+<h3>4.2 The progression chain</h3>
+<blockquote>
+<p><strong>Play rounds → earn XP → level up → unlock cosmetic clubs and balls</strong></p>
+</blockquote>
+<p>Unlocked clubs and balls are <strong>cosmetic</strong>: they change how your shot looks, never how far or how straight it flies. A new player competes on skill from their first round, so the leaderboards never become a ranking of who has played longest.</p>
+<table>
+<thead>
+<tr>
+<th>Moment</th>
+<th>What persists or has been built?</th>
+<th>What becomes possible next?</th>
+<th>How can another player tell?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>End of first session</strong></td>
+<td>XP, your first level, your name on the daily board</td>
+<td>Your first cosmetic unlock is in reach</td>
+<td>Your name on the daily board</td>
+</tr>
+<tr>
+<td><strong>End of first week</strong></td>
+<td>Several levels and your first cosmetic clubs and balls</td>
+<td>Chasing the weekly board</td>
+<td>Your club and ball look different in your bay</td>
+</tr>
+<tr>
+<td><strong>Week 3+ — what takes more than two weeks?</strong></td>
+<td>Higher levels in the levelling and progression system, and a place on the monthly board</td>
+<td>Quests (in v1 scope; <span class="pill open">TBD: quest design not discussed yet</span>), and the weekly meetups <span class="pill open">TBD: day and time to be confirmed</span></td>
+<td>Your level, your name on the monthly board, and being a regular face at the weekly meetups</td>
+</tr>
+</tbody>
+</table>
+<p><strong>End of the first week, as a scene</strong></p>
+<p>You walk into your usual bay with a club nobody had on day one, and your ball leaves a trail when it flies. You know which targets are worth the gamble now. The weekly board has your name in the middle of it, and the player two places above you is in the next bay.</p>
+<p><strong>Currency: Pixel Points.</strong> Earned by playing: every game played earns points. Spent in the clubhouse shop on cosmetic clubs and balls. Points are held per scene for now and will later carry across the wider Pixel Arcade ecosystem. Main abuse risk: idle farming, answered by design: the AFK practice range pays XP, never Pixel Points.</p>
+<h3>4.3 Two return hooks</h3>
+<table>
+<thead>
+<tr>
+<th>Selected hook</th>
+<th>Exact trigger or timing</th>
+<th>What the player anticipates</th>
+<th>Reminder channel + no-reminder fallback</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. Daily leaderboard reset</strong></td>
+<td>Every day at 00:00 UTC, for everyone at once</td>
+<td>A fresh daily board they can top, even against veterans</td>
+<td>Reminder: <span class="pill open">TBD: not discussed yet</span> · Fallback: the countdown clock on the daily board, the last thing seen before leaving</td>
+</tr>
+<tr>
+<td><strong>2. Daily XP reset</strong></td>
+<td>24 hours after the player last logged in</td>
+<td>A fresh day of XP towards their next level and cosmetic unlock. XP comes from logging in each day, and later from quests as well.</td>
+<td>Reminder: <span class="pill open">TBD: not discussed yet</span> · Fallback: <span class="pill open">TBD: not discussed yet</span></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. Social by Design 👥</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>The repeatable social loop</strong></td>
+<td>A player arrives on the map, playing or AFK → the multiplier ceiling rises for everyone: each roll lands randomly between 2x and the number of players in the space (50 players, up to 50x), and never below 2x → big rolls happen in front of a crowd → players have a reason to come when others are on. Every score posts to two boards: a <strong>True Score</strong> board (skill only, no multiplier) and a <strong>Multiplier</strong> board. The hot target doubles base points on both boards, and the multiplier stacks on top on the Multiplier board.</td>
+</tr>
+<tr>
+<td><strong>The disappearance test</strong></td>
+<td>The shared multiplier drops to its base. Rounds, leaderboards and progression all still work: Pixel Golf is designed to work when no one is around, and gets better with company.</td>
+</tr>
+<tr>
+<td><strong>From strangers to a group</strong></td>
+<td>You don't need to find a group: stepping into a bay makes you part of the range. Your arrival raises everyone's multiplier, and when the hot target lights up, the whole range swings for the same area at once, so within seconds you are playing alongside strangers without a word said.</td>
+</tr>
+<tr>
+<td><strong>Recognition &amp; continuity</strong></td>
+<td>You first learn another player's name on the daily board. Weekly and monthly boards make the same names recur.</td>
+</tr>
+<tr>
+<td><strong>Quiet hours &amp; player counts</strong></td>
+<td>Pixel Golf is designed to work with one player in the space: a solo player can play full rounds, climb both boards, level up and use the AFK practice range. Social play begins at 2 players, when the multiplier and the hot target start to be shared. Ideal group: no fixed size, since every extra player raises the multiplier ceiling and the space grows as more people engage. v1 tested maximum: 20 players, one per bay across the range's 20 bays. The multiplier never drops below 2x: a solo player always gets exactly 2x, and the random ceiling only opens up as more players arrive. What happens to a 21st player when every bay is full: <span class="pill open">TBD: to be confirmed</span></td>
+</tr>
+<tr>
+<td><strong>Drop-in / drop-out</strong></td>
+<td>Every player has their own bay and nobody takes turns, so a late arrival plays immediately and raises the multiplier. A player leaving breaks nothing for anyone else.</td>
+</tr>
+<tr>
+<td><strong>The AFK practice range</strong></td>
+<td>Where AFK players go to chat and hang out. Time there earns XP towards their level, never Pixel Points, and their presence raises the shared multiplier for everyone playing. Rate of AFK XP compared with playing: <span class="pill open">TBD: to be confirmed</span>. Practice swings on a screen: <span class="pill open">TBD: detail to be designed during the build</span>.</td>
+</tr>
+<tr>
+<td><strong>Visible play (the bystander test)</strong></td>
+<td>Watching a neighbour, you see which target they picked and whether it landed, and you learn the swing.</td>
+</tr>
+<tr>
+<td><strong>Shareable play (the memorable moment)</strong></td>
+<td>A huge multiplier roll landing on a busy night, with the whole range watching.</td>
+</tr>
+<tr>
+<td><strong>Bring-a-friend</strong></td>
+<td>Every friend who joins raises the multiplier for both of you.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Mobile-First 📱</h2>
+<p>Pixel Golf is built on desktop first and plays exactly the same on mobile, with a focus on lightweight models and textures.</p>
+<p><strong>Every core-loop verb on touch</strong></p>
+<table>
+<thead>
+<tr>
+<th>Core-loop verb</th>
+<th>How it works with touch controls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Target</td>
+<td>Tap a target area</td>
+</tr>
+<tr>
+<td>Aim</td>
+<td><span class="pill open">TBD: to be confirmed (arrow sweeps and you tap to stop it, or you drag to steer it)</span></td>
+</tr>
+<tr>
+<td>Swing</td>
+<td>Tap to stop the Power bar, tap again to stop the Accuracy bar</td>
+</tr>
+<tr>
+<td>Score</td>
+<td>No input: watch the ball land</td>
+</tr>
+</tbody>
+</table>
+<p><strong>UI plan.</strong> <span class="pill open">TBD: the UI layout will be tested with players over time to find the right setup</span></p>
+<p><strong>Performance.</strong> Lightweight models and textures throughout. Tested on the team's iPhones and Android phones at the v1 tested maximum of 20 players. Specific models and fps results: <span class="pill open">TBD: to be named when testing starts</span>. Biggest risk: asset weight across the canyon, trees and a full row of occupied bays.</p>
+<p><strong>Desktop-only dependencies.</strong> None expected, since the swing uses only tap and drag. <span class="pill open">TBD: check against the Desktop vs Mobile Feature Gap tracker before submission</span></p>
+<hr />
+<h2>7. World, Look &amp; Story 🎨</h2>
+<p><strong>The world</strong></p>
+<blockquote>
+<p>Pixel Golf is a driving range cut into the floor of a bright sandstone canyon, part of the Pixel Arcade ecosystem. The canyon walls close the range on both sides, so every ball has somewhere to land and nowhere to get lost, and the ten target areas are set flush into the fairway rather than standing on it.</p>
+</blockquote>
+<p><strong>Visual direction and small-screen readability</strong></p>
+<p>Four things carry the readability, and all four are already in the look reference:</p>
+<ul>
+<li><strong>Targets are flat coloured discs with concentric rings.</strong> Colour says which target, rings say how close you were. Both read at thumbnail size, and neither needs a label.</li>
+<li><strong>The mown stripes across the fairway are a distance ruler.</strong> A player counts bands to judge how far a target is, which is how they learn the range without a rangefinder or a number on screen.</li>
+<li><strong>The canyon walls are a fixed frame.</strong> The player always knows which way they are facing, and the scene has a hard boundary, which keeps the draw distance and the asset budget bounded.</li>
+<li><strong>Avatars in the bays sit against bright grass</strong>, so a neighbour mid-swing is legible from across the range. That is what makes the range teach itself.</li>
+</ul>
+<p><strong>Visual signature</strong></p>
+<blockquote>
+<p>A low camera at ball height, looking down a striped green fairway at ten coloured rings set flush in the grass and receding into the distance, sandstone cliffs and dark pines framing both sides.</p>
+</blockquote>
+<p>Look reference: <code>assets/look-reference-2026-09-18.png</code></p>
+<hr />
+<h2>8. Audience &amp; Comparables 🎯</h2>
+<p><strong>Primary player + arrival context</strong></p>
+<blockquote>
+<p>For players who already enjoy cosy, nostalgic games and being social in Decentraland, arriving alone or with friends, looking for relaxed, fun golf rather than a simulation.</p>
+</blockquote>
+<p><strong>How the first group arrives</strong></p>
+<p>Through the existing Pixel Arcade ecosystem, and from Decentraland players left without a golf game since Golfcraft left the platform. The game works with one player, so nobody has to wait for a crowd before it is playable; every extra arrival makes it better for everyone already there.</p>
+<p><strong>Deliberately not for</strong></p>
+<p>Players who want an accurate golf simulation: Pixel Golf is social and fun first.</p>
+<h3>Comparables</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Comparable A — outside Decentraland: <strong>Wii Sports golf</strong></th>
+<th>Comparable B — outside Decentraland: <strong>Topgolf</strong> (the anchor this game is based on)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What we observed works</td>
+<td>Anyone can take a swing within seconds of picking it up, with no golf knowledge and no reading. It is warm and unintimidating rather than a sport, and people who would never play a golf game will play this one.</td>
+<td>The bays-and-targets format is legible in about three seconds, including to people who have never held a club. Scoring by which area you land in, rather than by strokes, turns golf into a game anyone can read.</td>
+</tr>
+<tr>
+<td>What does not fit our audience or context, and why</td>
+<td>You pass the controller and wait your turn. Waiting to play is always the problem with golf, and in a persistent world with strangers in it, waiting is worse: a player who has to queue behind someone else simply leaves. A full round is also far too long for a Decentraland session.</td>
+<td>A bay is booked by the hour and shared by up to six people, so most of a paid session is spent not hitting. That is tolerable when you are out with friends and there is food on the table. In Decentraland there is no table, no food and no booking, so the same idle time has nothing to fill it and the player leaves.</td>
+</tr>
+<tr>
+<td>What we will do differently</td>
+<td>Every player hits at the same time in their own bay, and a round is ten balls rather than nine holes. The warmth and the low barrier are what we are keeping.</td>
+<td>Nobody shares a bay and nobody waits. Everyone on the range hits at the same time, in their own bay, and a round lasts about four minutes rather than an hour.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>9. 4 Week Plan (v1 scope)</h2>
+<table>
+<thead>
+<tr>
+<th>Week</th>
+<th>What is playable / done</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 — Prototype definition</td>
+<td>Map built in Blender; core design concept executed</td>
+</tr>
+<tr>
+<td>2 — Core interaction + first-group test</td>
+<td>Mechanics and the initial game concept working in Decentraland. First-group social playtest with 5 to 10 players</td>
+</tr>
+<tr>
+<td>3 — Core systems refinement</td>
+<td>Testing, and the v1 build</td>
+</tr>
+<tr>
+<td>4 — Playable prototype, final design direction (mobile playtest)</td>
+<td>Final testing, updates and marketing</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What keeps the experience changing after launch</strong></p>
+<ul>
+<li>Without building a new level, the hot target rotates every 30 seconds and the daily, weekly and monthly boards reset on schedule.</li>
+<li>If an update is skipped, the hot target and the board resets still create variation.</li>
+<li>Progression is cosmetic only, so there is no power gap: a new player can compete for the daily board in their first round.</li>
+<li>One player behaviour that would change what we build next: <span class="pill open">TBD: not discussed yet</span></li>
+</ul>
+<p><strong>Not building in v1</strong></p>
+<ol>
+<li>Carrying Pixel Points across the wider Pixel Arcade ecosystem: v1 holds them per scene only.</li>
+<li>Different game modes: v1 ships the ten-ball round only, and new modes follow after v1.</li>
+<li>Wind and other per-shot modifiers: v1 keeps the swing clean.</li>
+</ol>
+<p>If v1 hits its numbers, cross-ecosystem Pixel Points come back first.</p>
+<p><strong>Top risk + fallback.</strong> Build time running short. Fallback: cut the AFK zone from v1; the range, progression and leaderboards all work without it.</p>
+<p class="stamp">Rendered from <code>design/gdd.md</code> · v22 · 21 September 2026 · this render is for looking at and sharing; <code>design/gdd.md</code> is what gets submitted. Submission copy: yellow marks honest TBDs.</p>
+</main></body></html>
