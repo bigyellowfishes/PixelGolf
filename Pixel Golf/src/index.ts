@@ -55,7 +55,9 @@ const GROUP_BALL = 2
 // State, resolved from the authored scene at startup
 // ---------------------------------------------------------------------------
 // Every playable ball in the scene, matched by entity name
-const BALL_NAMES = ['Ball', 'Ball_2', 'Ball_3', 'Ball_4']
+const BALL_NAMES = ['Ball_1', 'Ball_2', 'Ball_3', 'Ball_4', 'Ball_5', 'Ball_6',
+                    'Ball_7', 'Ball_8','Ball_9', 'Ball_10', 'Ball_11', 'Ball_12',
+                    'Ball_13', 'Ball_14', 'Ball_15', 'Ball_16', 'Ball_17', 'Ball_18']
 
 type BallRig = { name: string; entity: Entity; body: CANNON.Body }
 const balls: BallRig[] = []

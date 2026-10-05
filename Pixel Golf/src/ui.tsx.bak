@@ -72,7 +72,7 @@ export const ProgressBar = () => (
       justifyContent: 'center',
       alignItems: 'center',
       margin: { left: 150 },
-      display: 'none'
+      display: 'flex'
     }}
   >
     {/* Progress Bar Background / Track */}

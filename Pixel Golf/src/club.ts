@@ -13,22 +13,7 @@ import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { stopEmote, triggerEmote, triggerSceneEmote } from '~system/RestrictedActions'
 
 /**
- * The player's club. Ported from Pirate Mini Golf (src/golf/club.ts) so both
- * games hold and swing the club the same way.
- *
- * There is one club, and it gets re-parented between two anchors, because no
- * single anchor does both jobs.
- *
- * The hand anchor looks right while walking: AvatarAttach hangs it off the
- * right hand bone so it moves with the arm. But AvatarAttach owns the transform
- * of the entity it is on, and the scene cannot read the resolved wrist angle
- * back, so the face cannot be squared and the swing cannot follow a known arc.
- *
- * The player anchor is the opposite: it does not track the hand, but every
- * degree of it is ours, so the club can address the ball square and swing
- * through an arc we control frame by frame.
- *
- * So: carried in the hand, addressed off the player, and on the strike the
+ * Carried in the hand, addressed off the player, and on the strike the
  * avatar's swing emote plays with the club back in the fist riding along.
  *
  *   handAnchor / playAnchor   the two places the club can hang from

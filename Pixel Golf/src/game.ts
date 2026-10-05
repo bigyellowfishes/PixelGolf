@@ -241,6 +241,7 @@ export class Game {
 
       case 'Swing_Height':
         if (this.walkedAway()) break
+        this.UpdateArrowDir(ArwHeightEnt)
         this.swingTime += dt
         this.charge = this.heightMeter()
         this.state.shotDistance = this.physics.predictRoll(this.charge)
@@ -408,12 +409,7 @@ export class Game {
     this.swingTime = 0
     if (!ent) return
 
-    // Put the arrow on the ball, pointing along the locked aim
-    const b = this.physics.position()
-    const t = Transform.getMutable(ent)
-    t.position = Vector3.create(b.x, b.y, b.z)
-    t.rotation = Quaternion.fromEulerDegrees(0, ((this.lockedYaw * 180)) / Math.PI, 0)
-
+    this.UpdateArrowDir(ent)
     this.setArrow(ent, true)
 
     // Restart every clip on the arrow from the beginning, looping
@@ -425,6 +421,25 @@ export class Game {
         s.speed = this.state.phase == 'Swing_Height' ? PowerTimeMulti : BendTimeMulti
       }
     }
+  }
+
+  // Value For Locking Arrow Dir
+  pi: number = Math.PI 
+  pio2: number = this.pi / 2
+  aimAllow: number = this.pi / 4
+
+  // Update the arrow to allow aiming while Arrow Hieght is Playing
+  private UpdateArrowDir(ent: Entity | undefined): void {
+    // Grab Current Player Yaw, Locked to a specific rotation range
+    this.lockedYaw = Math.max(Math.min(this.aimYaw, this.pio2 + this.aimAllow), this.pio2 - this.aimAllow)
+    
+    if (!ent) return
+
+    // Put the arrow on the ball, pointing along the locked aim
+    const b = this.physics.position()
+    const t = Transform.getMutable(ent)
+    t.position = Vector3.create(b.x, b.y, b.z)
+    t.rotation = Quaternion.fromEulerDegrees(0, ((this.lockedYaw * 180)) / Math.PI, 0)
   }
 
   private stopArrow(ent: Entity | undefined): void {
@@ -469,6 +484,9 @@ export class Game {
     return ball
   }
 
+  // How Much To Clamp The Score
+  scoreClamp: number = 10
+
   // Tests the ball against every score zone and returns the best result
   private scoreBall(): { points: number; zone: string } {
     const ball = this.physics.position()
@@ -495,7 +513,8 @@ export class Game {
       const s = ZONE_SCORES[colour]
       if (!s) continue
 
-      const points = Math.round(s.outside + (s.inside - s.outside) * (1 - edge))
+      const sInRange = Math.round(s.outside + (s.inside - s.outside) * (1 - edge))
+      const points = Math.ceil(sInRange / this.scoreClamp) * this.scoreClamp
       if (points > best.points) best = { points, zone: key }
     }
     return best
@@ -521,29 +540,39 @@ export class Game {
   private updateRolling(dt: number): void {
     const ball = this.measure()
 
+    // Check if Ball Is OOB
+    if(ball.z > 400 || ball.z < 100 || ball.y < 0) this.ResetBall()
+    
+    // Count Down Ball Settled For Shot Done
     if (this.physics.settled()) {
       this.physics.freeze()
       this.settleTimer += dt
       if (this.settleTimer >= SETTLE_HOLD) {
-        // Handle Scoring
-        const result = this.scoreBall()
-        this.state.lastShotScore = result.points
-        this.state.lastZone = result.zone
-        this.state.score += result.points
-        console.log(result.zone)
-
-        // Reset Player and Physics
-        this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
-        this.settleTimer = 0
-        this.state.phase = 'walking'
-        activeGame = null
-        this.swingClock = -1
-        this.rollLock = false
-        this.freezePlayer(false)
+        this.ResetBall()
       }
     } else {
       this.settleTimer = 0
     }
+  }
+
+  private ResetBall() {
+    // Freeze Physics
+    this.physics.freeze()
+
+    // Handle Scoring
+    const result = this.scoreBall()
+    this.state.lastShotScore = result.points
+    this.state.lastZone = result.zone
+    this.state.score += result.points
+
+    // Reset Player and Physics
+    this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
+    this.settleTimer = 0
+    this.state.phase = 'walking'
+    activeGame = null
+    this.swingClock = -1
+    this.rollLock = false
+    this.freezePlayer(false)
   }
 
   // --- Camera Settings
