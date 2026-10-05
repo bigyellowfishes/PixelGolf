@@ -15,9 +15,10 @@ import * as CANNON from 'cannon-es'
 import { courseData } from './collisionData/course_collision'
 
 import { Game, Physics, updateSettingsInput } from './game'
+import { getLaunchPower } from './clubSelect'
+import { spawnClubRacks } from './clubRack'
 
-import { ReactEcsRenderer } from '@dcl/sdk/react-ecs'
-import { ProgressBar, Score, Prompt, BallCamToggle } from './ui'
+import { setupUi } from './ui/index'
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -65,8 +66,13 @@ const balls: BallRig[] = []
 // Arrow Entities
 export let ArwHeightEnt: Entity | undefined
 export let ArwTurnEnt: Entity | undefined
+export let ghostShot: Entity | undefined
 
 export type ScoreZonesType = {
+  Bunker1: Entity | undefined
+  Bunker2: Entity | undefined
+  Bunker3: Entity | undefined
+  Bunker4: Entity | undefined
   Red1: Entity | undefined
   Red2: Entity | undefined
   Red3: Entity | undefined
@@ -81,6 +87,10 @@ export type ScoreZonesType = {
 }
 
 export let ScoreZones: ScoreZonesType = {
+    Bunker1: undefined,
+    Bunker2: undefined,
+    Bunker3: undefined,
+    Bunker4: undefined,
     Red1: undefined,
     Red2: undefined,
     Red3: undefined,
@@ -111,8 +121,13 @@ function buildWorldFromScene() {
     // Find Arrow Entities
     if(n === 'Arrow_Height') ArwHeightEnt = entity
     if(n === 'Arrow_Turn') ArwTurnEnt = entity
+    if(n === 'Ghost_Shot') ghostShot = entity
 
     // Find Score Zones
+    if(n === 'Bunker1') ScoreZones.Bunker1 = entity
+    if(n === 'Bunker2') ScoreZones.Bunker2 = entity
+    if(n === 'Bunker3') ScoreZones.Bunker3 = entity
+    if(n === 'Bunker4') ScoreZones.Bunker4 = entity
     if(n === 'Red1') ScoreZones.Red1 = entity
     if(n === 'Red2') ScoreZones.Red2 = entity
     if(n === 'Red3') ScoreZones.Red3 = entity
@@ -358,11 +373,12 @@ function probeSurface(x: number, z: number, aroundY: number) {
   }
 }
 
-let Launch_Power = 140
+// Launch power now comes from the selected club (wedge 80 / iron 130 / driver 170),
+// see CLUB_TYPES in club.ts and getLaunchPower() in clubSelect.ts
 
 // How far the ball will roll for a given charge, on the flat
 function predictRoll(power: number): number {
-  const launch = Math.max(0, Math.min(1, power)) * Launch_Power
+  const launch = Math.max(0, Math.min(1, power)) * getLaunchPower()
   const decay = -Math.log(1 - 0.5) // linearDamping 0.5 -> ln 2 per second
   return Math.max(0, (launch - REST_SPEED) / decay)
 }
@@ -388,13 +404,13 @@ function makePhysicsBridge(body: CANNON.Body): Physics {
     },
     strike(dirX, dirZ, power) {
       // Horizontal Strike, applied at the centre so it imparts no spin
-      const p = Math.max(0, Math.min(1, power)) * Launch_Power
+      const p = Math.max(0, Math.min(1, power)) * getLaunchPower()
       body.wakeUp()
       body.applyImpulse(new CANNON.Vec3(dirX * p, 0, dirZ * p), body.position)
       clampBallSpeed(body)
     },
     chipshot(power) {
-        const p = Math.max(0, Math.min(1,  power)) * Launch_Power / 4
+        const p = Math.max(0, Math.min(1,  power)) * getLaunchPower() / 4
         body.applyImpulse(new CANNON.Vec3(0, p, 0), body.position)
     },
     freeze() {
@@ -430,13 +446,15 @@ function SpawnCamera() {
 export function main() {
   
   buildWorldFromScene()
+
+  // A rack of the three clubs beside every ball's pad. Each ball body is still
+  // at its authored start position here, and the ground sits one radius below it.
+  spawnClubRacks(
+    balls.map((b) => ({ x: b.body.position.x, y: b.body.position.y - BALL_RADIUS, z: b.body.position.z }))
+  )
+
   SpawnCamera()
-  ReactEcsRenderer.setUiRenderer(ProgressBar)
-  ReactEcsRenderer.setUiRenderer(Score)
-  // "Press E" instructions, drawn as a separate layer on top of the score
-  ReactEcsRenderer.addUiRenderer(engine.addEntity(), Prompt)
-  // Ball cam on/off button
-  ReactEcsRenderer.addUiRenderer(engine.addEntity(), BallCamToggle)
+  setupUi()
 
   engine.addSystem(() => {
     applyTouchControls()

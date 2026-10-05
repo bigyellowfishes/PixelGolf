@@ -89,6 +89,7 @@ export const ProgressBar = () => (
       {/* Inner Progress Fill */}
       <UiEntity
         uiTransform={{
+          alignItems: 'flex-end',
           height: `${progressValue}%`,
           width: '100%'
         }}

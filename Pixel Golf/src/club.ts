@@ -23,8 +23,6 @@ import { stopEmote, triggerEmote, triggerSceneEmote } from '~system/RestrictedAc
  */
 
 export const CLUB = {
-  model: 'assets/Models/Golf_Iron/Golf_Iron.glb',
-
   /** 'hand' carries it in the right hand while walking; 'player' uses the fixed carry pose below. */
   carryAnchor: 'hand' as 'hand' | 'player',
 
@@ -138,6 +136,23 @@ export const CLUB = {
   recoverTime: 0.5
 }
 
+export type ClubType = 'wedge' | 'iron' | 'driver'
+
+/**
+ * The clubs the player can pick from (see clubSelect.ts and clubRack.ts).
+ *
+ *   model        the .glb carried in the hand and shown on the rack
+ *   launchPower  the strike's base power, used by the physics bridge in index.ts
+ *   scaleMul     multiplies the grip scale, carried and swinging. 1 = same size as the iron.
+ *                The swing animation is fixed, so if a club falls short of the ball or
+ *                overshoots it at impact, nudge this (e.g. shorter wedge -> a bit above 1).
+ */
+export const CLUB_TYPES: Record<ClubType, { label: string; model: string; launchPower: number; scaleMul: number }> = {
+  wedge: { label: 'Wedge', model: 'assets/Models/Golf_Wedge/Golf_Wedge.glb', launchPower: 75, scaleMul: 1 },
+  iron: { label: 'Iron', model: 'assets/Models/Golf_Iron/Golf_Iron.glb', launchPower: 125, scaleMul: 1 },
+  driver: { label: 'Driver', model: 'assets/Models/Golf_Driver/Golf_Driver.glb', launchPower: 175, scaleMul: 1 }
+}
+
 const v3 = (p: { x: number; y: number; z: number }) => Vector3.create(p.x, p.y, p.z)
 
 export type Club = {
@@ -146,6 +161,8 @@ export type Club = {
   grip: Entity
   pivot: Entity
   model: Entity
+  /** Which club is being carried (see CLUB_TYPES). */
+  type: ClubType
   /** Which anchor the grip is currently parented to. */
   held: 'hand' | 'play'
   strikeTimer: number
@@ -163,6 +180,12 @@ export type Club = {
   swingGripOn: boolean
 }
 
+/** Grip scale for the carried club: carry or swing scale, times the club's own multiplier. */
+function gripScale(club: Club): number {
+  const base = club.swingGripOn && CLUB.swingGrip ? CLUB.swingGrip.scale : CLUB.scale
+  return base * CLUB_TYPES[club.type].scaleMul
+}
+
 const STRIKE_TIME = CLUB.downswingTime + CLUB.followTime + CLUB.recoverTime
 
 const HAND_GRIP_POS = v3(CLUB.gripOffset)
@@ -170,7 +193,7 @@ const HAND_GRIP_ROT = Quaternion.fromEulerDegrees(CLUB.gripRotation.x, CLUB.grip
 const PLAY_GRIP_POS = Vector3.Zero()
 const PLAY_GRIP_ROT = Quaternion.fromEulerDegrees(CLUB.address.tilt, CLUB.address.yaw, 0)
 
-export function createClub(): Club {
+export function createClub(type: ClubType = 'iron'): Club {
   // Hand anchor. No avatarId: attaches to the local player.
   const handAnchor = engine.addEntity()
   if (CLUB.carryAnchor === 'hand') {
@@ -194,7 +217,7 @@ export function createClub(): Club {
   Transform.create(grip, {
     position: CLUB.carryAnchor === 'hand' ? HAND_GRIP_POS : PLAY_GRIP_POS,
     rotation: CLUB.carryAnchor === 'hand' ? HAND_GRIP_ROT : PLAY_GRIP_ROT,
-    scale: Vector3.create(CLUB.scale, CLUB.scale, CLUB.scale),
+    scale: Vector3.create(CLUB.scale * CLUB_TYPES[type].scaleMul, CLUB.scale * CLUB_TYPES[type].scaleMul, CLUB.scale * CLUB_TYPES[type].scaleMul),
     parent: handAnchor
   })
 
@@ -209,7 +232,7 @@ export function createClub(): Club {
     parent: pivot
   })
   GltfContainer.create(model, {
-    src: CLUB.model,
+    src: CLUB_TYPES[type].model,
     // Purely visual: don't block the player, the pointer or the ball
     visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
     invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
@@ -224,6 +247,7 @@ export function createClub(): Club {
     grip,
     pivot,
     model,
+    type,
     held: 'hand',
     strikeTimer: 0,
     strikePower: 0,
@@ -243,6 +267,20 @@ export function setClubVisible(club: Club, visible: boolean): void {
   if (v) v.visible = visible
 }
 
+/** Swaps the carried club to another model. Selection is locked mid-shot, so this runs between shots. */
+export function applyClubType(club: Club, type: ClubType): void {
+  if (club.type === type) return
+  club.type = type
+  const gltf = GltfContainer.getMutableOrNull(club.model)
+  if (gltf) gltf.src = CLUB_TYPES[type].model
+  // Clubs differ in length, so the grip scale follows the club
+  const t = Transform.getMutableOrNull(club.grip)
+  if (t) {
+    const sc = gripScale(club)
+    t.scale = Vector3.create(sc, sc, sc)
+  }
+}
+
 /** In the hand: the carry grip normally, the swing grip while a swing animation plays. */
 function applyHandGrip(club: Club, swinging: boolean): void {
   if (club.held !== 'hand' || CLUB.carryAnchor !== 'hand') return
@@ -254,11 +292,13 @@ function applyHandGrip(club: Club, swinging: boolean): void {
   if (g) {
     t.position = Vector3.create(g.offset.x, g.offset.y, g.offset.z)
     t.rotation = Quaternion.create(g.rotation.x, g.rotation.y, g.rotation.z, g.rotation.w)
-    t.scale = Vector3.create(g.scale, g.scale, g.scale)
+    const sc = gripScale(club)
+    t.scale = Vector3.create(sc, sc, sc)
   } else {
     t.position = Vector3.create(HAND_GRIP_POS.x, HAND_GRIP_POS.y, HAND_GRIP_POS.z)
     t.rotation = Quaternion.create(HAND_GRIP_ROT.x, HAND_GRIP_ROT.y, HAND_GRIP_ROT.z, HAND_GRIP_ROT.w)
-    t.scale = Vector3.create(CLUB.scale, CLUB.scale, CLUB.scale)
+    const sc = gripScale(club)
+    t.scale = Vector3.create(sc, sc, sc)
   }
 }
 
@@ -273,7 +313,8 @@ function hold(club: Club, where: 'hand' | 'play'): void {
   const toHand = where === 'hand'
   t.parent = toHand ? club.handAnchor : club.playAnchor
   club.swingGripOn = false
-  t.scale = Vector3.create(CLUB.scale, CLUB.scale, CLUB.scale)
+  const sc = gripScale(club)
+  t.scale = Vector3.create(sc, sc, sc)
 
   // The carried grip offset only applies to the hand bone; on the player anchor
   // the address pose is already baked into the anchor's own position.

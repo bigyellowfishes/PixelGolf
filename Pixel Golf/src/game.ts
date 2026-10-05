@@ -12,8 +12,9 @@ import {
   InputModifier
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
-import { ArwHeightEnt, ArwTurnEnt, cameraEntity, ScoreZones } from './index'
-import { Club, CLUB, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub } from './club'
+import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
+import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub } from './club'
+import { getSelectedClubType, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 
 // The club in the player's hand, shared by every ball like the arrows
@@ -62,6 +63,7 @@ export let curball: ballStats = {
 
 // Score at the very edge of a zone ("Outside") and at its exact centre ("Inside")
 const ZONE_SCORES: Record<string, { outside: number; inside: number }> = {
+  Bunker: { outside: -1000, inside: -1000 },
   Red:    { outside: 500,   inside: 1000 },
   Yellow: { outside: 750,   inside: 2000 },
   Green:  { outside: 750,   inside: 4000 },
@@ -124,6 +126,12 @@ let activeGame: Game | null = null
 let shownGame: Game | null = null
 // Every ball's game, so the UI can work out which prompt to show
 const allGames: Game[] = []
+
+// True from the first E press until the ball has come to rest and reset.
+// The club rack uses it to lock club selection mid-shot.
+export function isShotInProgress(): boolean {
+  return activeGame !== null
+}
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
@@ -192,6 +200,7 @@ export class Game {
     allGames.push(this)
     this.setArrow(ArwHeightEnt, false)
     this.setArrow(ArwTurnEnt, false)
+    this.setArrow(ghostShot, false)
   }
 
   // -------------------------------------------------------------------------
@@ -241,7 +250,8 @@ export class Game {
 
       case 'Swing_Height':
         if (this.walkedAway()) break
-        this.UpdateArrowDir(ArwHeightEnt)
+        this.setArrow(ghostShot, true)
+        this.UpdateArrowDir(ghostShot)
         this.swingTime += dt
         this.charge = this.heightMeter()
         this.state.shotDistance = this.physics.predictRoll(this.charge)
@@ -251,10 +261,9 @@ export class Game {
       case 'Swing_Turn':
         if (this.walkedAway()) break
         this.swingTime += dt
-        
         const f = (this.swingTime * BendTimeMulti / TURN_ANIM_SECONDS) % 1
         const p = Math.sin(2 * Math.PI * f)
-        setProgress(50 + (p * 50))
+        setProgress(50 - (p * 50))
 
         //
         if (this.clicked()) this.lockTurnAndSwing()
@@ -268,6 +277,7 @@ export class Game {
       case 'rolling':
         // Stay on the player until the swing has been seen, then follow the ball,
         // unless the player has turned the ball cam off (key 1 or the on-screen button)
+        this.setArrow(ghostShot, false)
         const swingSeen = this.swingClock < 0 || this.swingClock >= CLUB.emoteDelay + CLUB.watchSwingTime
         const useBallCam = ballCamEnabled && swingSeen
         if (swingSeen) this.UpdateCamera(useBallCam)
@@ -287,14 +297,19 @@ export class Game {
   private beginSwing(): void {
     activeGame = this
     shownGame = this
+
     // Move the shared follow camera onto this ball
     if (cameraEntity) Transform.getMutable(cameraEntity).parent = this.ballEntity
 
+    // Change BarVis
+    viewPower = true
+    viewRotate = false
+
+    // Update Player
     this.lockedYaw = this.aimYaw
     this.storedPower = 0
     this.state.phase = 'Swing_Height'
     this.inputLock = 0.2
-    this.startArrow(ArwHeightEnt)
     this.takeStance()
     this.addressClock = 0
     this.backswingStarted = false
@@ -319,8 +334,10 @@ export class Game {
   // The player walked off mid-shot: drop the shot and let them play again
   private walkedAway(): boolean {
     if (this.state.distanceToBall <= HIT_RANGE + 1) return false
-    this.stopArrow(ArwHeightEnt)
-    this.stopArrow(ArwTurnEnt)
+    // Change BarVis
+    viewPower = false
+    viewRotate = false
+
     if (club) cancelBackswing(club)
     this.addressClock = -1
     this.charge = 0
@@ -333,16 +350,22 @@ export class Game {
   private lockHeight(): void {
     this.storedPower = this.heightMeter()
     this.charge = this.storedPower // the club holds its backswing while you set the curve
-    this.stopArrow(ArwHeightEnt)
     this.state.phase = 'Swing_Turn'
     this.inputLock = 0.2
-    this.startArrow(ArwTurnEnt)
+
+    // Change BarVis
+    viewPower = false
+    viewRotate = true
   }
 
   // Stage 2: E pressed. Read the bend and swing.
   private lockTurnAndSwing(): void {
     this.storedBend = this.turnMeter() * MAX_BEND_DEG
-    this.stopArrow(ArwTurnEnt)
+
+    // Change BarVis
+    viewPower = false
+    viewRotate = false
+
     // Lift the movement lock before the emote fires, so nothing can block it.
     // It goes back on when the camera moves to the ball.
     this.freezePlayer(false)
@@ -366,8 +389,12 @@ export class Game {
 
   // Build the shared club once at startup (see club.ts)
   static InitClub(): void {
-    club = createClub()
+    club = createClub(getSelectedClubType())
     setClubVisible(club, false)
+    // Picking a club on the rack swaps the model in the hand
+    onClubSelected((type) => {
+      if (club) applyClubType(club, type)
+    })
   }
 
   // Runs once per frame after every ball has updated. One club, so one place drives it.
@@ -487,10 +514,10 @@ export class Game {
   // How Much To Clamp The Score
   scoreClamp: number = 10
 
-  // Tests the ball against every score zone and returns the best result
+  // Tests the ball against every score zone
   private scoreBall(): { points: number; zone: string } {
     const ball = this.physics.position()
-    let best = { points: 0, zone: '' }
+    let Zone = { points: 0, zone: '' }
 
     for (const [key, ent] of Object.entries(ScoreZones)) {
       if (!ent) continue
@@ -512,12 +539,13 @@ export class Game {
       const colour = key.replace(/\d+$/, '') // Red1 -> Red
       const s = ZONE_SCORES[colour]
       if (!s) continue
+      console.log(key)
 
       const sInRange = Math.round(s.outside + (s.inside - s.outside) * (1 - edge))
       const points = Math.ceil(sInRange / this.scoreClamp) * this.scoreClamp
-      if (points > best.points) best = { points, zone: key }
+      Zone = { points, zone: key }
     }
-    return best
+    return Zone
   }
 
   // Horizontal facing of the player camera
@@ -696,6 +724,8 @@ export function updateSettingsInput(): void {
 }
 
 export let progressValue = 50 // Value between 0 and 100
+export let viewPower: boolean
+export let viewRotate: boolean
 
 export function setProgress(val: number) {
   progressValue = Math.min(Math.max(val, 0), 100) // Clamp between 0 and 100
