@@ -11,6 +11,7 @@ import {
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { stopEmote, triggerEmote, triggerSceneEmote } from '~system/RestrictedActions'
+import { ghostShot } from './index'
 
 /**
  * Carried in the hand, addressed off the player, and on the strike the
@@ -147,10 +148,10 @@ export type ClubType = 'wedge' | 'iron' | 'driver'
  *                The swing animation is fixed, so if a club falls short of the ball or
  *                overshoots it at impact, nudge this (e.g. shorter wedge -> a bit above 1).
  */
-export const CLUB_TYPES: Record<ClubType, { label: string; model: string; launchPower: number; scaleMul: number }> = {
-  wedge: { label: 'Wedge', model: 'assets/Models/Golf_Wedge/Golf_Wedge.glb', launchPower: 75, scaleMul: 1 },
-  iron: { label: 'Iron', model: 'assets/Models/Golf_Iron/Golf_Iron.glb', launchPower: 125, scaleMul: 1 },
-  driver: { label: 'Driver', model: 'assets/Models/Golf_Driver/Golf_Driver.glb', launchPower: 175, scaleMul: 1 }
+export const CLUB_TYPES: Record<ClubType, { label: string; model: string; launchPower: number; scaleMul: number, ghostSize: number }> = {
+  wedge:  { label: 'Wedge',   model: 'assets/Models/Golf_Wedge/Golf_Wedge.glb',   launchPower: 75,  scaleMul: 1, ghostSize: 60 },
+  iron:   { label: 'Iron',    model: 'assets/Models/Golf_Iron/Golf_Iron.glb',     launchPower: 125, scaleMul: 1, ghostSize: 115 },
+  driver: { label: 'Driver',  model: 'assets/Models/Golf_Driver/Golf_Driver.glb', launchPower: 175, scaleMul: 1, ghostSize: 150 }
 }
 
 const v3 = (p: { x: number; y: number; z: number }) => Vector3.create(p.x, p.y, p.z)
@@ -279,6 +280,11 @@ export function applyClubType(club: Club, type: ClubType): void {
     const sc = gripScale(club)
     t.scale = Vector3.create(sc, sc, sc)
   }
+  // Update Ghost Size
+  if(!ghostShot) return
+  let ghostTrans = Transform.getMutable(ghostShot)
+  let ghostScale = CLUB_TYPES[type].ghostSize
+  ghostTrans.scale = Vector3.create(ghostScale, ghostScale, ghostScale)
 }
 
 /** In the hand: the carry grip normally, the swing grip while a swing animation plays. */
