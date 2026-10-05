@@ -1,6 +1,67 @@
 import ReactEcs, { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { Color4 } from '@dcl/sdk/math'
-import { progressValue, curScore, curRound } from './game'
+import { progressValue, curScore, curRound, getPrompt, ballCamEnabled, toggleBallCam } from './game'
+
+// Ball cam on/off button, just under the score. Click or tap it, or press 1.
+export const BallCamToggle = () => (
+  <UiEntity
+    uiTransform={{
+      width: '100%',
+      height: '100%',
+      positionType: 'absolute',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+      margin: { top: 108 }
+    }}
+  >
+    <UiEntity
+      uiTransform={{ width: 200, height: 34 }}
+      uiBackground={{ color: ballCamEnabled ? Color4.create(0.1, 0.45, 0.2, 0.85) : Color4.create(0, 0, 0, 0.65) }}
+      uiText={{
+        value: `Ball cam: ${ballCamEnabled ? 'ON' : 'OFF'}  [1]`,
+        fontSize: 15,
+        textAlign: 'middle-center',
+        color: Color4.White()
+      }}
+      onMouseDown={() => toggleBallCam()}
+    />
+  </UiEntity>
+)
+
+// Instruction shown near the bottom of the screen, e.g. "Press E to take your shot".
+// Hidden when there's nothing to say.
+export const Prompt = () => {
+  const text = getPrompt()
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        height: '100%',
+        positionType: 'absolute',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        padding: { bottom: 160 },
+        display: text ? 'flex' : 'none'
+      }}
+    >
+      <UiEntity
+        uiTransform={{
+          width: 440,
+          height: 56
+        }}
+        uiBackground={{
+          color: Color4.create(0, 0, 0, 0.65)
+        }}
+        uiText={{
+          value: text,
+          fontSize: 22,
+          textAlign: 'middle-center',
+          color: Color4.White()
+        }}
+      />
+    </UiEntity>
+  )
+}
 
 export const ProgressBar = () => (
   // TEMPORARY PROGRESS BAR TO TEST - Root Full-Screen Overlay Container

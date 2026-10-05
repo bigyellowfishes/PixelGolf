@@ -15,6 +15,7 @@
   "main": "bin/index.js",
   "tags": [],
   "scene": {
+    "base": "0,0",
     "parcels": [
       "0,31",
       "1,31",
@@ -1040,8 +1041,7 @@
       "29,0",
       "30,0",
       "31,0"
-    ],
-    "base": "0,0"
+    ]
   },
   "spawnPoints": [
     {
@@ -1083,5 +1083,8 @@
   "source": {
     "origin": "creator-hub",
     "projectId": "c100da2c-41e8-4c4a-b062-93c6a499f5e0"
+  },
+  "worldConfiguration": {
+    "name": "pixelgolf.dcl.eth"
   }
 }

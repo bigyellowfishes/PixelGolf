@@ -9,6 +9,9 @@
     "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",
     "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next"
   },
+  "dependencies": {
+    "cannon-es": "0.20.0"
+  },
   "devDependencies": {
     "@dcl/js-runtime": "7.29.0",
     "@dcl/sdk": "latest"

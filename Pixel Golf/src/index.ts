@@ -14,10 +14,10 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import * as CANNON from 'cannon-es'
 import { courseData } from './collisionData/course_collision'
 
-import { Game, Physics } from './game'
+import { Game, Physics, updateSettingsInput } from './game'
 
 import { ReactEcsRenderer } from '@dcl/sdk/react-ecs'
-import { ProgressBar, Score } from './ui'
+import { ProgressBar, Score, Prompt, BallCamToggle } from './ui'
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -54,9 +54,11 @@ const GROUP_BALL = 2
 // ---------------------------------------------------------------------------
 // State, resolved from the authored scene at startup
 // ---------------------------------------------------------------------------
-let ballEntity: Entity | undefined
-let ballBody: CANNON.Body | undefined
-let ballStart = new CANNON.Vec3(0, BALL_RADIUS, 0)
+// Every playable ball in the scene, matched by entity name
+const BALL_NAMES = ['Ball', 'Ball_2', 'Ball_3', 'Ball_4']
+
+type BallRig = { name: string; entity: Entity; body: CANNON.Body }
+const balls: BallRig[] = []
 
 // Arrow Entities
 export let ArwHeightEnt: Entity | undefined
@@ -92,14 +94,15 @@ export let ScoreZones: ScoreZonesType = {
 
 // Build static bodies from every entity named col_* and grab the ball
 function buildWorldFromScene() {
+  const foundBalls: { name: string; entity: Entity; start: CANNON.Vec3 }[] = []
+
   for (const [entity, name, transform] of engine.getEntitiesWith(Name, Transform)) {
     const n = name.value
 
-    // Find Main Ball Entity
-    if (n === 'Ball') {
-      ballEntity = entity
+    // Find Ball Entities (Ball, Ball_2, Ball_3, Ball_4)
+    if (BALL_NAMES.includes(n)) {
       const p = transform.position
-      ballStart = new CANNON.Vec3(p.x, p.y, p.z)
+      foundBalls.push({ name: n, entity, start: new CANNON.Vec3(p.x, p.y, p.z) })
       continue
     }
 
@@ -141,20 +144,25 @@ function buildWorldFromScene() {
   // Adding the ball physics
   //--------
 
-  if (ballEntity) {
-    ballBody = new CANNON.Body({
+  // Keep them in Ball, Ball_2, Ball_3, Ball_4 order
+  foundBalls.sort((a, b) => BALL_NAMES.indexOf(a.name) - BALL_NAMES.indexOf(b.name))
+
+  for (const found of foundBalls) {
+    const body = new CANNON.Body({
       mass: 1,
       material: ballMat,
       shape: new CANNON.Sphere(BALL_RADIUS),
-      position: ballStart.clone(),
+      position: found.start.clone(),
       linearDamping: 0.35, // rolling resistance so the ball settles
       angularDamping: 0.35,
-      collisionFilterGroup: GROUP_BALL
+      collisionFilterGroup: GROUP_BALL,
+      collisionFilterMask: GROUP_COURSE // balls only hit the course, never each other
     })
-    ballBody.allowSleep = true
-    ballBody.sleepSpeedLimit = REST_SPEED
-    ballBody.sleepTimeLimit = 0.3
-    world.addBody(ballBody)
+    body.allowSleep = true
+    body.sleepSpeedLimit = REST_SPEED
+    body.sleepTimeLimit = 0.3
+    world.addBody(body)
+    balls.push({ name: found.name, entity: found.entity, body })
   }
 }
 
@@ -248,19 +256,16 @@ function applyTouchControls(): void {
 // Physics Calcs basics Step Method
 // ---------------------------------------------------------------------------
 
-// Determines Balls Cur Speed
-function ballSpeed(): number {
-  if (!ballBody) return 0
-  const v = ballBody.velocity
+// Determines a ball's current speed
+function ballSpeed(body: CANNON.Body): number {
+  const v = body.velocity
   return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 }
 
-// Hard speed cap for ball, MAX_POWER should already keep us under this
-function clampBallSpeed() {
-  if (!ballBody) return
-  // The test override still clamps
+// Hard speed cap for a ball, MAX_POWER should already keep us under this
+function clampBallSpeed(body: CANNON.Body) {
   const ceiling = MAX_BALL_SPEED
-  const v = ballBody.velocity
+  const v = body.velocity
   const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
   if (speed > ceiling) {
     const scale = ceiling / speed
@@ -270,12 +275,11 @@ function clampBallSpeed() {
   }
 }
 
-// Test Whether the ball is idle in the world
+// Test whether every ball is idle in the world
 function worldIsIdle(): boolean {
-  if (!ballBody) return false
-  if (ballBody.sleepState !== CANNON.Body.SLEEPING) return false
-  const p = ballBody.position
-
+  for (const b of balls) {
+    if (b.body.sleepState !== CANNON.Body.SLEEPING) return false
+  }
   return true
 }
 
@@ -284,10 +288,14 @@ let accumulator = 0
 
 // Tick Through Physics Calculations
 function physicsSystem(dt: number) {
-  if (!ballBody || !ballEntity) return
+  if (balls.length === 0) return
   if (worldIsIdle()) return
 
-  const step = stepFor(ballSpeed())
+  // Step size follows the fastest ball so none of them tunnel through the course
+  let fastest = 0
+  for (const b of balls) fastest = Math.max(fastest, ballSpeed(b.body))
+
+  const step = stepFor(fastest)
   accumulator += dt
   if (accumulator > MAX_DEBT_SECONDS) accumulator = MAX_DEBT_SECONDS
 
@@ -297,20 +305,26 @@ function physicsSystem(dt: number) {
     accumulator -= step
     steps++
   }
-  clampBallSpeed() // catch speed gained from steep ramps too, not just strikes
 
-  // Update Ball Positions
-  const t = Transform.getMutable(ballEntity)
-  t.position = {
-    x: ballBody.position.x,
-    y: ballBody.position.y,
-    z: ballBody.position.z
-  }
-  t.rotation = {
-    x: ballBody.quaternion.x,
-    y: ballBody.quaternion.y,
-    z: ballBody.quaternion.z,
-    w: ballBody.quaternion.w
+  for (const b of balls) {
+    // Sleeping balls haven't moved, so leave their transforms alone
+    if (b.body.sleepState === CANNON.Body.SLEEPING) continue
+
+    clampBallSpeed(b.body) // catch speed gained from steep ramps too, not just strikes
+
+    // Update Ball Positions
+    const t = Transform.getMutable(b.entity)
+    t.position = {
+      x: b.body.position.x,
+      y: b.body.position.y,
+      z: b.body.position.z
+    }
+    t.rotation = {
+      x: b.body.quaternion.x,
+      y: b.body.quaternion.y,
+      z: b.body.quaternion.z,
+      w: b.body.quaternion.w
+    }
   }
 }
 
@@ -356,14 +370,13 @@ function makePhysicsBridge(body: CANNON.Body): Physics {
   return {
     ballRadius: BALL_RADIUS,
     position: () => ({ x: body.position.x, y: body.position.y, z: body.position.z }),
-    speed: ballSpeed,
+    speed: () => ballSpeed(body),
     // Horizontal speed only
     flatSpeed: () => {
-      if (!ballBody) return 0
-      const v = ballBody.velocity
+      const v = body.velocity
       return Math.sqrt(v.x * v.x + v.z * v.z)
     },
-    settled: () => body.sleepState === CANNON.Body.SLEEPING || ballSpeed() < REST_SPEED,
+    settled: () => body.sleepState === CANNON.Body.SLEEPING || ballSpeed(body) < REST_SPEED,
     place(x, y, z) {
       body.velocity.set(0, 0, 0)
       body.angularVelocity.set(0, 0, 0)
@@ -376,7 +389,7 @@ function makePhysicsBridge(body: CANNON.Body): Physics {
       const p = Math.max(0, Math.min(1, power)) * Launch_Power
       body.wakeUp()
       body.applyImpulse(new CANNON.Vec3(dirX * p, 0, dirZ * p), body.position)
-      clampBallSpeed()
+      clampBallSpeed(body)
     },
     chipshot(power) {
         const p = Math.max(0, Math.min(1,  power)) * Launch_Power / 4
@@ -396,7 +409,8 @@ function makePhysicsBridge(body: CANNON.Body): Physics {
 export let cameraEntity: Entity | undefined
 
 function SpawnCamera() {
-  // Create the camera entity attached to the target object
+  // Create the camera entity attached to the first ball.
+  // Game.beginSwing re-parents it to whichever ball is being played.
   cameraEntity = engine.addEntity()
   Transform.create(cameraEntity, {
     // Offset relative to the target (3 units behind, 2 units above)
@@ -404,7 +418,7 @@ function SpawnCamera() {
     // Rotate camera to look slightly down toward the target
     rotation: Quaternion.fromEulerDegrees(0, 0, 0),
     // Parent it to the target so it automatically follows translation & rotation
-    parent: ballEntity 
+    parent: balls[0]?.entity
   })
 }
 
@@ -417,6 +431,10 @@ export function main() {
   SpawnCamera()
   ReactEcsRenderer.setUiRenderer(ProgressBar)
   ReactEcsRenderer.setUiRenderer(Score)
+  // "Press E" instructions, drawn as a separate layer on top of the score
+  ReactEcsRenderer.addUiRenderer(engine.addEntity(), Prompt)
+  // Ball cam on/off button
+  ReactEcsRenderer.addUiRenderer(engine.addEntity(), BallCamToggle)
 
   engine.addSystem(() => {
     applyTouchControls()
@@ -424,17 +442,21 @@ export function main() {
 
   engine.addSystem(physicsSystem)
 
-  if (!ballBody) {
-    console.log('[golf] no entity named "ball" in the scene — the game cannot start')
+  if (balls.length === 0) {
+    console.log('[golf] no entity named "Ball" in the scene, the game cannot start')
     return
   }
 
-  // Enable All The Physics
-  const game = new Game(makePhysicsBridge(ballBody))
-  game.InitCamera()
+  // One game per ball, each with its own physics body. They share the arrows and camera.
+  const games = balls.map((b) => new Game(makePhysicsBridge(b.body), b.entity))
+  Game.InitCamera()
+  Game.InitClub()
 
   // Run the Update for the Main Game Loop In Game.ts
   engine.addSystem((dt: number) => {
-    game.update(dt)
+    for (const game of games) game.update(dt)
+    Game.UpdateClubFrame(dt)
+    Game.UpdateCameraFrame(dt)
+    updateSettingsInput()
   })
 }

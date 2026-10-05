@@ -13,6 +13,19 @@ import {
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, cameraEntity, ScoreZones } from './index'
+import { Club, CLUB, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub } from './club'
+import { movePlayerTo } from '~system/RestrictedActions'
+
+// The club in the player's hand, shared by every ball like the arrows
+let club: Club | undefined
+
+// Which camera has the view: the player's own, the ball cam, or the brief
+// instant-cut camera used on the way back (see Game.InitCamera)
+let camMode: 'player' | 'ball' | 'returning' = 'player'
+let returnCam: Entity | undefined
+let returnTimer = 0
+// How long the return camera holds before handing the view back to the player
+const RETURN_HOLD_SECONDS = 0.15
 
 //The rules layer
 type SurfaceProbe = (
@@ -80,6 +93,7 @@ export type Phase =
   | 'walking'
   | 'Swing_Height'
   | 'Swing_Turn'
+  | 'Swinging'
   | 'rolling'
 
 export type GameState = {
@@ -103,6 +117,27 @@ export type GameState = {
   joined: boolean
 }
 
+// The ball currently being swung at or rolling. Only one at a time, since the
+// arrows, camera and power bar are shared between all balls.
+let activeGame: Game | null = null
+// The ball whose score is shown in the UI (the last one played)
+let shownGame: Game | null = null
+// Every ball's game, so the UI can work out which prompt to show
+const allGames: Game[] = []
+
+// The instruction to show the player right now, or '' for none
+export function getPrompt(): string {
+  if (activeGame) {
+    if (activeGame.state.phase === 'Swing_Height') return 'Press E to set your power'
+    if (activeGame.state.phase === 'Swing_Turn') return 'Press E to set your curve and hit'
+    return ''
+  }
+  for (const g of allGames) {
+    if (g.state.phase === 'walking' && g.state.distanceToBall <= HIT_RANGE) return 'Press E to take your shot'
+  }
+  return ''
+}
+
 export class Game {
   readonly state: GameState = {
     phase: 'walking',
@@ -118,6 +153,7 @@ export class Game {
   }
 
   private physics: Physics
+  private ballEntity: Entity
 
   // Aim direction as a compass yaw in radians, taken from where you look
   private aimYaw = 0
@@ -136,10 +172,24 @@ export class Game {
   private swingTime = 0
   // 0..1 power captured on the first E press
   private storedPower = 0
+  // Bend in degrees captured on the third E press, used when the ball is struck
+  private storedBend = 0
+  // Seconds since the third E press, or -1 when no swing is under way
+  private swingClock = -1
+  private emoteFired = false
+  // Whether the movement lock is on while the ball cam follows the ball
+  private rollLock = false
+  // Seconds since the first E press (stance and take-back), or -1 when not addressing
+  private addressClock = -1
+  private backswingStarted = false
+  // 0..1, how far the club is drawn back while addressing. Follows the power meter.
+  charge = 0
 
-  constructor(physics: Physics) {
+  constructor(physics: Physics, ballEntity: Entity) {
     this.physics = physics
+    this.ballEntity = ballEntity
     this.startPos = physics.position()
+    allGames.push(this)
     this.setArrow(ArwHeightEnt, false)
     this.setArrow(ArwTurnEnt, false)
   }
@@ -149,8 +199,8 @@ export class Game {
   update(dt: number): void {
     if (this.inputLock > 0) this.inputLock -= dt
 
-    //
-    UpdateScore(this.state.score, this.state.shot)
+    // Only the ball last played drives the score UI
+    if (shownGame === this || shownGame === null) UpdateScore(this.state.score, this.state.shot)
 
     // Only follow the camera while walking. Once the swing starts the aim is locked.
     if (this.state.phase === 'walking' || this.state.phase === 'Swing_Height') this.readAimFromCamera()
@@ -158,23 +208,47 @@ export class Game {
     // Refresh distanceToBall against the player's current position
     this.measure()
 
+    // The swing runs on its own clock from the third press: emote, then the
+    // ball leaves, then the camera goes to the ball. See CLUB in club.ts.
+    // After stepping into the stance, take the club back to the top
+    if (this.addressClock >= 0) {
+      this.addressClock += dt
+      if (!this.backswingStarted && this.addressClock >= CLUB.stanceSettle) {
+        this.backswingStarted = true
+        if (club) startBackswing(club)
+      }
+    }
+
+    if (this.swingClock >= 0) {
+      this.swingClock += dt
+      if (!this.emoteFired && this.swingClock >= CLUB.emoteDelay) {
+        this.emoteFired = true
+        if (club) playStrike(club, this.storedPower)
+      }
+    }
+
     switch (this.state.phase) {
       case 'walking':
-        this.UpdateCamera(false)
+        // Don't reset the camera while another ball is mid-shot
+        if (activeGame === null) this.UpdateCamera(false)
         this.physics.freeze()
-        if (this.state.distanceToBall <= HIT_RANGE && this.clicked()) {
+        if (activeGame === null && this.state.distanceToBall <= HIT_RANGE && this.clicked()) {
+          // No movement lock while addressing: it stops the swing animations playing.
+          // Walking away cancels the shot instead (see below).
           this.beginSwing()
-          this.freezePlayer(true)
         }
         break
 
       case 'Swing_Height':
+        if (this.walkedAway()) break
         this.swingTime += dt
-        this.state.shotDistance = this.physics.predictRoll(this.heightMeter())
+        this.charge = this.heightMeter()
+        this.state.shotDistance = this.physics.predictRoll(this.charge)
         if (this.clicked()) this.lockHeight()
         break
 
       case 'Swing_Turn':
+        if (this.walkedAway()) break
         this.swingTime += dt
         
         const f = (this.swingTime * BendTimeMulti / TURN_ANIM_SECONDS) % 1
@@ -182,11 +256,25 @@ export class Game {
         setProgress(50 + (p * 50))
 
         //
-        if (this.clicked()) this.lockTurnAndHit()
+        if (this.clicked()) this.lockTurnAndSwing()
+        break
+
+      case 'Swinging':
+        // The avatar is mid-swing. Launch at the swing's contact.
+        if (this.emoteFired && this.swingClock >= CLUB.emoteDelay + CLUB.strikeDelay) this.strikeBall()
         break
 
       case 'rolling':
-        this.UpdateCamera(true)
+        // Stay on the player until the swing has been seen, then follow the ball,
+        // unless the player has turned the ball cam off (key 1 or the on-screen button)
+        const swingSeen = this.swingClock < 0 || this.swingClock >= CLUB.emoteDelay + CLUB.watchSwingTime
+        const useBallCam = ballCamEnabled && swingSeen
+        if (swingSeen) this.UpdateCamera(useBallCam)
+        // Movement is only locked while the ball cam has the view
+        if (useBallCam !== this.rollLock) {
+          this.rollLock = useBallCam
+          this.freezePlayer(useBallCam)
+        }
         this.updateRolling(dt)
         break
     }
@@ -196,31 +284,102 @@ export class Game {
 
   // Stage 0: E pressed by the ball. Remember where the player faces, show height arrow.
   private beginSwing(): void {
+    activeGame = this
+    shownGame = this
+    // Move the shared follow camera onto this ball
+    if (cameraEntity) Transform.getMutable(cameraEntity).parent = this.ballEntity
+
     this.lockedYaw = this.aimYaw
     this.storedPower = 0
     this.state.phase = 'Swing_Height'
     this.inputLock = 0.2
     this.startArrow(ArwHeightEnt)
+    this.takeStance()
+    this.addressClock = 0
+    this.backswingStarted = false
+  }
+
+  // Step the player in beside the ball, facing the target. The swing animation
+  // then turns them side-on so the club meets the ball (CLUB.stance in club.ts).
+  private takeStance(): void {
+    const b = this.physics.position()
+    const fx = Math.sin(this.lockedYaw), fz = Math.cos(this.lockedYaw) // towards the target
+    const rx = fz, rz = -fx // the player's right
+    const ground = b.y - this.physics.ballRadius
+    const x = b.x - rx * CLUB.stance.right - fx * CLUB.stance.ahead
+    const z = b.z - rz * CLUB.stance.right - fz * CLUB.stance.ahead
+    void movePlayerTo({
+      newRelativePosition: Vector3.create(x, ground, z),
+      avatarTarget: Vector3.create(x + fx * 10, ground + 1, z + fz * 10),
+      cameraTarget: Vector3.create(x + fx * 20, ground, z + fz * 20)
+    })
+  }
+
+  // The player walked off mid-shot: drop the shot and let them play again
+  private walkedAway(): boolean {
+    if (this.state.distanceToBall <= HIT_RANGE + 1) return false
+    this.stopArrow(ArwHeightEnt)
+    this.stopArrow(ArwTurnEnt)
+    if (club) cancelBackswing(club)
+    this.addressClock = -1
+    this.charge = 0
+    this.state.phase = 'walking'
+    activeGame = null
+    return true
   }
 
   // Stage 1: E pressed. Keep the power, swap to the turn arrow.
   private lockHeight(): void {
     this.storedPower = this.heightMeter()
+    this.charge = this.storedPower // the club holds its backswing while you set the curve
     this.stopArrow(ArwHeightEnt)
     this.state.phase = 'Swing_Turn'
     this.inputLock = 0.2
     this.startArrow(ArwTurnEnt)
   }
 
-  // Stage 2: E pressed. Read the bend and fire.
-  private lockTurnAndHit(): void {
-    const bendDeg = this.turnMeter() * MAX_BEND_DEG
+  // Stage 2: E pressed. Read the bend and swing.
+  private lockTurnAndSwing(): void {
+    this.storedBend = this.turnMeter() * MAX_BEND_DEG
     this.stopArrow(ArwTurnEnt)
-    this.hit(this.storedPower, bendDeg)
+    // Lift the movement lock before the emote fires, so nothing can block it.
+    // It goes back on when the camera moves to the ball.
+    this.freezePlayer(false)
+    this.addressClock = -1
+    this.swingClock = 0
+    this.emoteFired = false
+    this.state.phase = 'Swinging'
+    this.inputLock = 0.2
+  }
+
+  // Stage 3: the ball leaves.
+  private strikeBall(): void {
+    this.hit(this.storedPower, this.storedBend)
     this.state.shot++
     this.state.phase = 'rolling'
     this.settleTimer = 0
-    this.inputLock = 0.2
+    this.charge = 0
+  }
+
+  // --- club ----------------------------------------------------------------
+
+  // Build the shared club once at startup (see club.ts)
+  static InitClub(): void {
+    club = createClub()
+    setClubVisible(club, false)
+  }
+
+  // Runs once per frame after every ball has updated. One club, so one place drives it.
+  static UpdateClubFrame(dt: number): void {
+    if (!club) return
+    const g = activeGame
+    // At address while setting power and curve; in the hand otherwise
+    const addressing = g !== null && (g.state.phase === 'Swing_Height' || g.state.phase === 'Swing_Turn')
+    updateClub(club, dt, addressing, g ? g.charge : 0)
+
+    // In hand as you walk up to a ball, and for the whole shot
+    const nearBall = allGames.some((x) => x.state.phase === 'walking' && x.state.distanceToBall <= HIT_RANGE)
+    setClubVisible(club, g !== null || nearBall || club.strikeTimer > 0)
   }
 
   // Power 0..1: 0% at start, 100% at 50% through the animation, 0% at the end
@@ -377,6 +536,9 @@ export class Game {
         this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
         this.settleTimer = 0
         this.state.phase = 'walking'
+        activeGame = null
+        this.swingClock = -1
+        this.rollLock = false
         this.freezePlayer(false)
       }
     } else {
@@ -385,13 +547,37 @@ export class Game {
   }
 
   // --- Camera Settings
-  InitCamera() {
+  static InitCamera() {
     // Test the Camera Obj Exists
     if(!cameraEntity) return
 
-    // Attach the VirtualCamera component to the camera entity
+    // Attach the VirtualCamera component to the camera entity.
+    // A zero-second transition makes the cut to the ball cam instant rather than a blend.
     VirtualCamera.create(cameraEntity, {
+      defaultTransition: { transitionMode: { $case: 'time', time: 0 } }
     })
+
+    // The "return" camera. The client always blends when it hands the view back
+    // to the player's own camera, and a scene can't change that. So before
+    // cutting to the ball cam we note where the player's camera is, and on the
+    // way back we cut instantly to this camera parked at that spot, then hand
+    // back. The client's blend then goes from a point to the same point, so it
+    // can't be seen.
+    returnCam = engine.addEntity()
+    Transform.create(returnCam, {})
+    VirtualCamera.create(returnCam, {
+      defaultTransition: { transitionMode: { $case: 'time', time: 0 } }
+    })
+  }
+
+  // Runs once per frame from index.ts: finishes the hand-back to the player camera
+  static UpdateCameraFrame(dt: number): void {
+    if (camMode !== 'returning') return
+    returnTimer -= dt
+    if (returnTimer <= 0) {
+      MainCamera.createOrReplace(engine.CameraEntity, { virtualCameraEntity: undefined })
+      camMode = 'player'
+    }
   }
 
   private UpdateCamera(State: boolean) {
@@ -400,10 +586,24 @@ export class Game {
 
     if(State)
     {
-      // Force the player's MainCamera to use this VirtualCamera
-      MainCamera.createOrReplace(engine.CameraEntity, {
-        virtualCameraEntity: cameraEntity
-      })
+      if (camMode !== 'ball') {
+        // Remember where the player's own camera is, for the instant cut back.
+        // (Only from the player camera: while a scene camera is active, the
+        // camera transform the scene reads is the scene camera's.)
+        if (camMode === 'player' && returnCam) {
+          const cam = Transform.getOrNull(engine.CameraEntity)
+          if (cam) {
+            const r = Transform.getMutable(returnCam)
+            r.position = Vector3.create(cam.position.x, cam.position.y, cam.position.z)
+            r.rotation = Quaternion.create(cam.rotation.x, cam.rotation.y, cam.rotation.z, cam.rotation.w)
+          }
+        }
+        // Force the player's MainCamera to use this VirtualCamera
+        MainCamera.createOrReplace(engine.CameraEntity, {
+          virtualCameraEntity: cameraEntity
+        })
+        camMode = 'ball'
+      }
 
       // Set Rotation
       const CamTrns = Transform.getMutable(cameraEntity)
@@ -411,27 +611,59 @@ export class Game {
       if(!Prnt) return
       const PrntTrns = Transform.getMutable(Prnt)
       PrntTrns.rotation = Quaternion.fromEulerDegrees(70, 90, 0)
-    } else {
-      // Revert back to the default player camera
-      MainCamera.createOrReplace(engine.CameraEntity, {
-        virtualCameraEntity: undefined
-      })
+    } else if (camMode === 'ball') {
+      // Back to the player camera: cut instantly to the return camera first,
+      // then UpdateCameraFrame hands the view back once it has taken effect
+      if (returnCam) {
+        MainCamera.createOrReplace(engine.CameraEntity, { virtualCameraEntity: returnCam })
+        camMode = 'returning'
+        returnTimer = RETURN_HOLD_SECONDS
+      } else {
+        MainCamera.createOrReplace(engine.CameraEntity, { virtualCameraEntity: undefined })
+        camMode = 'player'
+      }
     }
   }
 
   private freezePlayer(state: boolean) {
     if(state)
     {
+      // Lock movement only. disableAll also blocks emotes, which stopped the
+      // avatar's swing animation (club.ts) from playing.
       InputModifier.createOrReplace(engine.PlayerEntity, {
-	      mode: {
-		      $case: 'standard',
-		      standard: {
-			      disableAll: true,
-		  },},})
+        mode: {
+          $case: 'standard',
+          standard: {
+            disableWalk: true,
+            disableJog: true,
+            disableRun: true,
+            disableJump: true,
+            disableDoubleJump: true,
+            disableGliding: true,
+            disableEmote: false
+          }
+        }
+      })
     } else {
       InputModifier.deleteFrom(engine.PlayerEntity)
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Player settings
+// ---------------------------------------------------------------------------
+
+// Whether the camera follows the ball after a shot. Toggled with key 1 or the on-screen button.
+export let ballCamEnabled = true
+
+export function toggleBallCam(): void {
+  ballCamEnabled = !ballCamEnabled
+}
+
+// Key 1 toggles the ball cam. Runs once per frame from index.ts.
+export function updateSettingsInput(): void {
+  if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) toggleBallCam()
 }
 
 export let progressValue = 50 // Value between 0 and 100
