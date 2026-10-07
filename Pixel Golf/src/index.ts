@@ -1,3 +1,4 @@
+import { setupUi } from './ui'
 import {
   engine,
   InputAction,
@@ -6,7 +7,10 @@ import {
   Entity,
   Material,
   MeshRenderer,
-  TouchScreenControls
+  TouchScreenControls,
+  VisibilityComponent,
+  GltfContainer,
+  ColliderLayer
 } from '@dcl/sdk/ecs'
 import { Color4, Vector3, Quaternion } from '@dcl/sdk/math'
 import { movePlayerTo } from '~system/RestrictedActions'
@@ -17,8 +21,8 @@ import { courseData } from './collisionData/course_collision'
 import { Game, Physics, updateSettingsInput } from './game'
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
-
-import { setupUi } from './ui/index'
+import { setupTeeOffPanels, setupTeeOffScreens } from './teeOffPanels'
+import { playAt } from './sfx'
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -426,6 +430,73 @@ function makePhysicsBridge(body: CANNON.Body): Physics {
 //
 export let cameraEntity: Entity | undefined
 
+// ---------------------------------------------------------------------------
+// Ball model: every playable ball shows this model instead of the editor's sphere
+// ---------------------------------------------------------------------------
+const BALL_MODEL = 'assets/Models/Golf_Ball/Golf_Ball_Single.glb'
+// The model is 0.1285 m across; this scales it to the physics ball's size (BALL_RADIUS)
+const BALL_MODEL_SCALE = (BALL_RADIUS * 2) / 0.1285
+
+// The physics ball slides rather than rolls (zero friction against the course), and
+// the ball cam steers the ball entity's rotation, so the model is a separate entity
+// that follows the ball and works out its own spin from how fast it is moving.
+const ballModels: { ball: BallRig; model: Entity; spin: Quaternion.MutableQuaternion }[] = []
+
+function swapBallModels() {
+  for (const b of balls) {
+    // Hide the placeholder sphere; the physics body is unaffected
+    MeshRenderer.deleteFrom(b.entity)
+    const model = engine.addEntity()
+    const p = b.body.position
+    Transform.create(model, {
+      position: Vector3.create(p.x, p.y, p.z),
+      scale: Vector3.create(BALL_MODEL_SCALE, BALL_MODEL_SCALE, BALL_MODEL_SCALE)
+    })
+    // Visual only: cannon-es handles the ball's collisions
+    GltfContainer.create(model, {
+      src: BALL_MODEL,
+      visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+      invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+    })
+    ballModels.push({ ball: b, model, spin: Quaternion.Identity() })
+
+    // A thud when the ball lands or bounces hard enough to hear
+    let lastThud = -1
+    b.body.addEventListener('collide', (e: { contact: CANNON.ContactEquation }) => {
+      const impact = Math.abs(e.contact.getImpactVelocityAlongNormal())
+      if (impact < LAND_SOUND_MIN_SPEED || sceneClock - lastThud < 0.15) return
+      lastThud = sceneClock
+      const p = b.body.position
+      playAt('ball_land', { x: p.x, y: p.y, z: p.z }, Math.min(1, impact / 12))
+    })
+  }
+}
+
+// Landings slower than this (m/s) are silent, so a resting ball doesn't keep thudding
+const LAND_SOUND_MIN_SPEED = 2
+let sceneClock = 0
+
+// Keep each model on its ball and roll it: a ball rolling without slipping turns
+// about the axis (up x velocity) by distance / radius
+function spinBallModels(dt: number) {
+  sceneClock += dt
+  for (const m of ballModels) {
+    const body = m.ball.body
+    const t = Transform.getMutable(m.model)
+    t.position = Vector3.create(body.position.x, body.position.y, body.position.z)
+
+    const vx = body.velocity.x
+    const vz = body.velocity.z
+    const speed = Math.sqrt(vx * vx + vz * vz)
+    if (speed < 0.01) continue
+    // up x v = (vz, 0, -vx)
+    const axis = Vector3.create(vz / speed, 0, -vx / speed)
+    const degrees = ((speed * dt) / BALL_RADIUS) * (180 / Math.PI)
+    m.spin = Quaternion.multiply(Quaternion.fromAngleAxis(degrees, axis), m.spin)
+    t.rotation = m.spin
+  }
+}
+
 function SpawnCamera() {
   // Create the camera entity attached to the first ball.
   // Game.beginSwing re-parents it to whichever ball is being played.
@@ -446,12 +517,21 @@ function SpawnCamera() {
 export function main() {
   
   buildWorldFromScene()
+  swapBallModels()
+
+  // The bunker zones are only used for scoring: keep them in the scene, but don't draw them
+  for (const zone of [ScoreZones.Bunker1, ScoreZones.Bunker2, ScoreZones.Bunker3, ScoreZones.Bunker4]) {
+    if (zone) VisibilityComponent.createOrReplace(zone, { visible: false })
+  }
 
   // A rack of the three clubs beside every ball's pad. Each ball body is still
   // at its authored start position here, and the ground sits one radius below it.
   spawnClubRacks(
     balls.map((b) => ({ x: b.body.position.x, y: b.body.position.y - BALL_RADIUS, z: b.body.position.z }))
   )
+
+  // Clicking a Tee Off panel opens the Pixel Golf menu
+  setupTeeOffPanels()
 
   SpawnCamera()
   setupUi()
@@ -461,6 +541,7 @@ export function main() {
   })
 
   engine.addSystem(physicsSystem)
+  engine.addSystem(spinBallModels)
 
   if (balls.length === 0) {
     console.log('[golf] no entity named "Ball" in the scene, the game cannot start')
@@ -469,6 +550,8 @@ export function main() {
 
   // One game per ball, each with its own physics body. They share the arrows and camera.
   const games = balls.map((b) => new Game(makePhysicsBridge(b.body), b.entity))
+  // Each bay's score on its Tee Off panel screen
+  setupTeeOffScreens(balls.map((b, i) => ({ name: b.name, state: games[i].state })))
   Game.InitCamera()
   Game.InitClub()
 

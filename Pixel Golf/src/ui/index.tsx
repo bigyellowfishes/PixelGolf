@@ -1,10 +1,13 @@
 /** @jsx ReactEcs.createElement */
 import ReactEcs, { UiEntity, ReactEcsRenderer, ScreenInsetArea } from '@dcl/sdk/react-ecs'
 import { BallCamToggle } from './BallCamToggle'
+import { ClubSelectMenu } from './ClubSelectMenu'
+import { GameModeMenu } from './GameModeMenu'
+import { MainUI } from './MainUI'
 import { PowerBar } from './PowerBar'
 import { RotateBar } from './RotateBar'
-import { MainUI } from './MainUI'
 import { Score } from './Score'
+import { SettingsMenu } from './SettingsMenu'
 import { ShotPrompt } from './ShotPrompt'
 
 export function setupUi() {
@@ -14,16 +17,25 @@ export function setupUi() {
         <BallCamToggle />
       </ScreenInsetArea>
       <ScreenInsetArea>
+        <ClubSelectMenu />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <GameModeMenu />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <MainUI />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
         <PowerBar />
       </ScreenInsetArea>
       <ScreenInsetArea>
         <RotateBar />
       </ScreenInsetArea>
       <ScreenInsetArea>
-        <MainUI />
+        <Score />
       </ScreenInsetArea>
       <ScreenInsetArea>
-        <Score />
+        <SettingsMenu />
       </ScreenInsetArea>
       <ScreenInsetArea>
         <ShotPrompt />

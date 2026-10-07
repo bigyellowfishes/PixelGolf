@@ -4,6 +4,8 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { ballCamEnabled, toggleBallCam } from '../game'
 import { Color4 } from '@dcl/sdk/math'
 
+// Replaced by the Ball cam switch in the Settings panel (SettingsMenu.tsx).
+// Hidden; safe to delete this GUI.
 export function BallCamToggle(props: {}) {
   return (
     <UiEntity
@@ -13,7 +15,8 @@ export function BallCamToggle(props: {}) {
       positionType: 'absolute',
       justifyContent: 'center',
       alignItems: 'flex-start',
-      margin: { top: 108 }
+      margin: { top: 108 },
+      display: 'none'
     }}
   >
     <UiEntity

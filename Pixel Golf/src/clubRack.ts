@@ -13,6 +13,7 @@ import {
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { CLUB_TYPES, ClubType } from './club'
 import { getSelectedClubType, onClubSelected, selectClub } from './clubSelect'
+import { playUi } from './sfx'
 import { isShotInProgress } from './game'
 
 /**
@@ -97,7 +98,9 @@ function spawnRack(spot: { x: number; y: number; z: number }): void {
     }
     // Swapping mid-shot would change the power under a swing that is already under way
     const pick = () => {
-      if (!isShotInProgress()) selectClub(type)
+      if (isShotInProgress()) return
+      selectClub(type)
+      playUi('ui_select')
     }
     pointerEventsSystem.onPointerDown({ entity: plate, opts }, pick)
     pointerEventsSystem.onPointerDown({ entity: model, opts }, pick)

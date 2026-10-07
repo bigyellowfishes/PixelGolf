@@ -51,6 +51,7 @@ export enum EntityNames {
   Mechanics = "Mechanics",
   Mountains_glb = "Mountains.glb",
   Orange = "Orange",
+  Pidgeon_Animation_V4_glb = "Pidgeon Animation V4.glb",
   Planters_glb = "Planters.glb",
   Plants_glb = "Plants.glb",
   Podium_Frame_glb = "Podium Frame.glb",

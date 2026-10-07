@@ -9,13 +9,15 @@ import {
   VisibilityComponent,
   MainCamera,
   VirtualCamera,
-  InputModifier
+  InputModifier,
+  PrimaryPointerInfo
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
 import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub } from './club'
 import { getSelectedClubType, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
+import { playAt, playUi } from './sfx'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -27,6 +29,60 @@ let returnCam: Entity | undefined
 let returnTimer = 0
 // How long the return camera holds before handing the view back to the player
 const RETURN_HOLD_SECONDS = 0.15
+
+// ---------------------------------------------------------------------------
+// Ball cam orbit (Settings > Orbit camera, off by default): while the ball cam
+// follows a shot, hold the left mouse button (or touch) and drag to orbit around
+// the ball, or use A / D. W / S zoom in and out. Every shot starts from the default view.
+// ---------------------------------------------------------------------------
+const ORBIT_DEFAULT = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
+const ORBIT_DRAG_SPEED = 0.25   // degrees per pixel dragged
+const ORBIT_KEY_SPEED = 90      // degrees per second with A / D
+const ORBIT_ZOOM_SPEED = 15     // metres per second with W / S
+const ORBIT_PITCH_LIMITS = { min: 8, max: 88 } // 8 = almost level with the ball, 88 = straight down
+const ORBIT_ZOOM_LIMITS = { min: 3, max: 40 }
+
+let orbitPitch = ORBIT_DEFAULT.pitch
+let orbitYaw = ORBIT_DEFAULT.yaw
+let orbitDistance = ORBIT_DEFAULT.distance
+
+function resetOrbit(): void {
+  orbitPitch = ORBIT_DEFAULT.pitch
+  orbitYaw = ORBIT_DEFAULT.yaw
+  orbitDistance = ORBIT_DEFAULT.distance
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
+
+// Read the player's orbit and zoom input for this frame
+function readOrbitInput(dt: number): void {
+  if (!orbitCamEnabled) return
+  if (inputSystem.isPressed(InputAction.IA_POINTER)) {
+    const delta = PrimaryPointerInfo.getOrNull(engine.RootEntity)?.screenDelta
+    if (delta) {
+      orbitYaw += delta.x * ORBIT_DRAG_SPEED
+      orbitPitch += delta.y * ORBIT_DRAG_SPEED
+    }
+  }
+  if (inputSystem.isPressed(InputAction.IA_LEFT)) orbitYaw -= ORBIT_KEY_SPEED * dt
+  if (inputSystem.isPressed(InputAction.IA_RIGHT)) orbitYaw += ORBIT_KEY_SPEED * dt
+  if (inputSystem.isPressed(InputAction.IA_FORWARD)) orbitDistance -= ORBIT_ZOOM_SPEED * dt
+  if (inputSystem.isPressed(InputAction.IA_BACKWARD)) orbitDistance += ORBIT_ZOOM_SPEED * dt
+  orbitPitch = clamp(orbitPitch, ORBIT_PITCH_LIMITS.min, ORBIT_PITCH_LIMITS.max)
+  orbitDistance = clamp(orbitDistance, ORBIT_ZOOM_LIMITS.min, ORBIT_ZOOM_LIMITS.max)
+}
+
+// Place the ball cam. It's parented to the ball, so turning the ball's transform
+// swings the camera around it, and its local distance is divided by the ball's scale.
+function applyOrbit(): void {
+  if (!cameraEntity) return
+  const cam = Transform.getMutable(cameraEntity)
+  if (!cam.parent) return
+  const ball = Transform.getMutable(cam.parent)
+  ball.rotation = Quaternion.fromEulerDegrees(orbitPitch, orbitYaw, 0)
+  const scale = ball.scale.x || 1
+  cam.position = Vector3.create(0, 0, -orbitDistance / scale)
+}
 
 //The rules layer
 type SurfaceProbe = (
@@ -138,6 +194,7 @@ export function getPrompt(): string {
   if (activeGame) {
     if (activeGame.state.phase === 'Swing_Height') return 'Press E to set your power'
     if (activeGame.state.phase === 'Swing_Turn') return 'Press E to set your curve and hit'
+    if (activeGame.state.phase === 'rolling' && camMode === 'ball' && orbitCamEnabled) return 'Drag or A / D to orbit    W / S to zoom'
     return ''
   }
   for (const g of allGames) {
@@ -233,6 +290,7 @@ export class Game {
       if (!this.emoteFired && this.swingClock >= CLUB.emoteDelay) {
         this.emoteFired = true
         if (club) playStrike(club, this.storedPower)
+        playAt('swing_whoosh', this.physics.position(), 0.6 + this.storedPower * 0.4)
       }
     }
 
@@ -313,6 +371,7 @@ export class Game {
     this.takeStance()
     this.addressClock = 0
     this.backswingStarted = false
+    playUi('ui_click')
   }
 
   // Step the player in beside the ball, facing the target. The swing animation
@@ -349,6 +408,7 @@ export class Game {
   // Stage 1: E pressed. Keep the power, swap to the turn arrow.
   private lockHeight(): void {
     this.storedPower = this.heightMeter()
+    playUi('meter_lock', 1, 0.9 + this.storedPower * 0.4) // higher blip for more power
     this.charge = this.storedPower // the club holds its backswing while you set the curve
     this.state.phase = 'Swing_Turn'
     this.inputLock = 0.2
@@ -361,6 +421,7 @@ export class Game {
   // Stage 2: E pressed. Read the bend and swing.
   private lockTurnAndSwing(): void {
     this.storedBend = this.turnMeter() * MAX_BEND_DEG
+    playUi('meter_lock', 1, 1.3)
 
     // Change BarVis
     viewPower = false
@@ -378,6 +439,9 @@ export class Game {
 
   // Stage 3: the ball leaves.
   private strikeBall(): void {
+    // Driver lowest, wedge highest; harder swings are louder
+    const clubPitch = { driver: 0.92, iron: 1.04, wedge: 1.16 }[getSelectedClubType()]
+    playAt('club_hit', this.physics.position(), 0.55 + this.storedPower * 0.45, clubPitch)
     this.hit(this.storedPower, this.storedBend)
     this.state.shot++
     this.state.phase = 'rolling'
@@ -592,6 +656,7 @@ export class Game {
     this.state.lastShotScore = result.points
     this.state.lastZone = result.zone
     this.state.score += result.points
+    playResultSound(result.zone, result.points)
 
     // Reset Player and Physics
     this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
@@ -629,6 +694,10 @@ export class Game {
 
   // Runs once per frame from index.ts: finishes the hand-back to the player camera
   static UpdateCameraFrame(dt: number): void {
+    if (camMode === 'ball') {
+      readOrbitInput(dt)
+      return
+    }
     if (camMode !== 'returning') return
     returnTimer -= dt
     if (returnTimer <= 0) {
@@ -660,14 +729,12 @@ export class Game {
           virtualCameraEntity: cameraEntity
         })
         camMode = 'ball'
+        // Each shot starts from the default view
+        resetOrbit()
       }
 
-      // Set Rotation
-      const CamTrns = Transform.getMutable(cameraEntity)
-      const Prnt = CamTrns.parent
-      if(!Prnt) return
-      const PrntTrns = Transform.getMutable(Prnt)
-      PrntTrns.rotation = Quaternion.fromEulerDegrees(70, 90, 0)
+      // Orbit and zoom from the player's input (see readOrbitInput)
+      applyOrbit()
     } else if (camMode === 'ball') {
       // Back to the player camera: cut instantly to the return camera first,
       // then UpdateCameraFrame hands the view back once it has taken effect
@@ -718,6 +785,15 @@ export function toggleBallCam(): void {
   ballCamEnabled = !ballCamEnabled
 }
 
+// Whether the player can orbit and zoom the ball cam. Toggled in the Settings panel.
+export let orbitCamEnabled = false
+
+export function toggleOrbitCam(): void {
+  orbitCamEnabled = !orbitCamEnabled
+  // Back to the standard view straight away when it's turned off
+  if (!orbitCamEnabled) resetOrbit()
+}
+
 // Key 1 toggles the ball cam. Runs once per frame from index.ts.
 export function updateSettingsInput(): void {
   if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) toggleBallCam()
@@ -736,6 +812,17 @@ export let curRound = 0
 export function UpdateScore(score: number, round: number) {
   curScore = score
   curRound = round
+}
+
+// The jingle for where a shot finished: sand for a bunker, a miss for no zone,
+// and bigger jingles for the harder targets
+function playResultSound(zone: string, points: number): void {
+  const colour = zone.replace(/\d+$/, '')
+  if (colour === 'Bunker') playUi('bunker_sand')
+  else if (points <= 0) playUi('score_miss')
+  else if (colour === 'Blue' || colour === 'White' || colour === 'Black') playUi('score_great')
+  else if (colour === 'Green' || colour === 'Orange') playUi('score_good')
+  else playUi('score_small')
 }
 
 // Rotate a vector by a quaternion
