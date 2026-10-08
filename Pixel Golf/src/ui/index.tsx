@@ -3,9 +3,12 @@ import ReactEcs, { UiEntity, ReactEcsRenderer, ScreenInsetArea } from '@dcl/sdk/
 import { BallCamToggle } from './BallCamToggle'
 import { ClubSelectMenu } from './ClubSelectMenu'
 import { GameModeMenu } from './GameModeMenu'
+import { LeaderboardMenu } from './LeaderboardMenu'
 import { MainUI } from './MainUI'
 import { PowerBar } from './PowerBar'
+import { RangeHud } from './RangeHud'
 import { RotateBar } from './RotateBar'
+import { RoundResult } from './RoundResult'
 import { Score } from './Score'
 import { SettingsMenu } from './SettingsMenu'
 import { ShotPrompt } from './ShotPrompt'
@@ -23,13 +26,22 @@ export function setupUi() {
         <GameModeMenu />
       </ScreenInsetArea>
       <ScreenInsetArea>
+        <LeaderboardMenu />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
         <MainUI />
       </ScreenInsetArea>
       <ScreenInsetArea>
         <PowerBar />
       </ScreenInsetArea>
       <ScreenInsetArea>
+        <RangeHud />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
         <RotateBar />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <RoundResult />
       </ScreenInsetArea>
       <ScreenInsetArea>
         <Score />

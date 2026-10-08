@@ -583,27 +583,6 @@
             "parent": 550
           }
         },
-        "538": {
-          "json": {
-            "position": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 550
-          }
-        },
         "539": {
           "json": {
             "position": {
@@ -754,9 +733,9 @@
         "546": {
           "json": {
             "position": {
-              "x": 0,
-              "y": 0,
-              "z": 0
+              "x": 320,
+              "y": 3,
+              "z": 250.19000244140625
             },
             "scale": {
               "x": 1,
@@ -769,20 +748,15 @@
               "z": 0,
               "w": 1
             },
-            "parent": 550
+            "parent": 0
           }
         },
         "547": {
           "json": {
             "position": {
-              "x": 0,
+              "x": 181.66854858398438,
               "y": 0,
-              "z": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
+              "z": 300.8624572753906
             },
             "rotation": {
               "x": 0,
@@ -790,7 +764,12 @@
               "z": 0,
               "w": 1
             },
-            "parent": 550
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
           }
         },
         "548": {
@@ -840,7 +819,7 @@
             "position": {
               "x": 320,
               "y": 3,
-              "z": 250
+              "z": 250.00006103515625
             },
             "scale": {
               "x": 1,
@@ -1493,16 +1472,16 @@
               "y": -0.25,
               "z": -30.25
             },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
             "rotation": {
               "x": 0,
               "y": 0,
               "z": 0,
               "w": 1
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
             },
             "parent": 550
           }
@@ -1717,6 +1696,195 @@
             "parent": 568
           }
         },
+        "597": {
+          "json": {
+            "position": {
+              "x": 179.21189880371094,
+              "y": 0,
+              "z": 266.49066162109375
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "599": {
+          "json": {
+            "position": {
+              "x": 179.21189880371094,
+              "y": 0,
+              "z": 233.08779907226562
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "600": {
+          "json": {
+            "position": {
+              "x": 181.55958557128906,
+              "y": 0,
+              "z": 198.2168731689453
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "601": {
+          "json": {
+            "position": {
+              "x": 223.1115264892578,
+              "y": 0,
+              "z": 278.6761474609375
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "602": {
+          "json": {
+            "position": {
+              "x": 223.1115264892578,
+              "y": 0,
+              "z": 220.73614501953125
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "603": {
+          "json": {
+            "position": {
+              "x": 273.2817077636719,
+              "y": 0,
+              "z": 249.95265197753906
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "604": {
+          "json": {
+            "position": {
+              "x": 330.7554016113281,
+              "y": 0,
+              "z": 218.36595153808594
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "605": {
+          "json": {
+            "position": {
+              "x": 371.2939758300781,
+              "y": 0,
+              "z": 281.4024658203125
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "606": {
+          "json": {
+            "position": {
+              "x": 413.476806640625,
+              "y": 0,
+              "z": 218.17752075195312
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
         "66068": {
           "json": {
             "position": {
@@ -1736,6 +1904,27 @@
               "w": 1
             },
             "parent": 550
+          }
+        },
+        "66074": {
+          "json": {
+            "position": {
+              "x": 320,
+              "y": 3,
+              "z": 250
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 1
+            },
+            "parent": 0
           }
         },
         "66089": {
@@ -1875,6 +2064,146 @@
         "protocolBuffer": "PBAnimator"
       },
       "data": {
+        "547": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "597": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "599": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "600": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "601": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "602": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "603": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "604": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "605": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
+        "606": {
+          "json": {
+            "states": [
+              {
+                "clip": "Cylinder.011Action",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              }
+            ]
+          }
+        },
         "66089": {
           "json": {
             "states": [
@@ -2135,13 +2464,6 @@
             "invisibleMeshesCollisionMask": 3
           }
         },
-        "538": {
-          "json": {
-            "src": "assets/Shop/Shop Light.glb",
-            "visibleMeshesCollisionMask": 0,
-            "invisibleMeshesCollisionMask": 3
-          }
-        },
         "539": {
           "json": {
             "src": "assets/Shop/shop_banner.glb",
@@ -2193,14 +2515,14 @@
         },
         "546": {
           "json": {
-            "src": "assets/Wall of Honor/Chairs.glb",
+            "src": "assets/Shop/Shop Light.glb",
             "visibleMeshesCollisionMask": 0,
             "invisibleMeshesCollisionMask": 3
           }
         },
         "547": {
           "json": {
-            "src": "assets/Wall of Honor/Wall of Honor Podium.glb",
+            "src": "assets/Course/Flag.glb",
             "visibleMeshesCollisionMask": 0,
             "invisibleMeshesCollisionMask": 3
           }
@@ -2268,9 +2590,79 @@
             "invisibleMeshesCollisionMask": 3
           }
         },
+        "597": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "599": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "600": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "601": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "602": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "603": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "604": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "605": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "606": {
+          "json": {
+            "src": "assets/Course/Flag.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
         "66068": {
           "json": {
             "src": "assets/Shop/Display Balls.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "66074": {
+          "json": {
+            "src": "assets/Wall of Honor/Wall of Honor.glb",
             "visibleMeshesCollisionMask": 0,
             "invisibleMeshesCollisionMask": 3
           }
@@ -2638,11 +3030,6 @@
             "value": "Shop Counter.glb"
           }
         },
-        "538": {
-          "json": {
-            "value": "Shop Light.glb"
-          }
-        },
         "539": {
           "json": {
             "value": "shop_banner.glb"
@@ -2680,12 +3067,12 @@
         },
         "546": {
           "json": {
-            "value": "Chairs.glb_2"
+            "value": "Shop Light.glb"
           }
         },
         "547": {
           "json": {
-            "value": "Wall of Honor Podium.glb"
+            "value": "Flag.glb"
           }
         },
         "548": {
@@ -2908,9 +3295,59 @@
             "value": "Ghost_Shot"
           }
         },
+        "597": {
+          "json": {
+            "value": "Flag.glb_2"
+          }
+        },
+        "599": {
+          "json": {
+            "value": "Flag.glb_3"
+          }
+        },
+        "600": {
+          "json": {
+            "value": "Flag.glb_4"
+          }
+        },
+        "601": {
+          "json": {
+            "value": "Flag.glb_5"
+          }
+        },
+        "602": {
+          "json": {
+            "value": "Flag.glb_6"
+          }
+        },
+        "603": {
+          "json": {
+            "value": "Flag.glb_7"
+          }
+        },
+        "604": {
+          "json": {
+            "value": "Flag.glb_8"
+          }
+        },
+        "605": {
+          "json": {
+            "value": "Flag.glb_9"
+          }
+        },
+        "606": {
+          "json": {
+            "value": "Flag.glb_10"
+          }
+        },
         "66068": {
           "json": {
             "value": "Display Balls.glb"
+          }
+        },
+        "66074": {
+          "json": {
+            "value": "Wall of Honor.glb"
           }
         },
         "66089": {
@@ -3022,7 +3459,19 @@
                 "children": [
                   550,
                   568,
-                  131670
+                  131670,
+                  66074,
+                  546,
+                  547,
+                  597,
+                  601,
+                  602,
+                  603,
+                  604,
+                  605,
+                  606,
+                  599,
+                  600
                 ]
               },
               {
@@ -3130,10 +3579,6 @@
                 "children": []
               },
               {
-                "entity": 538,
-                "children": []
-              },
-              {
                 "entity": 539,
                 "children": []
               },
@@ -3159,14 +3604,6 @@
               },
               {
                 "entity": 545,
-                "children": []
-              },
-              {
-                "entity": 546,
-                "children": []
-              },
-              {
-                "entity": 547,
                 "children": []
               },
               {
@@ -3209,7 +3646,6 @@
                   535,
                   536,
                   537,
-                  538,
                   539,
                   540,
                   541,
@@ -3217,8 +3653,6 @@
                   543,
                   544,
                   545,
-                  546,
-                  547,
                   548,
                   512,
                   549,
@@ -3467,6 +3901,54 @@
               {
                 "entity": 131670,
                 "children": []
+              },
+              {
+                "entity": 66074,
+                "children": []
+              },
+              {
+                "entity": 546,
+                "children": []
+              },
+              {
+                "entity": 547,
+                "children": []
+              },
+              {
+                "entity": 597,
+                "children": []
+              },
+              {
+                "entity": 599,
+                "children": []
+              },
+              {
+                "entity": 600,
+                "children": []
+              },
+              {
+                "entity": 601,
+                "children": []
+              },
+              {
+                "entity": 602,
+                "children": []
+              },
+              {
+                "entity": 603,
+                "children": []
+              },
+              {
+                "entity": 604,
+                "children": []
+              },
+              {
+                "entity": 605,
+                "children": []
+              },
+              {
+                "entity": 606,
+                "children": []
               }
             ]
           }
@@ -3563,9 +4045,6 @@
           "json": {}
         },
         "537": {
-          "json": {}
-        },
-        "538": {
           "json": {}
         },
         "539": {
@@ -3727,7 +4206,37 @@
         "596": {
           "json": {}
         },
+        "597": {
+          "json": {}
+        },
+        "599": {
+          "json": {}
+        },
+        "600": {
+          "json": {}
+        },
+        "601": {
+          "json": {}
+        },
+        "602": {
+          "json": {}
+        },
+        "603": {
+          "json": {}
+        },
+        "604": {
+          "json": {}
+        },
+        "605": {
+          "json": {}
+        },
+        "606": {
+          "json": {}
+        },
         "66068": {
+          "json": {}
+        },
+        "66074": {
           "json": {}
         },
         "66089": {

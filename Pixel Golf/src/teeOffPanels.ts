@@ -15,6 +15,10 @@ import {
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu } from './ui/GameModeMenu'
 import { isShotInProgress, GameState } from './game'
+import { ROUND_BALLS } from './ledger/rules'
+import { bayTakenBy, claimBay } from './ledger/client'
+import { showToast } from './ui/RangeHud'
+import { playUi } from './sfx'
 
 // The Tee Off panels: clicking one opens the Pixel Golf menu, and its screen shows
 // that bay's score in the same style as the menu.
@@ -48,13 +52,15 @@ const SCREEN_SHIFT_UP = 0
 const SCREEN_LIFT = -0.008
 // Text is drawn on its readable side; set to -1 if the screen shows mirrored in the preview
 const FACE_DIRECTION = 1
+// How much the screen glows, so it reads like a lit display. 0 is none, 1 is full brightness.
+const SCREEN_GLOW = 0.6
 // Multiplies every text size; nudge this if the numbers look too big or small for their boxes
 const TEXT_SCALE = 1
 // Where each live value sits on the picture (metres from its centre) and its letter height
 const SLOTS = {
   bay: { x: -1.0462, y: 0.515, cap: 0.08 },
   score: { x: -0.69, y: -0.0762, cap: 0.225 },
-  shots: { x: 0.3475, y: -0.0762, cap: 0.225 },
+  shots: { x: 0.3475, y: -0.0762, cap: 0.15 }, // smaller than the score so "10/10" fits its box
   last: { x: 1.0375, y: -0.045, cap: 0.09 },
   zone: { x: 1.0375, y: -0.2075, cap: 0.0625 }
 }
@@ -188,6 +194,13 @@ export function setupTeeOffPanels(): void {
       () => {
         // Don't interrupt a swing or a ball that's still rolling
         if (isShotInProgress()) return
+        // One player per bay. Clicking a free bay's screen makes it yours (and lets your old one go).
+        const takenBy = bayTakenBy(p.ball)
+        if (takenBy || !claimBay(p.ball)) {
+          playUi('score_miss')
+          showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
+          return
+        }
         activeBay = p.ball
         openPixelGolfMenu()
       }
@@ -263,7 +276,17 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
     const bg = engine.addEntity()
     Transform.create(bg, { parent: card, scale: Vector3.create(SCREEN_SIZE.x, SCREEN_SIZE.y, 1) })
     MeshRenderer.setPlane(bg)
-    Material.setBasicMaterial(bg, { texture: Material.Texture.Common({ src: SCREEN_IMAGE }) })
+    // Lit like a display: the picture is its own glow, so it reads in shade and at a distance
+    const screenTexture = Material.Texture.Common({ src: SCREEN_IMAGE })
+    Material.setPbrMaterial(bg, {
+      texture: screenTexture,
+      emissiveTexture: screenTexture,
+      emissiveColor: Color4.White(),
+      emissiveIntensity: SCREEN_GLOW,
+      metallic: 0,
+      roughness: 1,
+      specularIntensity: 0
+    })
 
     addText(card, SLOTS.bay, Color4.White(), `BAY ${ball}`)
     screens.push({
@@ -283,12 +306,12 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
       const played = st.shot > 0
       const last = played ? `${st.lastShotScore >= 0 ? '+' : ''}${formatNumber(st.lastShotScore)}` : '-'
       // Red1 -> Red
-      const zone = played ? st.lastZone.replace(/\d+$/, '') : ''
+      const zone = played ? st.lastZone.replace(/\d+$/, '') + (st.lastHot ? ' 2X' : '') : ''
       const key = `${st.score}|${st.shot}|${last}|${zone}`
       if (key === sc.key) continue
       sc.key = key
       TextShape.getMutable(sc.score).text = formatNumber(st.score)
-      TextShape.getMutable(sc.shots).text = String(st.shot)
+      TextShape.getMutable(sc.shots).text = `${st.shot}/${ROUND_BALLS}`
       TextShape.getMutable(sc.last).text = last
       TextShape.getMutable(sc.zone).text = zone
     }

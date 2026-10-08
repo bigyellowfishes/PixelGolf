@@ -1,0 +1,369 @@
+import { engine } from '@dcl/sdk/ecs'
+import { getPlayer } from '@dcl/sdk/players'
+
+import { room } from './room'
+import { HOT, Period, PERIODS, levelProgress, multiplierCeiling } from './rules'
+
+/**
+ * The scene's side of the ledger.
+ *
+ * Says hello, keeps the server told that this player is here, posts finished
+ * rounds, and holds what the server sends back so the UI can read it. Nothing
+ * here decides a number the server pays: the scene reports, the server pays.
+ *
+ * The UI reads the exported objects below each frame. Anything that needs to
+ * react at a moment (a round result, a level-up) subscribes with the on...()
+ * functions.
+ */
+
+// ---------------------------------------------------------------------------
+// What the server has told us
+// ---------------------------------------------------------------------------
+
+export const profile = {
+  /** True once the server has answered. Until then, show a dash. */
+  ready: false,
+  /** False for a guest: progress won't be there next visit. */
+  durable: false,
+  xp: 0,
+  level: 1,
+  /** XP into this level, and what the level needs in all. */
+  levelXp: 0,
+  levelNeed: 0,
+  points: 0,
+  pointsEarned: 0,
+  best: 0,
+  bestMulti: 0,
+  rounds: 0,
+  owned: [] as string[],
+  equipped: { ball: 'ball-classic', club: 'club-classic' } as Record<string, string>,
+  /** Seconds until the daily login bonus is back, counted down locally. */
+  dailyIn: 0
+}
+
+export const range = {
+  /** The hot target's zone name, or '' until the server says. */
+  hot: '',
+  /** When it rotates, in this client's clock (ms). */
+  hotEndsAt: 0,
+  /** Players in the space, by the server's count. At least 1: you. */
+  players: 1
+}
+
+export type BoardRow = { n: string; v: number; u: string }
+export type Board = { key: string; true: BoardRow[]; multi: BoardRow[] }
+export type MyRank = { true: number; trueV: number; multi: number; multiV: number }
+
+export const boards: { ready: boolean; tables: Record<Period, Board>; mine: Record<Period, MyRank> } = {
+  ready: false,
+  tables: {
+    day: { key: '', true: [], multi: [] },
+    week: { key: '', true: [], multi: [] },
+    month: { key: '', true: [], multi: [] },
+    all: { key: '', true: [], multi: [] }
+  },
+  mine: {
+    day: { true: 0, trueV: 0, multi: 0, multiV: 0 },
+    week: { true: 0, trueV: 0, multi: 0, multiV: 0 },
+    month: { true: 0, trueV: 0, multi: 0, multiV: 0 },
+    all: { true: 0, trueV: 0, multi: 0, multiV: 0 }
+  }
+}
+
+/** Who has which bay, by the server's list, and a claim waiting for its answer. */
+export const bays = {
+  owners: {} as Record<string, { u: string; n: string }>,
+  pending: 0
+}
+
+export type RoundResult = {
+  trueScore: number
+  roll: number
+  players: number
+  multiScore: number
+  hotHits: number
+  xp: number
+  points: number
+  personalBest: boolean
+  counted: boolean
+  reason: string
+}
+
+// ---------------------------------------------------------------------------
+// Listeners
+// ---------------------------------------------------------------------------
+
+type Fn<T> = (v: T) => void
+const profileFns: Fn<typeof profile>[] = []
+const resultFns: Fn<RoundResult>[] = []
+const levelFns: Fn<{ level: number; gained: number; unlocked: string[] }>[] = []
+const awardFns: Fn<{ xp: number; points: number; reason: string }>[] = []
+const rolledFns: Fn<{ name: string; roll: number; score: number }>[] = []
+const refusedFns: Fn<string>[] = []
+const settingsFns: Fn<Record<string, boolean>>[] = []
+export type RemoteShot = { bay: number; vx: number; vy: number; vz: number }
+export type BayScore = { bay: number; score: number; shot: number; last: number; zone: string; hot: boolean }
+const remoteShotFns: Fn<RemoteShot>[] = []
+const bayScoreFns: Fn<BayScore>[] = []
+/** Another player hit the ball in their bay. */
+export const onRemoteShot = (fn: Fn<RemoteShot>) => remoteShotFns.push(fn)
+/** Another player's bay numbers after their shot. */
+export const onBayScore = (fn: Fn<BayScore>) => bayScoreFns.push(fn)
+
+/** Tell everyone I just hit, so they can watch the ball fly. */
+export function sendShot(bay: number, vx: number, vy: number, vz: number): void {
+  if (bay > 0) void room.send('shot', { bay, vx, vy, vz })
+}
+
+/** Tell everyone my bay's numbers after the ball settles. */
+export function sendShotDone(d: BayScore): void {
+  if (d.bay > 0) void room.send('shotDone', d)
+}
+
+/** Whenever XP, points or cosmetics change. */
+export const onProfile = (fn: Fn<typeof profile>) => profileFns.push(fn)
+/** The server's answer to a posted round. */
+export const onRoundResult = (fn: Fn<RoundResult>) => resultFns.push(fn)
+export const onLevelUp = (fn: Fn<{ level: number; gained: number; unlocked: string[] }>) => levelFns.push(fn)
+export const onAward = (fn: Fn<{ xp: number; points: number; reason: string }>) => awardFns.push(fn)
+/** Someone on the range rolled a big multiplier. */
+export const onBigRoll = (fn: Fn<{ name: string; roll: number; score: number }>) => rolledFns.push(fn)
+export const onRefused = (fn: Fn<string>) => refusedFns.push(fn)
+/** The Settings switches this player saved last time. */
+export const onSavedSettings = (fn: Fn<Record<string, boolean>>) => settingsFns.push(fn)
+
+// ---------------------------------------------------------------------------
+// Asking the server
+// ---------------------------------------------------------------------------
+
+export type BallResult = { zone: string; points: number; hot: boolean }
+
+/** Posts a finished round. points are base points, before the hot target doubles them. */
+export function submitRound(balls: BallResult[]): void {
+  const json = JSON.stringify(balls.map((b) => ({ z: b.zone, p: b.points, h: b.hot ? 1 : 0 })))
+  void room.send('round', { balls: json })
+}
+
+export function buyCosmetic(id: string): void {
+  void room.send('buy', { id })
+}
+
+export function equipCosmetic(id: string): void {
+  void room.send('equip', { id })
+}
+
+function myId(): string {
+  return getPlayer()?.userId ?? ''
+}
+
+/** The name of whoever else has this bay, or '' if it's free or yours. */
+export function bayTakenBy(bay: number): string {
+  const o = bays.owners[String(bay)]
+  return o && o.u !== myId() ? o.n || 'another player' : ''
+}
+
+/** The bay this player plays in, or 0 if they haven't picked one. */
+export function myBay(): number {
+  const me = myId()
+  if (me) {
+    for (const k in bays.owners) if (bays.owners[k].u === me) return Number(k)
+  }
+  if (bays.pending && !bayTakenBy(bays.pending)) return bays.pending
+  return 0
+}
+
+/**
+ * Asks for a bay. Returns false straight away if someone else has it. Otherwise
+ * it's yours at once on this screen, and the server confirms it (or, if someone
+ * beat you to it, says so and it's taken back).
+ */
+export function claimBay(bay: number): boolean {
+  if (bayTakenBy(bay)) return false
+  bays.pending = bay
+  void room.send('claimBay', { bay })
+  return true
+}
+
+export function saveSetting(key: string, on: boolean): void {
+  void room.send('settings', { key, on })
+}
+
+/**
+ * Call once a minute while the player is on the AFK practice range. The server
+ * pays XP for it, never Pixel Points, and ignores calls that come too fast.
+ */
+export function afkMinute(): void {
+  void room.send('afk', { n: 1 })
+}
+
+// ---------------------------------------------------------------------------
+// Reading the range
+// ---------------------------------------------------------------------------
+
+/** Whether a zone is the hot target right now. */
+export function isHot(zone: string): boolean {
+  return range.hot !== '' && zone === range.hot && Date.now() < range.hotEndsAt + 1500
+}
+
+/** Seconds until the hot target moves on. */
+export function hotSecondsLeft(): number {
+  return Math.max(0, Math.ceil((range.hotEndsAt - Date.now()) / 1000))
+}
+
+/** The biggest multiplier a round can roll right now. */
+export function currentCeiling(): number {
+  return multiplierCeiling(range.players)
+}
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+function myName(): string {
+  const p = getPlayer()
+  return p && p.name ? p.name : ''
+}
+
+function greet(): void {
+  void room.send('hello', { version: 1, name: myName() })
+}
+
+function parse<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T
+  } catch {
+    return fallback
+  }
+}
+
+/** How often to tell the server we're still here. */
+const HERE_SECONDS = 20
+
+export function setupLedgerClient(): void {
+  room.onMessage('ledger', (d) => {
+    const lp = levelProgress(d.xp)
+    profile.ready = true
+    profile.durable = d.durable
+    profile.xp = d.xp
+    profile.level = lp.level
+    profile.levelXp = lp.into
+    profile.levelNeed = lp.need
+    profile.points = d.points
+    profile.pointsEarned = d.pointsEarned
+    profile.best = d.best
+    profile.bestMulti = d.bestMulti
+    profile.rounds = d.rounds
+    profile.owned = parse<string[]>(d.owned, [])
+    profile.equipped = parse<Record<string, string>>(d.equipped, profile.equipped)
+    profile.dailyIn = d.dailyIn
+    for (const fn of profileFns) fn(profile)
+  })
+
+  room.onMessage('mySettings', (d) => {
+    const s = parse<Record<string, boolean>>(d.json, {})
+    for (const fn of settingsFns) fn(s)
+  })
+
+  room.onMessage('range', (d) => {
+    range.hot = d.hot
+    range.hotEndsAt = Date.now() + d.seconds * 1000
+    range.players = Math.max(1, d.players)
+  })
+
+  room.onMessage('leaders', (d) => {
+    const t = parse<Partial<Record<Period, Board>>>(d.json, {})
+    for (const p of PERIODS) if (t[p]) boards.tables[p] = t[p] as Board
+    boards.ready = true
+  })
+
+  room.onMessage('myRanks', (d) => {
+    const m = parse<Partial<Record<Period, MyRank>>>(d.json, {})
+    for (const p of PERIODS) if (m[p]) boards.mine[p] = m[p] as MyRank
+  })
+
+  room.onMessage('bays', (d) => {
+    bays.owners = parse<Record<string, { u: string; n: string }>>(d.json, {})
+    // The server has answered the claim one way or the other once that bay has an owner
+    if (bays.pending && bays.owners[String(bays.pending)]) bays.pending = 0
+  })
+
+  // Other players' shots and scores. My own bay is already playing them.
+  room.onMessage('shotSeen', (d) => {
+    if (d.bay === myBay()) return
+    for (const fn of remoteShotFns) fn({ ...d })
+  })
+  room.onMessage('bayScore', (d) => {
+    if (d.bay === myBay()) return
+    for (const fn of bayScoreFns) fn({ ...d })
+  })
+
+  room.onMessage('roundResult', (d) => {
+    for (const fn of resultFns) fn({ ...d })
+  })
+
+  room.onMessage('levelUp', (d) => {
+    const v = { level: d.level, gained: d.gained, unlocked: parse<string[]>(d.unlocked, []) }
+    for (const fn of levelFns) fn(v)
+  })
+
+  room.onMessage('awarded', (d) => {
+    for (const fn of awardFns) fn({ ...d })
+  })
+
+  room.onMessage('rolled', (d) => {
+    for (const fn of rolledFns) fn({ ...d })
+  })
+
+  room.onMessage('refused', (d) => {
+    for (const fn of refusedFns) fn(d.reason)
+  })
+
+  // Messages sent before the room connects are queued, so hello can go now
+  greet()
+
+  // The profile often loads after the scene starts, so the first hello can go
+  // out without a name. Say hello again once it's known.
+  let greetedAs = myName()
+  let hereClock = 0
+  let dailyClock = 0
+  let waited = 0
+  engine.addSystem((dt) => {
+    if (greetedAs === '') {
+      const name = myName()
+      if (name !== '') {
+        greetedAs = name
+        greet()
+      }
+    }
+
+    hereClock += dt
+    if (hereClock >= HERE_SECONDS) {
+      hereClock = 0
+      void room.send('here', { n: 1 })
+    }
+
+    // Count the daily bonus down, and say hello again when it's due so it pays
+    if (profile.ready && profile.dailyIn > 0) {
+      dailyClock += dt
+      if (dailyClock >= 1) {
+        profile.dailyIn = Math.max(0, profile.dailyIn - Math.floor(dailyClock))
+        dailyClock -= Math.floor(dailyClock)
+        if (profile.dailyIn === 0) greet()
+      }
+    }
+
+    if (!profile.ready && waited >= 0) {
+      waited += dt
+      if (waited > 12) {
+        waited = -1
+        console.log(
+          '[ledger] No answer from the Multiplayer Server after 12s. XP, Pixel Points, the hot target and the ' +
+            'leaderboards all need it. Check scene.json has "authoritativeMultiplayer": true.'
+        )
+      }
+    }
+  })
+}
+
+/** Exposed for the HUD: the hot target length, so a bar can show how long is left. */
+export const HOT_SECONDS = HOT.seconds
