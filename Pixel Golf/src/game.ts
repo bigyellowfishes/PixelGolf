@@ -19,7 +19,7 @@ import { getSelectedClubType, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, sendShot, sendShotDone, RemoteShot, BayScore } from './ledger/client'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, sendShot, sendShotDone, RemoteShot, BayScore, tutorial } from './ledger/client'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -183,6 +183,12 @@ let shownGame: Game | null = null
 // Every ball's game, so the UI can work out which prompt to show
 const allGames: Game[] = []
 
+// Tutorial Value Where
+// 0: Tell Player To Line Up First Shot
+// 1: Tell Player To 
+let TUTORIAL_STEP = 0
+
+
 // True from the first E press until the ball has come to rest and reset.
 // The club rack uses it to lock club selection mid-shot.
 export function isShotInProgress(): boolean {
@@ -191,6 +197,28 @@ export function isShotInProgress(): boolean {
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
+  if(tutorial.active && TUTORIAL_STEP <= 18)
+  {
+    if(TUTORIAL_STEP == 0) return 'Welcome To Pixel Golf, press E to begin.'
+    if(TUTORIAL_STEP == 1) return 'Lets Aim Towards the Orange Hole.'
+    if(TUTORIAL_STEP == 2) return 'The first bar is power, lets give it some beans.'
+    if(TUTORIAL_STEP == 3) return 'The second bar is aim, try and hit the centre.'
+    if(TUTORIAL_STEP == 4) return ''
+    if(TUTORIAL_STEP == 5) return 'Wow! nice shot! Press E to keep shooting.'
+    if(TUTORIAL_STEP == 6) return 'Now try aiming for yourself by pressing and dragging.'
+    if(TUTORIAL_STEP == 7) return 'Press E to Lock in Power.'
+    if(TUTORIAL_STEP == 8) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 9) return ''
+    if(TUTORIAL_STEP == 10) return 'Now Try setting the power yourself.'
+    if(TUTORIAL_STEP == 11) return 'Press E to Lock in Power.'
+    if(TUTORIAL_STEP == 12) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 13) return ''
+    if(TUTORIAL_STEP == 14) return 'Now Try setting the aim bar yourself.'
+    if(TUTORIAL_STEP == 15) return 'Press E to Lock in Power.'
+    if(TUTORIAL_STEP == 16) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 17) return ''
+    if(TUTORIAL_STEP == 18) return 'Now Finish the Remaining Shots!'
+  }
   if (activeGame) {
     if (activeGame.state.phase === 'Swing_Height') return 'Press E to set your power'
     if (activeGame.state.phase === 'Swing_Turn') return 'Press E to set your curve and hit'
@@ -200,6 +228,9 @@ export function getPrompt(): string {
   for (const g of allGames) {
     if (g.state.phase === 'walking' && g.state.distanceToBall <= HIT_RANGE) {
       if (!g.isMine()) {
+        // The tutorial bay is closed after the tutorial, and every other bay is closed during it
+        const locked = bayLockReason(g.bay)
+        if (locked) return locked
         // One player, one bay
         const takenBy = bayTakenBy(g.bay)
         if (takenBy) return `Bay ${g.bay} is in use by ${takenBy}`
@@ -279,8 +310,21 @@ export class Game {
   }
 
   // -------------------------------------------------------------------------
-
   update(dt: number): void {
+
+    // Do Tutorial Stuff
+    if(tutorial.active)
+    {
+      if(TUTORIAL_STEP == 0) this.freezePlayer(true)
+      // Lock Power In Tutorial 1
+      if(TUTORIAL_STEP == 1 || TUTORIAL_STEP == 2) this.swingTime = 0.757
+      if(TUTORIAL_STEP == 6 || TUTORIAL_STEP == 7) this.swingTime = 0.757
+      // Lock Bend In Tutorial 1
+      if(TUTORIAL_STEP == 3) this.swingTime = 1.62
+      if(TUTORIAL_STEP == 8) this.swingTime = 0.0
+      if(TUTORIAL_STEP == 12) this.swingTime = 0.0
+    }
+
     if (this.inputLock > 0) this.inputLock -= dt
 
     // Only the ball last played drives the score UI
@@ -288,7 +332,7 @@ export class Game {
 
     // Only follow the camera while walking. Once the swing starts the aim is locked.
     if (this.state.phase === 'walking' || this.state.phase === 'Swing_Height') this.readAimFromCamera()
-
+    
     // Refresh distanceToBall against the player's current position
     this.measure()
 
@@ -326,24 +370,47 @@ export class Game {
         break
 
       case 'Swing_Height':
+        if (TUTORIAL_STEP == 0) TUTORIAL_STEP = 1
+        if (TUTORIAL_STEP == 5) TUTORIAL_STEP = 6
+        if (TUTORIAL_STEP == 10) TUTORIAL_STEP = 11
+        if (TUTORIAL_STEP == 14) TUTORIAL_STEP = 15
+        if (TUTORIAL_STEP == 18) TUTORIAL_STEP = 19
+
         if (this.walkedAway()) break
         this.setArrow(ghostShot, true)
         this.UpdateArrowDir(ghostShot)
-        this.swingTime += dt
+        if(!tutorial.active || TUTORIAL_STEP > 8) this.swingTime += dt
         this.charge = this.heightMeter()
         this.state.shotDistance = this.physics.predictRoll(this.charge)
-        if (this.clicked()) this.lockHeight()
+
+        if (!tutorial.active && this.clicked()) this.lockHeight()
+        if (tutorial.active && TUTORIAL_STEP == 4 && this.clicked()) this.lockHeight()
+        if (tutorial.active && TUTORIAL_STEP == 2 && this.clicked()) this.lockHeight()
+        if (tutorial.active && TUTORIAL_STEP == 1 && this.clicked()) TUTORIAL_STEP = 2
+        if (tutorial.active && TUTORIAL_STEP == 7 && this.clicked()) this.lockHeight()
+        if (tutorial.active && TUTORIAL_STEP == 6 && this.clicked()) TUTORIAL_STEP = 7
+        if (tutorial.active && TUTORIAL_STEP > 8 && this.clicked()) this.lockHeight()
         break
 
       case 'Swing_Turn':
+        if (TUTORIAL_STEP == 2) TUTORIAL_STEP = 3
+        if (TUTORIAL_STEP == 7) TUTORIAL_STEP = 8
+        if (TUTORIAL_STEP == 11) TUTORIAL_STEP = 12
+        if (TUTORIAL_STEP == 15) TUTORIAL_STEP = 16
         if (this.walkedAway()) break
-        this.swingTime += dt
+        if(!tutorial.active || TUTORIAL_STEP > 12) this.swingTime += dt
         const f = (this.swingTime * BendTimeMulti / TURN_ANIM_SECONDS) % 1
         const p = Math.sin(2 * Math.PI * f)
         setProgress(50 - (p * 50))
 
-        //
-        if (this.clicked()) this.lockTurnAndSwing()
+        // When Turn / Bend Meter Is selected
+        if (this.clicked()) {
+          this.lockTurnAndSwing()
+          if (TUTORIAL_STEP == 3) TUTORIAL_STEP = 4
+          if (TUTORIAL_STEP == 8) TUTORIAL_STEP = 9
+          if (TUTORIAL_STEP == 12) TUTORIAL_STEP = 13
+          if (TUTORIAL_STEP == 16) TUTORIAL_STEP = 17
+        }
         break
 
       case 'Swinging':
@@ -352,6 +419,7 @@ export class Game {
         break
 
       case 'watching':
+        // While Player is watching the ball
         this.updateWatching(dt)
         break
 
@@ -365,7 +433,7 @@ export class Game {
         // Movement is only locked while the ball cam has the view
         if (useBallCam !== this.rollLock) {
           this.rollLock = useBallCam
-          this.freezePlayer(useBallCam)
+          //this.freezePlayer(useBallCam)
         }
         this.updateRolling(dt)
         break
@@ -383,6 +451,28 @@ export class Game {
   private beginSwing(): void {
     // The last round is finished: this ball starts a fresh one
     if (this.state.shot >= ROUND_BALLS) this.newRound()
+
+    // Lock The players first shot in the tutorial
+    if(TUTORIAL_STEP == 0 && tutorial.active) {
+      ScoreZones.Orange
+      let lookAtTarget: Entity | undefined
+      lookAtTarget = ScoreZones.Orange
+      if(lookAtTarget)
+      {
+        const myVirtualCam = engine.addEntity()
+        Transform.create(myVirtualCam, {
+          position: Vector3.create(97.27, 35.55, 334.03) // Where the camera itself is placed in the scene
+        })
+        
+        VirtualCamera.create(myVirtualCam, {
+          lookAtEntity: lookAtTarget,
+        })
+
+        MainCamera.createOrReplace(engine.CameraEntity, {
+          virtualCameraEntity: myVirtualCam,
+        })
+      }
+    }
 
     activeGame = this
     shownGame = this
@@ -460,7 +550,7 @@ export class Game {
 
     // Lift the movement lock before the emote fires, so nothing can block it.
     // It goes back on when the camera moves to the ball.
-    this.freezePlayer(false)
+    //this.freezePlayer(false)
     this.addressClock = -1
     this.swingClock = 0
     this.emoteFired = false
@@ -530,24 +620,6 @@ export class Game {
     VisibilityComponent.createOrReplace(ent, { visible })
   }
 
-  private startArrow(ent: Entity | undefined): void {
-    this.swingTime = 0
-    if (!ent) return
-
-    this.UpdateArrowDir(ent)
-    this.setArrow(ent, true)
-
-    // Restart every clip on the arrow from the beginning, looping
-    if (Animator.has(ent)) {
-      for (const s of Animator.getMutable(ent).states) {
-        s.playing = true
-        s.loop = true
-        s.shouldReset = true
-        s.speed = this.state.phase == 'Swing_Height' ? PowerTimeMulti : BendTimeMulti
-      }
-    }
-  }
-
   // Value For Locking Arrow Dir
   pi: number = Math.PI 
   pio2: number = this.pi / 2
@@ -565,14 +637,6 @@ export class Game {
     const t = Transform.getMutable(ent)
     t.position = Vector3.create(b.x, b.y, b.z)
     t.rotation = Quaternion.fromEulerDegrees(0, ((this.lockedYaw * 180)) / Math.PI, 0)
-  }
-
-  private stopArrow(ent: Entity | undefined): void {
-    if (!ent) return
-    if (Animator.has(ent)) {
-      for (const s of Animator.getMutable(ent).states) s.playing = false
-    }
-    this.setArrow(ent, false)
   }
 
   // --- input / hit ---------------------------------------------------------
@@ -695,6 +759,12 @@ export class Game {
     this.state.score += points
     playResultSound(result.zone, points, hot)
 
+    // Update Tutorial States
+    if (TUTORIAL_STEP == 4) TUTORIAL_STEP = 5
+    if (TUTORIAL_STEP == 9) TUTORIAL_STEP = 10
+    if (TUTORIAL_STEP == 13) TUTORIAL_STEP = 14
+    if (TUTORIAL_STEP == 17) TUTORIAL_STEP = 18
+
     // Ten balls make a round. The ledger is sent base points and which balls were
     // hot, and does the doubling itself.
     this.roundLog.push({ zone: result.zone, points: result.points, hot })
@@ -712,7 +782,7 @@ export class Game {
     activeGame = null
     this.swingClock = -1
     this.rollLock = false
-    this.freezePlayer(false)
+    if(!tutorial.active) this.freezePlayer(false)
 
     // Everyone else's screen for this bay shows the same numbers
     sendShotDone({
@@ -763,8 +833,13 @@ export class Game {
     }
   }
 
+  // Where this ball sits on its tee
+  teePosition(): { x: number; y: number; z: number } {
+    return { ...this.startPos }
+  }
+
   // Clear the bay for a fresh round of ten
-  private newRound(): void {
+  newRound(): void {
     this.state.shot = 0
     this.state.score = 0
     this.state.lastShotScore = 0

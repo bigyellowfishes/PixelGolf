@@ -16,7 +16,7 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu } from './ui/GameModeMenu'
 import { isShotInProgress, GameState } from './game'
 import { ROUND_BALLS } from './ledger/rules'
-import { bayTakenBy, claimBay } from './ledger/client'
+import { bayTakenBy, claimBay, bayLockReason, tutorial, TUTORIAL_BAY } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 import { playUi } from './sfx'
 
@@ -163,6 +163,11 @@ const PANELS: {
     ball: 18,
     box: { x: -225.168, y: 30.534, z: 71.754, yaw: -78.68 },
     screen: { x: -225.144, y: 30.670, z: 71.876, nx: 0.139, ny: 0.707, nz: 0.693 }
+  },
+  {
+    ball: 19,
+    box: { x: -221.12, y: 30.534, z: 79.88, yaw: -77.6 },
+    screen: { x: -221.12, y: 30.670, z: 79.92, nx: 0.139, ny: 0.707, nz: 0.693 }
   }
 ]
 
@@ -170,7 +175,7 @@ const PANELS: {
 let activeBay = 0
 
 export function getActiveBay(): number {
-  return activeBay
+  return tutorial.active ? TUTORIAL_BAY : activeBay
 }
 
 export function setupTeeOffPanels(): void {
@@ -194,6 +199,17 @@ export function setupTeeOffPanels(): void {
       () => {
         // Don't interrupt a swing or a ball that's still rolling
         if (isShotInProgress()) return
+        // Tutorial rules: your own bay is already picked, and the tutorial bay is closed afterwards
+        if (tutorial.active && p.ball === TUTORIAL_BAY) {
+          showToast('This is your tutorial bay. Walk to the ball and press E to take your shot.', 4)
+          return
+        }
+        const locked = bayLockReason(p.ball)
+        if (locked) {
+          playUi('score_miss')
+          showToast(locked, 4)
+          return
+        }
         // One player per bay. Clicking a free bay's screen makes it yours (and lets your old one go).
         const takenBy = bayTakenBy(p.ball)
         if (takenBy || !claimBay(p.ball)) {

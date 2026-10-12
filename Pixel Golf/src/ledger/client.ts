@@ -38,7 +38,12 @@ export const profile = {
   owned: [] as string[],
   equipped: { ball: 'ball-classic', club: 'club-classic' } as Record<string, string>,
   /** Seconds until the daily login bonus is back, counted down locally. */
-  dailyIn: 0
+  dailyIn: 0,
+  /**
+   * Whether the server has this player down as having finished the tutorial round (the
+   * 'tutorial' message). Starts true so nothing happens until the server explicitly says false.
+   */
+  tutorialDone: true
 }
 
 export const range = {
@@ -74,6 +79,35 @@ export const boards: { ready: boolean; tables: Record<Period, Board>; mine: Reco
 export const bays = {
   owners: {} as Record<string, { u: string; n: string }>,
   pending: 0
+}
+
+// ---------------------------------------------------------------------------
+// Tutorial
+// ---------------------------------------------------------------------------
+
+/** The bay reserved for the tutorial round. It's local to each player's screen: never claimed on the server. */
+export const TUTORIAL_BAY = 19
+
+export const tutorial = {
+  /** True while this player is playing their tutorial round in the tutorial bay. */
+  active: false,
+  /** True once this visit's tutorial has begun, so a later ledger update can't restart it. */
+  started: false
+}
+
+/**
+ * Why this player can't use a bay right now, or '' if they can. During the tutorial
+ * only the tutorial bay is playable. After it, the tutorial bay is closed.
+ */
+export function bayLockReason(bay: number): string {
+  if (tutorial.active && bay !== TUTORIAL_BAY) return 'Finish your tutorial round first'
+  if (!tutorial.active && bay === TUTORIAL_BAY) return `Bay ${TUTORIAL_BAY} is reserved for the tutorial`
+  return ''
+}
+
+/** Tell the server this player finished the tutorial, so it's saved on their ledger. */
+export function sendTutorialDone(): void {
+  void room.send('tutorialDone', { n: 1 })
 }
 
 export type RoundResult = {
@@ -112,12 +146,12 @@ export const onBayScore = (fn: Fn<BayScore>) => bayScoreFns.push(fn)
 
 /** Tell everyone I just hit, so they can watch the ball fly. */
 export function sendShot(bay: number, vx: number, vy: number, vz: number): void {
-  if (bay > 0) void room.send('shot', { bay, vx, vy, vz })
+  if (bay > 0 && bay !== TUTORIAL_BAY) void room.send('shot', { bay, vx, vy, vz })
 }
 
 /** Tell everyone my bay's numbers after the ball settles. */
 export function sendShotDone(d: BayScore): void {
-  if (d.bay > 0) void room.send('shotDone', d)
+  if (d.bay > 0 && d.bay !== TUTORIAL_BAY) void room.send('shotDone', d)
 }
 
 /** Whenever XP, points or cosmetics change. */
@@ -164,6 +198,7 @@ export function bayTakenBy(bay: number): string {
 
 /** The bay this player plays in, or 0 if they haven't picked one. */
 export function myBay(): number {
+  if (tutorial.active) return TUTORIAL_BAY
   const me = myId()
   if (me) {
     for (const k in bays.owners) if (bays.owners[k].u === me) return Number(k)
@@ -178,7 +213,9 @@ export function myBay(): number {
  * beat you to it, says so and it's taken back).
  */
 export function claimBay(bay: number): boolean {
-  if (bayTakenBy(bay)) return false
+  if (bayLockReason(bay) || bayTakenBy(bay)) return false
+  // The tutorial bay is never claimed on the server, so any number of newcomers can use it at once
+  if (bay === TUTORIAL_BAY) return true
   bays.pending = bay
   void room.send('claimBay', { bay })
   return true
@@ -259,6 +296,12 @@ export function setupLedgerClient(): void {
     for (const fn of profileFns) fn(profile)
   })
 
+  // Sent by the server right after every ledger. Only the first `false` starts the tutorial.
+  room.onMessage('tutorial', (d) => {
+    profile.tutorialDone = d.done
+    for (const fn of profileFns) fn(profile)
+  })
+
   room.onMessage('mySettings', (d) => {
     const s = parse<Record<string, boolean>>(d.json, {})
     for (const fn of settingsFns) fn(s)
@@ -289,11 +332,11 @@ export function setupLedgerClient(): void {
 
   // Other players' shots and scores. My own bay is already playing them.
   room.onMessage('shotSeen', (d) => {
-    if (d.bay === myBay()) return
+    if (tutorial.active || d.bay === myBay()) return
     for (const fn of remoteShotFns) fn({ ...d })
   })
   room.onMessage('bayScore', (d) => {
-    if (d.bay === myBay()) return
+    if (tutorial.active || d.bay === myBay()) return
     for (const fn of bayScoreFns) fn({ ...d })
   })
 

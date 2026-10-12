@@ -66,6 +66,9 @@ export const MESSAGES = {
    */
   claimBay: Schemas.Map({ bay: Schemas.Int }),
 
+  /** I finished the tutorial round. The server ticks it off on my ledger. */
+  tutorialDone: Schemas.Map({ n: Schemas.Int }),
+
   // -------------------------------------------------------------------------
   // Server -> one player
   // -------------------------------------------------------------------------
@@ -96,6 +99,12 @@ export const MESSAGES = {
     /** False for a guest, whose progress can't be kept between visits. */
     durable: Schemas.Boolean
   }),
+
+  /**
+   * Whether this player has finished the tutorial. Sent right after every ledger. Its own message
+   * rather than a ledger field, because a field added to a shipped message breaks decoding.
+   */
+  tutorial: Schemas.Map({ done: Schemas.Boolean }),
 
   /** The switches this player has saved, as one JSON object. */
   mySettings: Schemas.Map({ json: Schemas.String }),

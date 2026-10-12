@@ -22,6 +22,7 @@ import { Game, Physics, updateSettingsInput, applySavedSettings, onSettingChange
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens } from './teeOffPanels'
+import { setupTutorial } from './tutorial'
 import { playAt, playUi } from './sfx'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
@@ -37,7 +38,8 @@ import {
   onRefused,
   saveSetting,
   onRemoteShot,
-  onBayScore
+  onBayScore,
+  TUTORIAL_BAY
 } from './ledger/client'
 import { setupHotTargetMarker } from './hotTarget'
 import { setPlayerProgress } from './ui/GameModeMenu'
@@ -84,7 +86,7 @@ const GROUP_PATCH = 4
 // Every playable ball in the scene, matched by entity name
 const BALL_NAMES = ['Ball_1', 'Ball_2', 'Ball_3', 'Ball_4', 'Ball_5', 'Ball_6',
                     'Ball_7', 'Ball_8','Ball_9', 'Ball_10', 'Ball_11', 'Ball_12',
-                    'Ball_13', 'Ball_14', 'Ball_15', 'Ball_16', 'Ball_17', 'Ball_18']
+                    'Ball_13', 'Ball_14', 'Ball_15', 'Ball_16', 'Ball_17', 'Ball_18', 'Ball_19']
 
 type BallRig = {
   name: string
@@ -961,6 +963,9 @@ export function main() {
   // Other players' shots play out on their bay's ball here too, and their bay screens update
   onRemoteShot((s) => games.find((g) => g.bay === s.bay)?.watchShot(s))
   onBayScore((d) => games.find((g) => g.bay === d.bay)?.showBayScore(d))
+
+  // New players start in the tutorial bay (Ball_19) with a first round of ten
+  setupTutorial(games.find((g) => g.bay === TUTORIAL_BAY))
 
   // Run the Update for the Main Game Loop In Game.ts
   engine.addSystem((dt: number) => {

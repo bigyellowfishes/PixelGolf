@@ -76,6 +76,8 @@ type Wallet = {
   best: number
   bestMulti: number
   rounds: number
+  // Tutorial Complete
+  tutorial: boolean
   /** Epoch seconds of the last posted round, for the cooldown. */
   lastRound: number
   /** Epoch seconds the daily login bonus was last collected. */
@@ -90,6 +92,9 @@ type Wallet = {
 
 const STORAGE_KEY = 'pg'
 
+/** The bay reserved for the tutorial. Keep equal to TUTORIAL_BAY in ledger/client.ts. */
+const TUTORIAL_BAY = 19
+
 const empty = (): Wallet => ({
   name: '',
   xp: 0,
@@ -99,6 +104,7 @@ const empty = (): Wallet => ({
   best: 0,
   bestMulti: 0,
   rounds: 0,
+  tutorial: false,
   lastRound: 0,
   lastDaily: 0,
   lastAfk: 0,
@@ -339,6 +345,7 @@ function sendLedger(address: string, wallet: Wallet): void {
     { to: [address] }
   )
   void room.send('mySettings', { json: JSON.stringify(wallet.settings) }, { to: [address] })
+  void room.send('tutorial', { done: wallet.tutorial }, { to: [address] })
 }
 
 function sendRanks(address: string): void {
@@ -415,6 +422,12 @@ export function runLedger(): void {
       touch(address, wallet)
     }
 
+    // Anyone who played before the tutorial existed has already learned the game
+    if (!wallet.tutorial && wallet.rounds > 0) {
+      wallet.tutorial = true
+      touch(address, wallet)
+    }
+
     // The daily login bonus, 24 hours after it was last collected
     if (canEarn(address) && dailyIn(wallet) <= 0) {
       wallet.lastDaily = now()
@@ -437,6 +450,11 @@ export function runLedger(): void {
     seen.set(address, now())
     const bay = Math.floor(Number(data.bay))
     if (!(bay >= 1 && bay <= BAY_COUNT)) return
+    // The tutorial bay is played privately on each player's own screen, never claimed
+    if (bay === TUTORIAL_BAY) {
+      void room.send('refused', { reason: `Bay ${bay} is reserved for the tutorial.` }, { to: [address] })
+      return
+    }
     await load(address) // for their name on the bay list
 
     const owner = bayOwners.get(bay)
@@ -476,6 +494,18 @@ export function runLedger(): void {
       zone: String(data.zone).slice(0, 16),
       hot: !!data.hot
     })
+  })
+
+  // The tutorial round is finished: tick it off so it isn't shown again
+  room.onMessage('tutorialDone', async (_data, context) => {
+    const address = context?.from
+    if (!address) return
+    seen.set(address, now())
+    const wallet = await load(address)
+    if (wallet.tutorial) return
+    wallet.tutorial = true
+    touch(address, wallet)
+    sendLedger(address, wallet)
   })
 
   room.onMessage('here', (_data, context) => {
