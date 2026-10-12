@@ -262,3 +262,38 @@ export function secondsToReset(period: Period, now: Date = new Date()): number {
   else return 0
   return Math.max(0, Math.floor((next - now.getTime()) / 1000))
 }
+
+// ---------------------------------------------------------------------------
+// Admins
+// ---------------------------------------------------------------------------
+
+/**
+ * Who can use the admin tools (the Reset ledger button in Settings). Same people as
+ * Pixel Pirate Mini Golf's ADMIN.allow / ADMIN.allowNames.
+ *
+ * `wallets` is the list the server checks before it does anything, so it's the one that
+ * actually protects the ledger. Compared lower-case.
+ *
+ * `names` only decides who sees the button. A client reports its own name, so a name can't
+ * be trusted to permit anything: someone named here whose wallet isn't in `wallets` sees the
+ * button but the server refuses the reset. The #tag on an unclaimed name and case are ignored.
+ */
+export const ADMIN = {
+  wallets: ['0xbe21e2cbac649134e1b113e613f0dad15c91a9e2', '0x87b1a311980ed517a26b3cb2111dcaebdf584662'] as string[],
+  names: ['thepixelarcade', 'JoelC'] as string[]
+}
+
+/** What the scene must send with adminReset, so a stray message can't wipe the ledger. */
+export const RESET_CONFIRM = 'wipe-everyone'
+
+/** Whether a wallet is on the admin list. This is the server's check. */
+export function isAdminWallet(address: string): boolean {
+  const a = (address || '').toLowerCase()
+  return a !== '' && ADMIN.wallets.some((w) => w.toLowerCase() === a)
+}
+
+/** Whether a display name is on the admin list. Only used to show the button. */
+export function isAdminName(name: string): boolean {
+  const n = (name || '').split('#')[0].trim().toLowerCase()
+  return n !== '' && ADMIN.names.some((x) => x.toLowerCase() === n)
+}

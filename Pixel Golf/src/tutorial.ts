@@ -2,7 +2,7 @@ import { engine } from '@dcl/sdk/ecs'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { Vector3 } from '@dcl/sdk/math'
 
-import { Game, onRoundFinished } from './game'
+import { Game, onRoundFinished, resetTutorialSteps } from './game'
 import { profile, onProfile, tutorial, sendTutorialDone } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 
@@ -59,6 +59,8 @@ export function setupTutorial(bay19: Game | undefined): void {
 function begin(bay19: Game): void {
   tutorial.started = true
   tutorial.active = true
+  resetTutorialSteps()
+  bay19.newRound()
 
   const tee = bay19.teePosition()
   const ground = tee.y - 0.1 // the ball sits one radius above the ground

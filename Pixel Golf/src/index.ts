@@ -36,6 +36,7 @@ import {
   onAward,
   onBigRoll,
   onRefused,
+  onLedgerReset,
   saveSetting,
   onRemoteShot,
   onBayScore,
@@ -255,6 +256,7 @@ function setupLedger(): void {
   })
   onBigRoll((r) => showToast(`${r.name} rolled x${r.roll}!`, 5))
   onRefused((reason) => showToast(reason, 5))
+  onLedgerReset((by) => showToast(`The ledger has been reset by ${by}. Everyone starts again from the tutorial.`, 8))
 
   // The floating 2X over whichever target is hot
   setupHotTargetMarker((zone) => (ScoreZones as Record<string, Entity | undefined>)[zone])
@@ -964,6 +966,11 @@ export function main() {
   onRemoteShot((s) => games.find((g) => g.bay === s.bay)?.watchShot(s))
   onBayScore((d) => games.find((g) => g.bay === d.bay)?.showBayScore(d))
 
+  // An admin reset the ledger: every bay starts a fresh round (the tutorial follows when the new ledger arrives)
+  onLedgerReset(() => {
+    for (const game of games) game.newRound()
+  })
+
   // New players start in the tutorial bay (Ball_19) with a first round of ten
   setupTutorial(games.find((g) => g.bay === TUTORIAL_BAY))
 
@@ -974,4 +981,4 @@ export function main() {
     Game.UpdateCameraFrame(dt)
     updateSettingsInput()
   })
-}
+}

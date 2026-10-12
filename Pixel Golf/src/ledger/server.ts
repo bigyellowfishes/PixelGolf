@@ -15,9 +15,22 @@ import {
   itemById,
   levelFor,
   multiplierCeiling,
-  validBall
+  validBall,
+  isAdminWallet,
+  RESET_CONFIRM
 } from './rules'
-import { leaderJson, leadersChanged, loadLeaders, noteRound, ranksFor, renameEverywhere, saveLeaders, tidyName } from './leaders'
+import {
+  leaderJson,
+  leadersChanged,
+  loadLeaders,
+  noteRound,
+  ranksFor,
+  renameEverywhere,
+  resetLeaders,
+  saveLeaders,
+  tidyName
+} from './leaders'
+import { bumpEpoch, currentEpoch, epochKey, epochReady } from './epoch'
 
 /**
  * The Pixel Golf ledger. Runs only on the Multiplayer Server (see main() in
@@ -90,7 +103,8 @@ type Wallet = {
   settings: Record<string, boolean>
 }
 
-const STORAGE_KEY = 'pg'
+/** Wallet records. Bumped from 'pg' on 2026-10-12 to give everyone a fresh ledger for tutorial testing. */
+const STORAGE_KEY = 'pg2'
 
 /** The bay reserved for the tutorial. Keep equal to TUTORIAL_BAY in ledger/client.ts. */
 const TUTORIAL_BAY = 19
@@ -145,12 +159,17 @@ const dirty = new Set<string>()
 async function load(address: string): Promise<Wallet> {
   const held = cache.get(address)
   if (held) return held
+  await epochReady()
+  const epochAtRead = currentEpoch()
   let stored: Wallet | null | undefined
   try {
-    stored = await Storage.player.get<Wallet>(address, STORAGE_KEY)
+    // Each reset (epoch.ts) reads and writes under its own key, so records from before it are never seen
+    stored = await Storage.player.get<Wallet>(address, epochKey(STORAGE_KEY))
   } catch (e) {
     console.log(`[ledger] read failed for ${address}: ${e}`)
   }
+  // An admin reset happened while we were reading: what came back is from before it
+  if (currentEpoch() !== epochAtRead) return load(address)
   // A second message may have loaded it while we waited
   const raced = cache.get(address)
   if (raced) return raced
@@ -307,7 +326,7 @@ function ledgerSystem(dt: number): void {
   sinceFlush = 0
   for (const address of dirty) {
     const wallet = cache.get(address)
-    if (wallet) void Storage.player.set(address, STORAGE_KEY, wallet)
+    if (wallet) void Storage.player.set(address, epochKey(STORAGE_KEY), wallet)
   }
   dirty.clear()
 }
@@ -506,6 +525,40 @@ export function runLedger(): void {
     wallet.tutorial = true
     touch(address, wallet)
     sendLedger(address, wallet)
+  })
+
+  // Admin only: wipe everyone's progress and the boards (the Reset ledger button in Settings)
+  let resetting = false
+  room.onMessage('adminReset', async (data, context) => {
+    const address = context?.from
+    if (!address) return
+    if (!isAdminWallet(address)) {
+      console.log(`[ledger] reset refused for ${address}: not in ADMIN.wallets`)
+      void room.send('refused', { reason: 'Only admins can reset the ledger. Your wallet is not on the admin list.' }, { to: [address] })
+      return
+    }
+    if (data.confirm !== RESET_CONFIRM || resetting) return
+    resetting = true
+    try {
+      if (!(await bumpEpoch())) {
+        void room.send('refused', { reason: 'The reset could not be saved. Nothing was changed, try again.' }, { to: [address] })
+        return
+      }
+      // Everything held in memory belongs to the old epoch now
+      const by = cache.get(address)?.name || tidyName('', address)
+      cache.clear()
+      dirty.clear()
+      bayOwners.clear()
+      resetLeaders()
+      await saveLeaders()
+      console.log(`[ledger] reset by ${by} (${address}), now epoch ${currentEpoch()}`)
+      // Every scene clears itself and says hello again, which loads the fresh, empty ledger
+      void room.send('ledgerReset', { by })
+      void room.send('leaders', { json: leaderJson() })
+      sendBays()
+    } finally {
+      resetting = false
+    }
   })
 
   room.onMessage('here', (_data, context) => {

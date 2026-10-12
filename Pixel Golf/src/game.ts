@@ -188,6 +188,11 @@ const allGames: Game[] = []
 // 1: Tell Player To 
 let TUTORIAL_STEP = 0
 
+// Back to the first tutorial step, so the tutorial can run again in the same visit (after an admin ledger reset)
+export function resetTutorialSteps(): void {
+  TUTORIAL_STEP = 0
+}
+
 
 // True from the first E press until the ball has come to rest and reset.
 // The club rack uses it to lock club selection mid-shot.
@@ -1052,4 +1057,4 @@ function rotateByQuat(v: { x: number; y: number; z: number }, q: { x: number; y:
     y: v.y + q.w * ty + (q.z * tx - q.x * tz),
     z: v.z + q.w * tz + (q.x * ty - q.y * tx),
   }
-}
+}

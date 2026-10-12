@@ -1,6 +1,7 @@
 import { Storage } from '@dcl/sdk/server'
 
 import { Period, PERIODS, periodKey } from './rules'
+import { currentEpoch, epochKey, epochReady } from './epoch'
 
 /**
  * The leaderboards, on the server.
@@ -43,7 +44,8 @@ const SHOW_ROWS = 10
 /** Longest name that fits on a board. */
 const MAX_NAME = 18
 
-const KEY = 'pg-leaders'
+// Bumped from 'pg-leaders' on 2026-10-12 to give everyone a fresh ledger for tutorial testing
+const KEY = 'pg-leaders2'
 
 const blankBoard = (period: Period): Board => ({ key: periodKey(period), true: [], multi: [] })
 const blank = (): Tables => ({
@@ -163,18 +165,29 @@ export async function saveLeaders(): Promise<void> {
   if (!loaded || !dirty) return
   dirty = false
   try {
-    await Storage.set(KEY, tables)
+    // Each reset (epoch.ts) has its own key, so a save still in flight from before one can't bring old boards back
+    await Storage.set(epochKey(KEY), tables)
   } catch (e) {
     console.log(`[ledger] leaderboard save failed: ${e}`)
     dirty = true
   }
 }
 
+/** Empties all eight boards (an admin reset). Saved on the next save. */
+export function resetLeaders(): void {
+  tables = blank()
+  loaded = true
+  dirty = true
+}
+
 /** Reads the boards from the last run. Called once at startup. */
 export async function loadLeaders(): Promise<void> {
   try {
-    const stored = await Storage.get<Tables>(KEY)
-    if (stored) {
+    await epochReady()
+    const epochAtRead = currentEpoch()
+    const stored = await Storage.get<Tables>(epochKey(KEY))
+    // Skipped if an admin reset happened while we were reading: the boards are already blank
+    if (stored && currentEpoch() === epochAtRead) {
       const fresh = blank()
       for (const p of PERIODS) {
         const b = stored[p]

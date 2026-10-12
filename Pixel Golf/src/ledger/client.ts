@@ -2,7 +2,7 @@ import { engine } from '@dcl/sdk/ecs'
 import { getPlayer } from '@dcl/sdk/players'
 
 import { room } from './room'
-import { HOT, Period, PERIODS, levelProgress, multiplierCeiling } from './rules'
+import { HOT, Period, PERIODS, levelProgress, multiplierCeiling, isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
 
 /**
  * The scene's side of the ledger.
@@ -135,6 +135,7 @@ const awardFns: Fn<{ xp: number; points: number; reason: string }>[] = []
 const rolledFns: Fn<{ name: string; roll: number; score: number }>[] = []
 const refusedFns: Fn<string>[] = []
 const settingsFns: Fn<Record<string, boolean>>[] = []
+const resetFns: Fn<string>[] = []
 export type RemoteShot = { bay: number; vx: number; vy: number; vz: number }
 export type BayScore = { bay: number; score: number; shot: number; last: number; zone: string; hot: boolean }
 const remoteShotFns: Fn<RemoteShot>[] = []
@@ -165,6 +166,8 @@ export const onBigRoll = (fn: Fn<{ name: string; roll: number; score: number }>)
 export const onRefused = (fn: Fn<string>) => refusedFns.push(fn)
 /** The Settings switches this player saved last time. */
 export const onSavedSettings = (fn: Fn<Record<string, boolean>>) => settingsFns.push(fn)
+/** An admin reset the ledger. Gets the admin's name. Fires before the fresh ledger arrives. */
+export const onLedgerReset = (fn: Fn<string>) => resetFns.push(fn)
 
 // ---------------------------------------------------------------------------
 // Asking the server
@@ -219,6 +222,23 @@ export function claimBay(bay: number): boolean {
   bays.pending = bay
   void room.send('claimBay', { bay })
   return true
+}
+
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether to show this player the admin tools. By wallet or by name (ADMIN in rules.ts).
+ * Only decides what's drawn: the server checks the wallet before it does anything.
+ */
+export function amIAdmin(): boolean {
+  return isAdminWallet(myId()) || isAdminName(myName())
+}
+
+/** Admin only: ask the server to wipe every player's progress and all the leaderboards. */
+export function sendAdminReset(): void {
+  void room.send('adminReset', { confirm: RESET_CONFIRM })
 }
 
 export function saveSetting(key: string, on: boolean): void {
@@ -359,6 +379,32 @@ export function setupLedgerClient(): void {
 
   room.onMessage('refused', (d) => {
     for (const fn of refusedFns) fn(d.reason)
+  })
+
+  // An admin wiped the ledger. Forget everything the server told us, let the scene clear
+  // itself, then say hello again: the answer is the fresh, empty ledger, and with it the
+  // tutorial for everyone.
+  room.onMessage('ledgerReset', (d) => {
+    profile.ready = false
+    profile.xp = 0
+    profile.level = 1
+    profile.levelXp = 0
+    profile.levelNeed = 0
+    profile.points = 0
+    profile.pointsEarned = 0
+    profile.best = 0
+    profile.bestMulti = 0
+    profile.rounds = 0
+    profile.owned = []
+    profile.dailyIn = 0
+    // Back to "wait for the server", so only its explicit `false` starts the tutorial
+    profile.tutorialDone = true
+    tutorial.active = false
+    tutorial.started = false
+    bays.pending = 0
+    for (const p of PERIODS) boards.mine[p] = { true: 0, trueV: 0, multi: 0, multiV: 0 }
+    for (const fn of resetFns) fn(d.by)
+    greet()
   })
 
   // Messages sent before the room connects are queued, so hello can go now

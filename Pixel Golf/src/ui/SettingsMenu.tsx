@@ -4,9 +4,11 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
 import { playUi } from '../sfx'
+import { amIAdmin, sendAdminReset } from '../ledger/client'
 
 // Settings button (top of the screen, under the score) and the Settings panel it opens.
 // Holds the Ball cam on/off switch (key 1 still toggles it too) and the Orbit camera switch.
+// Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
 
 export interface State {
   display: 'flex' | 'none'
@@ -14,14 +16,26 @@ export interface State {
   orbitCamOn: boolean
   ballCamLabel: string
   orbitCamLabel: string
+  /** Show the admin row. Only decides what's drawn: the server checks the wallet. */
+  isAdmin: boolean
+  /** The Reset button has been pressed once and is waiting for the second press. */
+  resetArmed: boolean
+  resetLabel: string
 }
+
+// How long the Reset button waits for its second press before it calms down again
+const RESET_ARM_MS = 5000
+let resetArmedUntil = 0
 
 export const state: State = {
   display: 'none',
   ballCamOn: true,
   orbitCamOn: false,
   ballCamLabel: 'On',
-  orbitCamLabel: 'Off'
+  orbitCamLabel: 'Off',
+  isAdmin: false,
+  resetArmed: false,
+  resetLabel: 'Reset'
 }
 
 type UiAction = { state: State; props: Parameters<typeof SettingsMenu>[0]; value?: unknown }
@@ -50,12 +64,29 @@ function switchOrbitCam({ state, props }: UiAction) {
   playUi('ui_click')
 }
 
+// @ui-action
+function pressResetLedger({ state, props }: UiAction) {
+  // First press arms it, the second (within a few seconds) sends it
+  if (!state.resetArmed) {
+    resetArmedUntil = Date.now() + RESET_ARM_MS
+    playUi('ui_click')
+    return
+  }
+  resetArmedUntil = 0
+  sendAdminReset()
+  state.display = 'none'
+  playUi('ui_close')
+}
+
 export function SettingsMenu(props: {}) {
   // The settings live in game.ts; mirror them here for the switches and labels
   state.ballCamOn = ballCamEnabled
   state.orbitCamOn = orbitCamEnabled
   state.ballCamLabel = ballCamEnabled ? 'On' : 'Off'
   state.orbitCamLabel = orbitCamEnabled ? 'On' : 'Off'
+  state.isAdmin = amIAdmin()
+  state.resetArmed = Date.now() < resetArmedUntil
+  state.resetLabel = state.resetArmed ? 'Sure?' : 'Reset'
 
   const settingsButton = useInteraction({
     base: {
@@ -144,6 +175,31 @@ export function SettingsMenu(props: {}) {
     state.orbitCamOn
   )
 
+  const resetButton = useInteraction(
+    {
+      base: {
+        uiTransform: {
+          width: 96,
+          height: 38,
+          justifyContent: 'center',
+          alignItems: 'center',
+          borderRadius: 19,
+          borderWidth: 2,
+          borderColor: { r: 0.773, g: 0.192, b: 0.192, a: 1 }
+        },
+        uiBackground: { color: { r: 1, g: 1, b: 1, a: 1 } },
+        onMouseDown: () => pressResetLedger({ state, props })
+      },
+      hover: {
+        uiBackground: { color: { r: 0.992, g: 0.902, b: 0.902, a: 1 } }
+      },
+      active: {
+        uiBackground: { color: { r: 0.773, g: 0.192, b: 0.192, a: 1 } }
+      }
+    },
+    state.resetArmed
+  )
+
   return (
     <UiEntity
       uiTransform={{
@@ -199,7 +255,7 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{
             width: 560,
-            height: 330,
+            height: state.isAdmin ? 450 : 330,
             flexDirection: 'column',
             borderRadius: 28,
             borderWidth: 4,
@@ -342,6 +398,54 @@ export function SettingsMenu(props: {}) {
                 <UiEntity
                   uiTransform={{ width: 30, height: 30, borderRadius: 15 }}
                   uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+                />
+              </UiEntity>
+            </UiEntity>
+
+            {/* Admin: reset the ledger. Only drawn for admins */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 106,
+                flexDirection: 'row',
+                alignItems: 'center',
+                margin: { top: 14 },
+                padding: { left: 20, right: 18 },
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: { r: 0.773, g: 0.192, b: 0.192, a: 1 },
+                display: state.isAdmin ? 'flex' : 'none'
+              }}
+              uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+            >
+              <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column' }}>
+                <Label
+                  value="Reset ledger (admin)"
+                  fontSize={20}
+                  color={{ r: 0.773, g: 0.192, b: 0.192, a: 1 }}
+                  textAlign="middle-left"
+                  uiTransform={{ width: '100%', height: 28 }}
+                />
+                <Label
+                  value={
+                    state.resetArmed
+                      ? 'Press again to wipe everyone. This can\'t be undone.'
+                      : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
+                  }
+                  fontSize={13}
+                  textWrap="wrap"
+                  color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
+                  textAlign="top-left"
+                  uiTransform={{ width: 330, height: 40, margin: { top: 4 } }}
+                />
+              </UiEntity>
+              <UiEntity {...resetButton}>
+                <Label
+                  value={state.resetLabel}
+                  fontSize={15}
+                  color={state.resetArmed ? { r: 1, g: 1, b: 1, a: 1 } : { r: 0.773, g: 0.192, b: 0.192, a: 1 }}
+                  textAlign="middle-center"
+                  uiTransform={{ width: 90, height: 30 }}
                 />
               </UiEntity>
             </UiEntity>

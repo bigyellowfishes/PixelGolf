@@ -69,6 +69,12 @@ export const MESSAGES = {
   /** I finished the tutorial round. The server ticks it off on my ledger. */
   tutorialDone: Schemas.Map({ n: Schemas.Int }),
 
+  /**
+   * Admin only: wipe every player's progress and all eight leaderboards. Refused unless the
+   * sender's wallet is in ADMIN.wallets (rules.ts). `confirm` must be RESET_CONFIRM.
+   */
+  adminReset: Schemas.Map({ confirm: Schemas.String }),
+
   // -------------------------------------------------------------------------
   // Server -> one player
   // -------------------------------------------------------------------------
@@ -108,6 +114,12 @@ export const MESSAGES = {
 
   /** The switches this player has saved, as one JSON object. */
   mySettings: Schemas.Map({ json: Schemas.String }),
+
+  /**
+   * Server -> everyone: an admin has just reset the ledger. Every scene clears what it was
+   * showing and says hello again, which brings back the fresh, empty ledger (and the tutorial).
+   */
+  ledgerReset: Schemas.Map({ by: Schemas.String }),
 
   /** What a round was worth, for the round result card. */
   roundResult: Schemas.Map({
