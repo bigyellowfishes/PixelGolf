@@ -3,14 +3,15 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import { Vector3 } from '@dcl/sdk/math'
 
 import { Game, onRoundFinished, resetTutorialSteps } from './game'
-import { profile, onProfile, tutorial, sendTutorialDone } from './ledger/client'
+import { profile, onProfile, tutorial, sendTutorialDone, TUTORIAL_BALLS } from './ledger/client'
 import { showToast } from './ui/RangeHud'
+import { showTutorialComplete } from './ui/RoundResult'
 
 /**
  * The tutorial round.
  *
  * A player whose ledger doesn't have the tutorial ticked off is placed in bay 19 and plays a
- * normal round of ten there. While they do:
+ * short round of TUTORIAL_BALLS there. A miss doesn't count and is taken again. While they do:
  *   - the other bays are closed to them, and bay 19 is closed to everyone who has finished
  *   - other players' shots and bay scores aren't shown to them
  *   - their own shots and scores aren't broadcast either, so bay 19 is private to each player
@@ -50,9 +51,9 @@ export function setupTutorial(bay19: Game | undefined): void {
   // This is here just to test if needed!
   //begin(bay19)
 
-  // The tenth ball of the tutorial round has landed
-  onRoundFinished(() => {
-    if (tutorial.active) finish(bay19)
+  // The last ball of the tutorial round has landed
+  onRoundFinished((r) => {
+    if (tutorial.active) finish(bay19, r.score)
   })
 }
 
@@ -70,15 +71,16 @@ function begin(bay19: Game): void {
     cameraTarget: Vector3.create(tee.x + 20, ground, tee.z)
   })
 
-  showToast('Welcome to Pixel Golf! Take 10 practice shots from this bay. Press E by the ball to swing.', 8)
+  showToast(`Welcome to Pixel Golf! Land ${TUTORIAL_BALLS} shots on the targets from this bay. Press E by the ball to swing.`, 8)
 }
 
-function finish(bay19: Game): void {
-  // Release the bay at once: the player can't swing here again, and the ledger has it saved
+function finish(bay19: Game, score: number): void {
+  // Release the bay at once: the player can't swing here again, and the ledger has it saved.
+  // The server answers with the tutorial's reward (up to TUTORIAL_LEVEL), which fills in the card.
   tutorial.active = false
   profile.tutorialDone = true
   sendTutorialDone()
-  showToast('Tutorial complete! Click a free bay\'s Tee Off screen to keep playing.', 8)
+  showTutorialComplete(score)
 
   // Let them see their score for a moment, then clear the bay and (optionally) move them on
   let waited = 0

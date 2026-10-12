@@ -23,6 +23,7 @@ import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
+import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
@@ -37,14 +38,21 @@ import {
   onBigRoll,
   onRefused,
   onLedgerReset,
+  onTutorialReward,
   saveSetting,
   onRemoteShot,
   onBayScore,
+  tutorial,
   TUTORIAL_BAY
 } from './ledger/client'
 import { setupHotTargetMarker } from './hotTarget'
 import { setPlayerProgress } from './ui/GameModeMenu'
-import { showRoundFinished, showRoundCounted } from './ui/RoundResult'
+import { showRoundFinished, showRoundCounted, showTutorialReward, state as roundCard } from './ui/RoundResult'
+import { state as gameModeMenu } from './ui/GameModeMenu'
+import { state as clubMenu } from './ui/ClubSelectMenu'
+import { state as boardsMenu } from './ui/LeaderboardMenu'
+import { state as settingsMenu } from './ui/SettingsMenu'
+import { setupMobileControls } from './mobile'
 import { showToast } from './ui/RangeHud'
 
 // ---------------------------------------------------------------------------
@@ -242,8 +250,13 @@ function setupLedger(): void {
   onSettingChanged(saveSetting)
 
   // The round card: the score straight away, the multiplier and rewards when the server answers
-  onRoundFinished((r) => showRoundFinished(r.score, r.hotHits))
+  // Not for the tutorial's practice round, which isn't sent to the ledger (tutorial.ts says well done instead)
+  onRoundFinished((r) => {
+    if (!tutorial.active) showRoundFinished(r.score, r.hotHits)
+  })
   onRoundResult(showRoundCounted)
+  // The tutorial's card shows the level it took the player to
+  onTutorialReward(showTutorialReward)
 
   onLevelUp((l) => {
     playUi('score_great')
@@ -966,6 +979,16 @@ export function main() {
   onRemoteShot((s) => games.find((g) => g.bay === s.bay)?.watchShot(s))
   onBayScore((d) => games.find((g) => g.bay === d.bay)?.showBayScore(d))
 
+  // Phones: E is the big button while playing; all the phone's buttons hide while a menu is open
+  setupMobileControls(
+    () =>
+      gameModeMenu.display === 'flex' ||
+      clubMenu.display === 'flex' ||
+      boardsMenu.display === 'flex' ||
+      settingsMenu.display === 'flex' ||
+      roundCard.display === 'flex'
+  )
+
   // An admin reset the ledger: every bay starts a fresh round (the tutorial follows when the new ledger arrives)
   onLedgerReset(() => {
     for (const game of games) game.newRound()
@@ -973,6 +996,12 @@ export function main() {
 
   // New players start in the tutorial bay (Ball_19) with a first round of ten
   setupTutorial(games.find((g) => g.bay === TUTORIAL_BAY))
+  // Players hidden from each other during it, and SHOOT HERE over the orange target
+  setupTutorialVisuals(
+    games.find((g) => g.bay === TUTORIAL_BAY),
+    games.find((g) => g.bay === TUTORIAL_BAY - 1),
+    (zone) => (ScoreZones as Record<string, Entity | undefined>)[zone]
+  )
 
   // Run the Update for the Main Game Loop In Game.ts
   engine.addSystem((dt: number) => {

@@ -2,15 +2,25 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
-import { profile, range, hotSecondsLeft, currentCeiling } from '../ledger/client'
+import { profile, range, hotSecondsLeft, currentCeiling, tutorial } from '../ledger/client'
 import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
+import { onPhone, forTouch } from '../mobile'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
 // Set to false before release.
 const PERF_READOUT = true
+
+// The green callouts under the card (level ups, the daily bonus, big rolls, "bay in use" and so
+// on, from showToast). Hidden for now; set true to bring them back.
+const SHOW_CALLOUTS = false
+
+// How far down the card starts. Higher on a phone: its screen is a third shorter, and the
+// phone's round buttons fill the bottom right below the card.
+const CARD_TOP = 150
+const CARD_TOP_PHONE = 100
 
 // The range card on the right of the screen: the hot target and its countdown,
 // your ball count and round total, the shared multiplier, your level and Pixel
@@ -55,7 +65,7 @@ let toastUntil = 0
 
 /** A short callout under the range card. */
 export function showToast(text: string, seconds = 4) {
-  state.toastText = text
+  state.toastText = forTouch(text)
   toastUntil = Date.now() + seconds * 1000
 }
 
@@ -78,7 +88,8 @@ function fmt(n: number): string {
 export function RangeHud(props: {}) {
   // Read the live values each frame
   const left = hotSecondsLeft()
-  state.hotDisplay = range.hot && left > 0 ? 'flex' : 'none'
+  // No hot target during the tutorial
+  state.hotDisplay = range.hot && left > 0 && !tutorial.active ? 'flex' : 'none'
   state.hotName = range.hot.replace(/\d+$/, '')
   state.hotTime = `0:${left < 10 ? '0' : ''}${left}`
   const round = getRoundProgress()
@@ -89,7 +100,7 @@ export function RangeHud(props: {}) {
   state.playersText = range.players === 1 ? '1 player here' : `${range.players} players here`
   state.levelText = profile.ready ? `LV ${profile.level}` : 'LV -'
   state.pointsText = profile.ready ? fmt(profile.points) : '-'
-  state.toastDisplay = Date.now() < toastUntil ? 'flex' : 'none'
+  state.toastDisplay = SHOW_CALLOUTS && Date.now() < toastUntil ? 'flex' : 'none'
   state.perfDisplay = PERF_READOUT ? 'flex' : 'none'
   state.perfText = `${perfStats.fps} fps  ·  physics ${perfStats.physicsMs} ms`
 
@@ -122,7 +133,7 @@ export function RangeHud(props: {}) {
         positionType: 'absolute',
         flexDirection: 'column',
         alignItems: 'flex-end',
-        padding: { top: 150, right: 16 },
+        padding: { top: onPhone() ? CARD_TOP_PHONE : CARD_TOP, right: 16 },
         pointerFilter: 'none'
       }}
     >

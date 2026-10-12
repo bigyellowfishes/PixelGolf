@@ -88,6 +88,13 @@ export const bays = {
 /** The bay reserved for the tutorial round. It's local to each player's screen: never claimed on the server. */
 export const TUTORIAL_BAY = 19
 
+/**
+ * Shots in the tutorial round. A miss doesn't use one up: the ball comes back and the player
+ * tries that shot again (game.ts). The tutorial round isn't posted to the ledger, since the
+ * server only takes full rounds of ROUND_BALLS.
+ */
+export const TUTORIAL_BALLS = 5
+
 export const tutorial = {
   /** True while this player is playing their tutorial round in the tutorial bay. */
   active: false,
@@ -136,6 +143,7 @@ const rolledFns: Fn<{ name: string; roll: number; score: number }>[] = []
 const refusedFns: Fn<string>[] = []
 const settingsFns: Fn<Record<string, boolean>>[] = []
 const resetFns: Fn<string>[] = []
+const tutorialRewardFns: Fn<{ xp: number; level: number; unlocked: string[] }>[] = []
 export type RemoteShot = { bay: number; vx: number; vy: number; vz: number }
 export type BayScore = { bay: number; score: number; shot: number; last: number; zone: string; hot: boolean }
 const remoteShotFns: Fn<RemoteShot>[] = []
@@ -168,6 +176,8 @@ export const onRefused = (fn: Fn<string>) => refusedFns.push(fn)
 export const onSavedSettings = (fn: Fn<Record<string, boolean>>) => settingsFns.push(fn)
 /** An admin reset the ledger. Gets the admin's name. Fires before the fresh ledger arrives. */
 export const onLedgerReset = (fn: Fn<string>) => resetFns.push(fn)
+/** The server's reward for finishing the tutorial: the XP given and the level it took them to. */
+export const onTutorialReward = (fn: Fn<{ xp: number; level: number; unlocked: string[] }>) => tutorialRewardFns.push(fn)
 
 // ---------------------------------------------------------------------------
 // Asking the server
@@ -257,8 +267,9 @@ export function afkMinute(): void {
 // Reading the range
 // ---------------------------------------------------------------------------
 
-/** Whether a zone is the hot target right now. */
+/** Whether a zone is the hot target right now. Never during the tutorial, which doesn't show one. */
 export function isHot(zone: string): boolean {
+  if (tutorial.active) return false
   return range.hot !== '' && zone === range.hot && Date.now() < range.hotEndsAt + 1500
 }
 
@@ -320,6 +331,11 @@ export function setupLedgerClient(): void {
   room.onMessage('tutorial', (d) => {
     profile.tutorialDone = d.done
     for (const fn of profileFns) fn(profile)
+  })
+
+  room.onMessage('tutorialReward', (d) => {
+    const v = { xp: d.xp, level: d.level, unlocked: parse<string[]>(d.unlocked, []) }
+    for (const fn of tutorialRewardFns) fn(v)
   })
 
   room.onMessage('mySettings', (d) => {

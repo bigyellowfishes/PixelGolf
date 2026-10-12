@@ -19,7 +19,7 @@ import { getSelectedClubType, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, sendShot, sendShotDone, RemoteShot, BayScore, tutorial } from './ledger/client'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, sendShot, sendShotDone, RemoteShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -187,10 +187,15 @@ const allGames: Game[] = []
 // 0: Tell Player To Line Up First Shot
 // 1: Tell Player To 
 let TUTORIAL_STEP = 0
+// True after a tutorial shot missed, until the player starts that shot again
+let TUTORIAL_RETRY = false
+// Each tutorial shot's in-flight step, and the step that shot started from. A miss goes back to the start.
+const TUTORIAL_SHOT_STARTS: Record<number, number> = { 4: 0, 9: 5, 13: 10, 17: 14, 19: 18 }
 
 // Back to the first tutorial step, so the tutorial can run again in the same visit (after an admin ledger reset)
 export function resetTutorialSteps(): void {
   TUTORIAL_STEP = 0
+  TUTORIAL_RETRY = false
 }
 
 
@@ -202,27 +207,28 @@ export function isShotInProgress(): boolean {
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
+  if(tutorial.active && TUTORIAL_RETRY && !activeGame) return 'Missed! That one doesn\'t count. Press E to try again.'
   if(tutorial.active && TUTORIAL_STEP <= 18)
   {
-    if(TUTORIAL_STEP == 0) return 'Welcome To Pixel Golf, press E to begin.'
-    if(TUTORIAL_STEP == 1) return 'Lets Aim Towards the Orange Hole.'
-    if(TUTORIAL_STEP == 2) return 'The first bar is power, lets give it some beans.'
-    if(TUTORIAL_STEP == 3) return 'The second bar is aim, try and hit the centre.'
+    if(TUTORIAL_STEP == 0) return 'Welcome to Pixel Golf! Press E to begin.'
+    if(TUTORIAL_STEP == 1) return 'Let\'s aim for the orange target.'
+    if(TUTORIAL_STEP == 2) return 'The first bar is power. Let\'s give it some beans!'
+    if(TUTORIAL_STEP == 3) return 'The second bar is aim. Try to hit the centre.'
     if(TUTORIAL_STEP == 4) return ''
-    if(TUTORIAL_STEP == 5) return 'Wow! nice shot! Press E to keep shooting.'
-    if(TUTORIAL_STEP == 6) return 'Now try aiming for yourself by pressing and dragging.'
-    if(TUTORIAL_STEP == 7) return 'Press E to Lock in Power.'
-    if(TUTORIAL_STEP == 8) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 5) return 'Wow, nice shot! Press E to keep shooting.'
+    if(TUTORIAL_STEP == 6) return 'Now try aiming yourself: press and drag.'
+    if(TUTORIAL_STEP == 7) return 'Press E to lock in power.'
+    if(TUTORIAL_STEP == 8) return 'Press E to lock in aim.'
     if(TUTORIAL_STEP == 9) return ''
-    if(TUTORIAL_STEP == 10) return 'Now Try setting the power yourself.'
-    if(TUTORIAL_STEP == 11) return 'Press E to Lock in Power.'
-    if(TUTORIAL_STEP == 12) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 10) return 'Now try setting the power yourself.'
+    if(TUTORIAL_STEP == 11) return 'Press E to lock in power.'
+    if(TUTORIAL_STEP == 12) return 'Press E to lock in aim.'
     if(TUTORIAL_STEP == 13) return ''
-    if(TUTORIAL_STEP == 14) return 'Now Try setting the aim bar yourself.'
-    if(TUTORIAL_STEP == 15) return 'Press E to Lock in Power.'
-    if(TUTORIAL_STEP == 16) return 'Press E to Lock in Aim.'
+    if(TUTORIAL_STEP == 14) return 'Now try setting the aim bar yourself.'
+    if(TUTORIAL_STEP == 15) return 'Press E to lock in power.'
+    if(TUTORIAL_STEP == 16) return 'Press E to lock in aim.'
     if(TUTORIAL_STEP == 17) return ''
-    if(TUTORIAL_STEP == 18) return 'Now Finish the Remaining Shots!'
+    if(TUTORIAL_STEP == 18) return 'Last shot! Land it on a target to finish.'
   }
   if (activeGame) {
     if (activeGame.state.phase === 'Swing_Height') return 'Press E to set your power'
@@ -243,7 +249,7 @@ export function getPrompt(): string {
           ? `Click Bay ${g.bay}'s Tee Off screen to play here`
           : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
       }
-      return g.state.shot >= ROUND_BALLS ? 'Press E to start a new round' : 'Press E to take your shot'
+      return g.state.shot >= g.roundBalls() ? 'Press E to start a new round' : 'Press E to take your shot'
     }
   }
   return ''
@@ -375,6 +381,7 @@ export class Game {
         break
 
       case 'Swing_Height':
+        if (tutorial.active) TUTORIAL_RETRY = false
         if (TUTORIAL_STEP == 0) TUTORIAL_STEP = 1
         if (TUTORIAL_STEP == 5) TUTORIAL_STEP = 6
         if (TUTORIAL_STEP == 10) TUTORIAL_STEP = 11
@@ -445,6 +452,11 @@ export class Game {
     }
   }
 
+  // Shots in a round at this ball: the tutorial's short round in the tutorial bay, otherwise ROUND_BALLS
+  roundBalls(): number {
+    return this.bay === TUTORIAL_BAY ? TUTORIAL_BALLS : ROUND_BALLS
+  }
+
   // Whether this ball is in the bay the player has picked
   isMine(): boolean {
     return this.bay !== 0 && this.bay === myBay()
@@ -455,7 +467,7 @@ export class Game {
   // Stage 0: E pressed by the ball. Remember where the player faces, show height arrow.
   private beginSwing(): void {
     // The last round is finished: this ball starts a fresh one
-    if (this.state.shot >= ROUND_BALLS) this.newRound()
+    if (this.state.shot >= this.roundBalls()) this.newRound()
 
     // Lock The players first shot in the tutorial
     if(TUTORIAL_STEP == 0 && tutorial.active) {
@@ -756,6 +768,27 @@ export class Game {
 
     // Handle Scoring. The hot target doubles a ball's points (see ledger/rules.ts).
     const result = this.scoreBall()
+
+    // In the tutorial a miss (no target, a bunker, or off the range) doesn't count: the ball
+    // comes back and the player takes that shot again from the same tutorial step
+    if (tutorial.active && this.bay === TUTORIAL_BAY && result.points <= 0) {
+      playResultSound(result.zone, result.points, false)
+      this.state.shot = Math.max(0, this.state.shot - 1)
+      this.state.lastShotScore = 0
+      this.state.lastZone = 'Missed'
+      this.state.lastHot = false
+      const start = TUTORIAL_SHOT_STARTS[TUTORIAL_STEP]
+      if (start !== undefined) TUTORIAL_STEP = start
+      TUTORIAL_RETRY = true
+      this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
+      this.settleTimer = 0
+      this.state.phase = 'walking'
+      activeGame = null
+      this.swingClock = -1
+      this.rollLock = false
+      return
+    }
+
     const hot = result.zone !== '' && isHot(result.zone)
     const points = hot ? result.points * HOT.factor : result.points
     this.state.lastShotScore = points
@@ -771,12 +804,13 @@ export class Game {
     if (TUTORIAL_STEP == 17) TUTORIAL_STEP = 18
 
     // Ten balls make a round. The ledger is sent base points and which balls were
-    // hot, and does the doubling itself.
+    // hot, and does the doubling itself. The tutorial's short round isn't sent: the server
+    // only takes full rounds, and the tutorial is ticked off by its own message (tutorial.ts).
     this.roundLog.push({ zone: result.zone, points: result.points, hot })
-    if (this.roundLog.length >= ROUND_BALLS) {
-      const balls = this.roundLog.slice(0, ROUND_BALLS)
+    if (this.roundLog.length >= this.roundBalls()) {
+      const balls = this.roundLog.slice(0, this.roundBalls())
       this.roundLog = []
-      submitRound(balls)
+      if (this.bay !== TUTORIAL_BAY) submitRound(balls)
       for (const fn of roundFinishedFns) fn({ score: this.state.score, hotHits: balls.filter((b) => b.hot).length })
     }
 
@@ -1011,7 +1045,7 @@ export function onRoundFinished(fn: (r: RoundFinished) => void): void {
 // The ball count and round total of the bay last played, for the HUD
 export function getRoundProgress(): { ball: number; balls: number; score: number } {
   const g = shownGame
-  return { ball: g ? g.state.shot : 0, balls: ROUND_BALLS, score: g ? g.state.score : 0 }
+  return { ball: g ? g.state.shot : 0, balls: g ? g.roundBalls() : ROUND_BALLS, score: g ? g.state.score : 0 }
 }
 
 // Key 1 toggles the ball cam. Runs once per frame from index.ts.

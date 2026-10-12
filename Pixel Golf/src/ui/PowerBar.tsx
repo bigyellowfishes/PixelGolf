@@ -3,6 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity } from '@dcl/sdk/react-ecs'
 import {progressValue, viewPower} from '../game'
 import { Color4 } from '@dcl/sdk/math'
+import { onPhone } from '../mobile'
 
 export interface State {}
 export const state: State = {}
@@ -17,7 +18,9 @@ export function PowerBar(props: {}) {
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        margin: { left: -100, top: 200 },
+        // Down from the middle of the screen. Less on a phone, whose screen is a third shorter,
+        // so the bottom of the bar stays on screen
+        margin: { left: -100, top: onPhone() ? 90 : 200 },
         display: barVisable,
       }}
     >

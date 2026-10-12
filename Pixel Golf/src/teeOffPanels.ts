@@ -16,7 +16,7 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu } from './ui/GameModeMenu'
 import { isShotInProgress, GameState } from './game'
 import { ROUND_BALLS } from './ledger/rules'
-import { bayTakenBy, claimBay, bayLockReason, tutorial, TUTORIAL_BAY } from './ledger/client'
+import { bayTakenBy, claimBay, bayLockReason, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 import { playUi } from './sfx'
 
@@ -165,9 +165,10 @@ const PANELS: {
     screen: { x: -225.144, y: 30.670, z: 71.876, nx: 0.139, ny: 0.707, nz: 0.693 }
   },
   {
+    // The end panel past bay 18, measured from the model the same way as the others
     ball: 19,
-    box: { x: -221.12, y: 30.534, z: 79.88, yaw: -77.6 },
-    screen: { x: -221.12, y: 30.670, z: 79.92, nx: 0.139, ny: 0.707, nz: 0.693 }
+    box: { x: -221.141, y: 30.542, z: 79.782, yaw: -77.23 },
+    screen: { x: -221.115, y: 30.678, z: 79.903, nx: 0.157, ny: 0.707, nz: 0.69 }
   }
 ]
 
@@ -226,7 +227,7 @@ export function setupTeeOffPanels(): void {
 
 // --- Score screens -------------------------------------------------------------
 
-type Screen = { state: GameState; score: Entity; shots: Entity; last: Entity; zone: Entity; key: string }
+type Screen = { state: GameState; balls: number; score: Entity; shots: Entity; last: Entity; zone: Entity; key: string }
 
 function formatNumber(n: number): string {
   const sign = n < 0 ? '-' : ''
@@ -261,7 +262,7 @@ function addText(parent: Entity, slot: { x: number; y: number; cap: number }, co
 
 /**
  * Puts each bay's score on its panel screen. Pass every ball's game state with the
- * ball's entity name (Ball_1 to Ball_18), as index.ts does after creating the games.
+ * ball's entity name (Ball_1 to Ball_19), as index.ts does after creating the games.
  */
 export function setupTeeOffScreens(games: { name: string; state: GameState }[]): void {
   const panels = engine.getEntityOrNullByName(PANEL_ENTITY_NAME)
@@ -307,6 +308,8 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
     addText(card, SLOTS.bay, Color4.White(), `BAY ${ball}`)
     screens.push({
       state: g.state,
+      // The tutorial bay plays the tutorial's short round
+      balls: ball === TUTORIAL_BAY ? TUTORIAL_BALLS : ROUND_BALLS,
       score: addText(card, SLOTS.score, INK),
       shots: addText(card, SLOTS.shots, INK),
       last: addText(card, SLOTS.last, INK),
@@ -327,7 +330,7 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
       if (key === sc.key) continue
       sc.key = key
       TextShape.getMutable(sc.score).text = formatNumber(st.score)
-      TextShape.getMutable(sc.shots).text = `${st.shot}/${ROUND_BALLS}`
+      TextShape.getMutable(sc.shots).text = `${st.shot}/${sc.balls}`
       TextShape.getMutable(sc.last).text = last
       TextShape.getMutable(sc.zone).text = zone
     }

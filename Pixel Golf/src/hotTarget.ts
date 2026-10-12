@@ -1,11 +1,12 @@
 import { engine, Entity, Transform, TextShape, Billboard, BillboardMode, Font, TextAlignMode } from '@dcl/sdk/ecs'
 import { Color4, Vector3 } from '@dcl/sdk/math'
-import { range, hotSecondsLeft } from './ledger/client'
+import { range, hotSecondsLeft, tutorial } from './ledger/client'
 import { HOT } from './ledger/rules'
 
 // The hot target marker: a big "2X" floating over whichever target is hot right now,
 // with the seconds it has left. The server picks the target and rotates it every
-// 30 seconds for everyone (ledger/server.ts). It hides until the server has said.
+// 30 seconds for everyone (ledger/server.ts). It hides until the server has said, and
+// during the tutorial, which has its own SHOOT HERE marker instead (tutorialVisuals.ts).
 
 // Height of the "2X" as a share of the target's width, and its limits in metres
 const MARKER_SIZE = 0.35
@@ -74,7 +75,7 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
     }
 
     const left = hotSecondsLeft()
-    const text = shownZone && left > 0 ? `HOT  0:${left < 10 ? '0' : ''}${left}` : ''
+    const text = shownZone && left > 0 && !tutorial.active ? `HOT  0:${left < 10 ? '0' : ''}${left}` : ''
     if (text !== shownText) {
       shownText = text
       TextShape.getMutable(marker).text = text ? `${HOT.factor}X` : ''

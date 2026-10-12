@@ -121,6 +121,12 @@ export const MESSAGES = {
    */
   ledgerReset: Schemas.Map({ by: Schemas.String }),
 
+  /**
+   * Server -> one player: what finishing the tutorial gave them. The XP that took them to
+   * TUTORIAL_LEVEL, the level they're now at, and a JSON string[] of anything that level unlocked.
+   */
+  tutorialReward: Schemas.Map({ xp: Schemas.Int, level: Schemas.Int, unlocked: Schemas.String }),
+
   /** What a round was worth, for the round result card. */
   roundResult: Schemas.Map({
     /** Base points with hot targets doubled. Posts to the True Score boards. */

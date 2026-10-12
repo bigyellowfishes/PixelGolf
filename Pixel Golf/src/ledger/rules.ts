@@ -173,6 +173,9 @@ export function xpToReach(level: number): number {
   return n * LEVELS.first + (LEVELS.step * n * (n - 1)) / 2
 }
 
+/** Finishing the tutorial takes a new player to this level (server.ts, tutorialDone). */
+export const TUTORIAL_LEVEL = 2
+
 /** The level a total XP puts you at. */
 export function levelFor(xp: number): number {
   let level = 1

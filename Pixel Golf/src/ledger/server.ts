@@ -17,7 +17,9 @@ import {
   multiplierCeiling,
   validBall,
   isAdminWallet,
-  RESET_CONFIRM
+  RESET_CONFIRM,
+  TUTORIAL_LEVEL,
+  xpToReach
 } from './rules'
 import {
   leaderJson,
@@ -515,7 +517,8 @@ export function runLedger(): void {
     })
   })
 
-  // The tutorial round is finished: tick it off so it isn't shown again
+  // The tutorial round is finished: tick it off so it isn't shown again, and level them up to
+  // TUTORIAL_LEVEL as the reward (only ever once, since the flag is checked first)
   room.onMessage('tutorialDone', async (_data, context) => {
     const address = context?.from
     if (!address) return
@@ -523,7 +526,13 @@ export function runLedger(): void {
     const wallet = await load(address)
     if (wallet.tutorial) return
     wallet.tutorial = true
+    const from = levelFor(wallet.xp)
+    const xp = canEarn(address) ? Math.max(0, xpToReach(TUTORIAL_LEVEL) - wallet.xp) : 0
+    giveXp(wallet, xp)
     touch(address, wallet)
+    const level = levelFor(wallet.xp)
+    const unlocked = CATALOGUE.filter((i) => i.level > from && i.level <= level).map((i) => i.name)
+    void room.send('tutorialReward', { xp, level, unlocked: JSON.stringify(unlocked) }, { to: [address] })
     sendLedger(address, wallet)
   })
 

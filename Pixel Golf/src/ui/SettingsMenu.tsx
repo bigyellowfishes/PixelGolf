@@ -5,6 +5,7 @@ import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
 import { playUi } from '../sfx'
 import { amIAdmin, sendAdminReset } from '../ledger/client'
+import { forTouch } from '../mobile'
 
 // Settings button (top of the screen, under the score) and the Settings panel it opens.
 // Holds the Ball cam on/off switch (key 1 still toggles it too) and the Orbit camera switch.
@@ -21,6 +22,10 @@ export interface State {
   /** The Reset button has been pressed once and is waiting for the second press. */
   resetArmed: boolean
   resetLabel: string
+  /** The rows' explanations, in touch words on a phone */
+  ballCamText: string
+  orbitCamText: string
+  resetText: string
 }
 
 // How long the Reset button waits for its second press before it calms down again
@@ -35,7 +40,10 @@ export const state: State = {
   orbitCamLabel: 'Off',
   isAdmin: false,
   resetArmed: false,
-  resetLabel: 'Reset'
+  resetLabel: 'Reset',
+  ballCamText: '',
+  orbitCamText: '',
+  resetText: ''
 }
 
 type UiAction = { state: State; props: Parameters<typeof SettingsMenu>[0]; value?: unknown }
@@ -87,6 +95,13 @@ export function SettingsMenu(props: {}) {
   state.isAdmin = amIAdmin()
   state.resetArmed = Date.now() < resetArmedUntil
   state.resetLabel = state.resetArmed ? 'Sure?' : 'Reset'
+  state.ballCamText = forTouch('Follow the ball after each shot. Key 1 also switches it.')
+  state.orbitCamText = forTouch('While the ball cam follows a shot: drag or A / D to orbit, W / S to zoom.')
+  state.resetText = forTouch(
+    state.resetArmed
+      ? 'Press again to wipe everyone. This can\'t be undone.'
+      : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
+  )
 
   const settingsButton = useInteraction({
     base: {
@@ -332,7 +347,7 @@ export function SettingsMenu(props: {}) {
                   uiTransform={{ width: '100%', height: 28 }}
                 />
                 <Label
-                  value="Follow the ball after each shot. Key 1 also switches it."
+                  value={state.ballCamText}
                   fontSize={13}
                   textWrap="wrap"
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -379,7 +394,7 @@ export function SettingsMenu(props: {}) {
                   uiTransform={{ width: '100%', height: 28 }}
                 />
                 <Label
-                  value="While the ball cam follows a shot: drag or A / D to orbit, W / S to zoom."
+                  value={state.orbitCamText}
                   fontSize={13}
                   textWrap="wrap"
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -427,11 +442,7 @@ export function SettingsMenu(props: {}) {
                   uiTransform={{ width: '100%', height: 28 }}
                 />
                 <Label
-                  value={
-                    state.resetArmed
-                      ? 'Press again to wipe everyone. This can\'t be undone.'
-                      : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
-                  }
+                  value={state.resetText}
                   fontSize={13}
                   textWrap="wrap"
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
