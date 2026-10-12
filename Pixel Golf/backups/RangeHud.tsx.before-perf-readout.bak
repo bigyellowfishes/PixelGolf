@@ -1,0 +1,217 @@
+/** @jsx ReactEcs.createElement */
+import ReactEcs from '@dcl/sdk/react-ecs'
+import { UiEntity, Label } from '@dcl/sdk/react-ecs'
+import { useInteraction } from './interaction'
+import { profile, range, hotSecondsLeft, currentCeiling } from '../ledger/client'
+import { getRoundProgress } from '../game'
+import { openLeaderboards } from './LeaderboardMenu'
+import { playUi } from '../sfx'
+
+// The range card on the right of the screen: the hot target and its countdown,
+// your ball count and round total, the shared multiplier, your level and Pixel
+// Points, and the Leaderboards button. Also shows short callouts (level ups, the
+// daily bonus, big multiplier rolls) with showToast().
+
+export interface State {
+  hotName: string
+  hotTime: string
+  hotDisplay: 'flex' | 'none'
+  ballText: string
+  roundScore: string
+  multiplierText: string
+  playersText: string
+  levelText: string
+  pointsText: string
+  toastText: string
+  toastDisplay: 'flex' | 'none'
+}
+
+export const state: State = {
+  hotName: '',
+  hotTime: '',
+  hotDisplay: 'none',
+  ballText: 'Ball 0/10',
+  roundScore: '0',
+  multiplierText: '2x',
+  playersText: '1 player',
+  levelText: 'LV -',
+  pointsText: '-',
+  toastText: '',
+  toastDisplay: 'none'
+}
+
+type UiAction = { state: State; props: Parameters<typeof RangeHud>[0]; value?: unknown }
+
+let toastUntil = 0
+
+/** A short callout under the range card. */
+export function showToast(text: string, seconds = 4) {
+  state.toastText = text
+  toastUntil = Date.now() + seconds * 1000
+}
+
+// @ui-action
+function openBoards({ state, props }: UiAction) {
+  playUi('ui_open')
+  openLeaderboards()
+}
+
+function fmt(n: number): string {
+  const s = String(Math.abs(Math.round(n)))
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 === 0) out += ','
+    out += s[i]
+  }
+  return (n < 0 ? '-' : '') + out
+}
+
+export function RangeHud(props: {}) {
+  // Read the live values each frame
+  const left = hotSecondsLeft()
+  state.hotDisplay = range.hot && left > 0 ? 'flex' : 'none'
+  state.hotName = range.hot.replace(/\d+$/, '')
+  state.hotTime = `0:${left < 10 ? '0' : ''}${left}`
+  const round = getRoundProgress()
+  state.ballText = `Ball ${round.ball}/${round.balls}`
+  state.roundScore = fmt(round.score)
+  const ceiling = currentCeiling()
+  state.multiplierText = ceiling > 2 ? `2x to ${ceiling}x` : '2x'
+  state.playersText = range.players === 1 ? '1 player here' : `${range.players} players here`
+  state.levelText = profile.ready ? `LV ${profile.level}` : 'LV -'
+  state.pointsText = profile.ready ? fmt(profile.points) : '-'
+  state.toastDisplay = Date.now() < toastUntil ? 'flex' : 'none'
+
+  const boardsButton = useInteraction({
+    base: {
+      uiTransform: {
+        width: '100%',
+        height: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: { top: 10 },
+        borderRadius: 18,
+        borderWidth: 2,
+        borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
+      },
+      uiBackground: { color: { r: 1, g: 1, b: 1, a: 1 } },
+      onMouseDown: () => openBoards({ state, props })
+    },
+    hover: {
+      uiTransform: { borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } },
+      uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }
+    }
+  })
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        height: '100%',
+        positionType: 'absolute',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        padding: { top: 150, right: 16 },
+        pointerFilter: 'none'
+      }}
+    >
+      {/* The card */}
+      <UiEntity
+        uiTransform={{
+          width: 240,
+          flexDirection: 'column',
+          padding: { top: 12, right: 14, bottom: 12, left: 14 },
+          borderRadius: 20,
+          borderWidth: 3,
+          borderColor: { r: 1, g: 1, b: 1, a: 1 }
+        }}
+        uiBackground={{ color: { r: 0.957, g: 0.969, b: 0.976, a: 0.95 } }}
+      >
+        {/* Hot target */}
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: 46,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: { left: 12, right: 12 },
+            margin: { bottom: 10 },
+            borderRadius: 14,
+            display: state.hotDisplay
+          }}
+          uiBackground={{ color: { r: 1, g: 0.549, b: 0.102, a: 1 } }}
+        >
+          <UiEntity uiTransform={{ flexDirection: 'column' }}>
+            <Label value="HOT TARGET  2X" fontSize={11} color={{ r: 1, g: 0.925, b: 0.839, a: 1 }} textAlign="middle-left" uiTransform={{ width: 140, height: 14 }} />
+            <Label value={state.hotName} fontSize={18} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: 140, height: 24 }} />
+          </UiEntity>
+          <Label value={state.hotTime} fontSize={20} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-right" uiTransform={{ width: 60, height: 30 }} />
+        </UiEntity>
+
+        {/* Round */}
+        <UiEntity uiTransform={{ width: '100%', height: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Label value={state.ballText} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 100, height: 26 }} />
+          <Label value={state.roundScore} fontSize={18} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 110, height: 26 }} />
+        </UiEntity>
+
+        {/* Multiplier */}
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: 44,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: { left: 10, right: 10 },
+            margin: { top: 6 },
+            borderRadius: 12
+          }}
+          uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
+        >
+          <UiEntity uiTransform={{ flexDirection: 'column' }}>
+            <Label value="MULTIPLIER" fontSize={11} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: 110, height: 14 }} />
+            <Label value={state.playersText} fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: 110, height: 18 }} />
+          </UiEntity>
+          <Label value={state.multiplierText} fontSize={17} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: 90, height: 26 }} />
+        </UiEntity>
+
+        {/* Level and Pixel Points */}
+        <UiEntity uiTransform={{ width: '100%', height: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: 8 } }}>
+          <UiEntity
+            uiTransform={{ width: 64, height: 26, justifyContent: 'center', alignItems: 'center', borderRadius: 13 }}
+            uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
+          >
+            <Label value={state.levelText} fontSize={13} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 64, height: 26 }} />
+          </UiEntity>
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Label value="Pixel Points" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 80, height: 26 }} />
+            <Label value={state.pointsText} fontSize={16} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 60, height: 26 }} />
+          </UiEntity>
+        </UiEntity>
+
+        {/* Leaderboards */}
+        <UiEntity {...boardsButton}>
+          <Label value="Leaderboards" fontSize={14} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: 140, height: 30 }} />
+        </UiEntity>
+      </UiEntity>
+
+      {/* Callout */}
+      <UiEntity
+        uiTransform={{
+          width: 240,
+          minHeight: 40,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: { top: 8, right: 12, bottom: 8, left: 12 },
+          margin: { top: 10 },
+          borderRadius: 16,
+          display: state.toastDisplay
+        }}
+        uiBackground={{ color: { r: 0.165, g: 0.525, b: 0.106, a: 0.95 } }}
+      >
+        <Label value={state.toastText} fontSize={14} textWrap="wrap" color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 216, minHeight: 24 }} />
+      </UiEntity>
+    </UiEntity>
+  )
+}
