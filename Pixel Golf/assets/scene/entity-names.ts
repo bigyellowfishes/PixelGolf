@@ -101,5 +101,4 @@ export enum EntityNames {
   shop_banner_2_glb = "shop_banner_2.glb",
   stacked_shirts_glb = "stacked_shirts.glb",
   trees_glb = "trees.glb",
-  tst = "tst",
 } 
