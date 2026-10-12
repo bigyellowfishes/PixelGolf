@@ -253,7 +253,7 @@ export function getPrompt(): string {
             : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
         } else {
           return myBay() === 0
-            ? `Click Solo Bays's Tee Off screen to play here`
+            ? `Click the Solo Bay's Tee Off screen to play here`
             : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
         }
       }

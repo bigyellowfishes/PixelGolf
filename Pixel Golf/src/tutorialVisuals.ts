@@ -8,14 +8,14 @@ import {
   Font,
   TextAlignMode,
   AvatarModifierArea,
-  AvatarModifierType
+  AvatarModifierType,
+  PlayerIdentityData
 } from '@dcl/sdk/ecs'
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { getPlayer } from '@dcl/sdk/players'
 
 import { Game } from './game'
-import { tutorial } from './ledger/client'
-import { getActiveBay } from './teeOffPanels'
+import { tutorial, solo, leaveSoloBay } from './ledger/client'
 
 /**
  * What the tutorial looks like, as opposed to how it runs (tutorial.ts).
@@ -58,7 +58,9 @@ const MARKER_CLEARANCE = 1.5
 const BOB_HEIGHT = 0.5
 const BOB_SECONDS = 2
 
-const SOLO_BAY = 20
+// Walking further than this from the solo bay's ball leaves the solo bay, so you're visible again
+// and can see everyone again
+const SOLO_LEAVE_DISTANCE = 12
 
 // Pixel Golf blue with a white outline, like the menus' header tabs
 const MARKER_COLOUR = Color4.create(1, 1, 1, 1)
@@ -99,10 +101,15 @@ export function setupTutorialVisuals(
     ]
   })
 
-  // Bay 20 (solo): a permanent private box, so nobody else can see a player standing in it
+  // Bay 20 (solo): a private box around the bay. It hides only the players who have joined the
+  // solo bay (the server's list); everyone else in the scene is put in its excludeIds, so someone
+  // just walking through stays visible.
   let soloPrivacy: Entity | undefined
+  let soloTee: { x: number; y: number; z: number } | undefined
+  let shownSoloKey = ''
   if (bay20) {
     const t20 = bay20.teePosition()
+    soloTee = t20
     let yaw20 = 0
     if (bay1) {
       const next = bay1.teePosition()
@@ -148,15 +155,41 @@ export function setupTutorialVisuals(
   engine.addSystem((dt) => {
     clock += dt
     const inTutorial = tutorial.active
-    // Hide everyone else in the tutorial AND in the solo bay
-    const wide = inTutorial || getActiveBay() === SOLO_BAY
+
+    // Walked away from the solo bay without picking another: you've left it
+    if (solo.joined && soloTee) {
+      const p = Transform.getOrNull(engine.PlayerEntity)?.position
+      if (p) {
+        const dx = p.x - soloTee.x
+        const dz = p.z - soloTee.z
+        if (dx * dx + dz * dz > SOLO_LEAVE_DISTANCE * SOLO_LEAVE_DISTANCE) leaveSoloBay()
+      }
+    }
+
+    // Hide everyone else from you in the tutorial, and while you're playing in the solo bay
+    const wide = inTutorial || solo.joined
 
     const me = getPlayer()?.userId ?? ''
     if (me !== shownMe) {
       shownMe = me
-      const ids = me ? [me, me.toLowerCase()] : []
-      AvatarModifierArea.getMutable(privacy).excludeIds = ids
-      if (soloPrivacy) AvatarModifierArea.getMutable(soloPrivacy).excludeIds = ids
+      AvatarModifierArea.getMutable(privacy).excludeIds = me ? [me, me.toLowerCase()] : []
+    }
+
+    // The solo bay's box leaves out you and everyone who hasn't joined it
+    if (soloPrivacy) {
+      const inSolo = new Set(solo.players)
+      const ids: string[] = []
+      if (me) ids.push(me, me.toLowerCase())
+      for (const [, who] of engine.getEntitiesWith(PlayerIdentityData)) {
+        const a = who.address
+        if (a && !inSolo.has(a.toLowerCase())) ids.push(a, a.toLowerCase())
+      }
+      ids.sort()
+      const key = ids.join(',')
+      if (key !== shownSoloKey) {
+        shownSoloKey = key
+        AvatarModifierArea.getMutable(soloPrivacy).excludeIds = ids
+      }
     }
 
     // The whole scene while you're in the tutorial, otherwise just bay 19

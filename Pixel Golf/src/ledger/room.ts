@@ -70,6 +70,12 @@ export const MESSAGES = {
   tutorialDone: Schemas.Map({ n: Schemas.Int }),
 
   /**
+   * I've left the solo bay (bay 20) without picking another bay, e.g. walked away. Joining it is
+   * a normal claimBay for bay 20, which the server treats as "add me" rather than "it's mine".
+   */
+  leaveSolo: Schemas.Map({ n: Schemas.Int }),
+
+  /**
    * Admin only: wipe every player's progress and all eight leaderboards. Refused unless the
    * sender's wallet is in ADMIN.wallets (rules.ts). `confirm` must be RESET_CONFIRM.
    */
@@ -120,6 +126,13 @@ export const MESSAGES = {
    * showing and says hello again, which brings back the fresh, empty ledger (and the tutorial).
    */
   ledgerReset: Schemas.Map({ by: Schemas.String }),
+
+  /**
+   * Server -> everyone: who is playing in the solo bay (bay 20) right now, as a JSON string[] of
+   * wallets. Any number of players can be in it at once. Scenes hide these players while they're
+   * in the bay; anyone else standing there stays visible.
+   */
+  soloPlayers: Schemas.Map({ json: Schemas.String }),
 
   /**
    * Server -> one player: what finishing the tutorial gave them. The XP that took them to

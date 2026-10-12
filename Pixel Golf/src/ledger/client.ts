@@ -95,6 +95,29 @@ export const TUTORIAL_BAY = 19
  */
 export const TUTORIAL_BALLS = 5
 
+/**
+ * The solo bay. Anyone can play here, any number at once: it's never owned by one player like
+ * the other bays (no "in use by" lock). Each player's ball, score and shots stay on their own
+ * screen, like the tutorial bay. Players who have joined it (clicked its Tee Off screen) are
+ * hidden from everyone while they're in the bay, and see nobody else; anyone just walking past
+ * stays visible (tutorialVisuals.ts).
+ */
+export const SOLO_BAY = 20
+
+export const solo = {
+  /** True once this player has clicked the solo bay's Tee Off screen, until they pick another bay or walk away. */
+  joined: false,
+  /** Wallets of everyone in the solo bay, by the server's list (lower case). */
+  players: [] as string[]
+}
+
+/** Leave the solo bay without picking another one (walked away). */
+export function leaveSoloBay(): void {
+  if (!solo.joined) return
+  solo.joined = false
+  void room.send('leaveSolo', { n: 1 })
+}
+
 export const tutorial = {
   /** True while this player is playing their tutorial round in the tutorial bay. */
   active: false,
@@ -155,12 +178,12 @@ export const onBayScore = (fn: Fn<BayScore>) => bayScoreFns.push(fn)
 
 /** Tell everyone I just hit, so they can watch the ball fly. */
 export function sendShot(bay: number, vx: number, vy: number, vz: number): void {
-  if (bay > 0 && bay !== TUTORIAL_BAY) void room.send('shot', { bay, vx, vy, vz })
+  if (bay > 0 && bay !== TUTORIAL_BAY && bay !== SOLO_BAY) void room.send('shot', { bay, vx, vy, vz })
 }
 
 /** Tell everyone my bay's numbers after the ball settles. */
 export function sendShotDone(d: BayScore): void {
-  if (d.bay > 0 && d.bay !== TUTORIAL_BAY) void room.send('shotDone', d)
+  if (d.bay > 0 && d.bay !== TUTORIAL_BAY && d.bay !== SOLO_BAY) void room.send('shotDone', d)
 }
 
 /** Whenever XP, points or cosmetics change. */
@@ -205,6 +228,8 @@ function myId(): string {
 
 /** The name of whoever else has this bay, or '' if it's free or yours. */
 export function bayTakenBy(bay: number): string {
+  // Nobody owns the solo bay, so it's never taken
+  if (bay === SOLO_BAY) return ''
   const o = bays.owners[String(bay)]
   return o && o.u !== myId() ? o.n || 'another player' : ''
 }
@@ -212,6 +237,7 @@ export function bayTakenBy(bay: number): string {
 /** The bay this player plays in, or 0 if they haven't picked one. */
 export function myBay(): number {
   if (tutorial.active) return TUTORIAL_BAY
+  if (solo.joined) return SOLO_BAY
   const me = myId()
   if (me) {
     for (const k in bays.owners) if (bays.owners[k].u === me) return Number(k)
@@ -229,6 +255,15 @@ export function claimBay(bay: number): boolean {
   if (bayLockReason(bay) || bayTakenBy(bay)) return false
   // The tutorial bay is never claimed on the server, so any number of newcomers can use it at once
   if (bay === TUTORIAL_BAY) return true
+  // The solo bay takes anyone. The server adds them to its list (and lets their old bay go).
+  if (bay === SOLO_BAY) {
+    solo.joined = true
+    bays.pending = 0
+    void room.send('claimBay', { bay })
+    return true
+  }
+  // Any other bay: leaving the solo bay for it
+  solo.joined = false
   bays.pending = bay
   void room.send('claimBay', { bay })
   return true
@@ -366,13 +401,18 @@ export function setupLedgerClient(): void {
     if (bays.pending && bays.owners[String(bays.pending)]) bays.pending = 0
   })
 
-  // Other players' shots and scores. My own bay is already playing them.
+  room.onMessage('soloPlayers', (d) => {
+    solo.players = parse<string[]>(d.json, []).map((a) => String(a).toLowerCase())
+  })
+
+  // Other players' shots and scores. My own bay is already playing them. Nobody's solo bay
+  // shots are shared, since everyone in it has their own ball there.
   room.onMessage('shotSeen', (d) => {
-    if (tutorial.active || d.bay === myBay()) return
+    if (tutorial.active || d.bay === myBay() || d.bay === SOLO_BAY) return
     for (const fn of remoteShotFns) fn({ ...d })
   })
   room.onMessage('bayScore', (d) => {
-    if (tutorial.active || d.bay === myBay()) return
+    if (tutorial.active || d.bay === myBay() || d.bay === SOLO_BAY) return
     for (const fn of bayScoreFns) fn({ ...d })
   })
 
@@ -418,6 +458,7 @@ export function setupLedgerClient(): void {
     tutorial.active = false
     tutorial.started = false
     bays.pending = 0
+    solo.joined = false
     for (const p of PERIODS) boards.mine[p] = { true: 0, trueV: 0, multi: 0, multiV: 0 }
     for (const fn of resetFns) fn(d.by)
     greet()

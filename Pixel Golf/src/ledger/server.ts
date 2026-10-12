@@ -110,6 +110,8 @@ const STORAGE_KEY = 'pg2'
 
 /** The bay reserved for the tutorial. Keep equal to TUTORIAL_BAY in ledger/client.ts. */
 const TUTORIAL_BAY = 19
+/** The solo bay: any number of players at once, never owned by one. Keep equal to SOLO_BAY in ledger/client.ts. */
+const SOLO_BAY = 20
 
 const empty = (): Wallet => ({
   name: '',
@@ -249,6 +251,19 @@ function sendRange(to?: string): void {
 
 /** Bay number -> wallet of the player in it. */
 const bayOwners = new Map<number, string>()
+/** Everyone playing in the solo bay. Not in bayOwners: it has no one owner. */
+const soloPlayers = new Set<string>()
+
+function sendSolo(to?: string): void {
+  const json = JSON.stringify(Array.from(soloPlayers))
+  if (to) void room.send('soloPlayers', { json }, { to: [to] })
+  else void room.send('soloPlayers', { json })
+}
+
+/** Takes a player out of the solo bay. True if they were in it. */
+function leaveSoloBay(address: string): boolean {
+  return soloPlayers.delete(address)
+}
 
 function isPresent(address: string): boolean {
   return (seen.get(address) ?? 0) >= now() - LEDGER.presenceSeconds
@@ -268,6 +283,14 @@ function sendBays(to?: string): void {
 /** Lets go of the bays of anyone who has left the space. True if any changed. */
 function releaseAbsentBays(): boolean {
   let changed = false
+  let soloChanged = false
+  for (const who of soloPlayers) {
+    if (!isPresent(who)) {
+      soloPlayers.delete(who)
+      soloChanged = true
+    }
+  }
+  if (soloChanged) sendSolo()
   for (const [bay, who] of bayOwners) {
     if (!isPresent(who)) {
       bayOwners.delete(bay)
@@ -461,6 +484,7 @@ export function runLedger(): void {
     sendLedger(address, wallet)
     sendRange(address)
     sendBays(address)
+    sendSolo(address)
     void room.send('leaders', { json: leaderJson() }, { to: [address] })
     sendRanks(address)
   })
@@ -478,6 +502,23 @@ export function runLedger(): void {
     }
     await load(address) // for their name on the bay list
 
+    // The solo bay takes anyone: joining it lets their own bay go, and nobody is refused
+    if (bay === SOLO_BAY) {
+      let released = false
+      for (const [b, who] of bayOwners) {
+        if (who === address) {
+          bayOwners.delete(b)
+          released = true
+        }
+      }
+      if (released) sendBays()
+      if (!soloPlayers.has(address)) {
+        soloPlayers.add(address)
+        sendSolo()
+      }
+      return
+    }
+
     const owner = bayOwners.get(bay)
     if (owner === address) {
       sendBays(address)
@@ -489,10 +530,18 @@ export function runLedger(): void {
       sendBays(address)
       return
     }
-    // One bay each: claiming this one lets any other go
+    // One bay each: claiming this one lets any other go, the solo bay included
     for (const [b, who] of bayOwners) if (who === address) bayOwners.delete(b)
     bayOwners.set(bay, address)
     sendBays()
+    if (leaveSoloBay(address)) sendSolo()
+  })
+
+  room.onMessage('leaveSolo', (_data, context) => {
+    const address = context?.from
+    if (!address) return
+    seen.set(address, now())
+    if (leaveSoloBay(address)) sendSolo()
   })
 
   // Shots are passed on to everyone so they can watch them, but only from the player in that bay
@@ -558,6 +607,8 @@ export function runLedger(): void {
       cache.clear()
       dirty.clear()
       bayOwners.clear()
+      soloPlayers.clear()
+      sendSolo()
       resetLeaders()
       await saveLeaders()
       console.log(`[ledger] reset by ${by} (${address}), now epoch ${currentEpoch()}`)
