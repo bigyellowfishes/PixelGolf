@@ -15,6 +15,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { Game } from './game'
 import { tutorial } from './ledger/client'
+import { getActiveBay } from './teeOffPanels'
 
 /**
  * What the tutorial looks like, as opposed to how it runs (tutorial.ts).
@@ -57,6 +58,8 @@ const MARKER_CLEARANCE = 1.5
 const BOB_HEIGHT = 0.5
 const BOB_SECONDS = 2
 
+const SOLO_BAY = 20
+
 // Pixel Golf blue with a white outline, like the menus' header tabs
 const MARKER_COLOUR = Color4.create(1, 1, 1, 1)
 const MARKER_OUTLINE = Color4.create(0.075, 0.533, 0.722, 1)
@@ -66,7 +69,9 @@ const HIDDEN = Vector3.create(0, -100, 0)
 export function setupTutorialVisuals(
   bay19: Game | undefined,
   bay18: Game | undefined,
-  zoneEntity: (zone: string) => Entity | undefined
+  zoneEntity: (zone: string) => Entity | undefined,
+  bay20?: Game,
+  bay1?: Game
 ): void {
   if (!bay19) return
 
@@ -94,6 +99,31 @@ export function setupTutorialVisuals(
     ]
   })
 
+  // Bay 20 (solo): a permanent private box, so nobody else can see a player standing in it
+  let soloPrivacy: Entity | undefined
+  if (bay20) {
+    const t20 = bay20.teePosition()
+    let yaw20 = 0
+    if (bay1) {
+      const next = bay1.teePosition()
+      yaw20 = (Math.atan2(next.x - t20.x, next.z - t20.z) * 180) / Math.PI
+    }
+    soloPrivacy = engine.addEntity()
+    Transform.create(soloPrivacy, {
+      position: Vector3.create(t20.x - BAY_BACK, t20.y + BAY_HEIGHT / 2 - 1, t20.z),
+      rotation: Quaternion.fromEulerDegrees(0, yaw20, 0)
+    })
+    AvatarModifierArea.create(soloPrivacy, {
+      area: baySize,
+      excludeIds: [],
+      modifiers: [
+        AvatarModifierType.AMT_HIDE_AVATARS,
+        AvatarModifierType.AMT_HIDE_NAMETAGS,
+        AvatarModifierType.AMT_DISABLE_PASSPORTS
+      ]
+    })
+  }
+
   let shownWide: boolean | null = null
   let shownMe = ''
 
@@ -117,13 +147,16 @@ export function setupTutorialVisuals(
 
   engine.addSystem((dt) => {
     clock += dt
-    const wide = tutorial.active
+    const inTutorial = tutorial.active
+    // Hide everyone else in the tutorial AND in the solo bay
+    const wide = inTutorial || getActiveBay() === SOLO_BAY
 
-    // Never hide yourself. Your id may only be known a moment after the scene starts.
     const me = getPlayer()?.userId ?? ''
     if (me !== shownMe) {
       shownMe = me
-      AvatarModifierArea.getMutable(privacy).excludeIds = me ? [me, me.toLowerCase()] : []
+      const ids = me ? [me, me.toLowerCase()] : []
+      AvatarModifierArea.getMutable(privacy).excludeIds = ids
+      if (soloPrivacy) AvatarModifierArea.getMutable(soloPrivacy).excludeIds = ids
     }
 
     // The whole scene while you're in the tutorial, otherwise just bay 19
@@ -135,8 +168,8 @@ export function setupTutorialVisuals(
       AvatarModifierArea.getMutable(privacy).area = wide ? SCENE_SIZE : baySize
     }
 
-    // SHOOT HERE over the orange target, only during the tutorial
-    if (wide && !markerBase) {
+    // SHOOT HERE: tutorial only, not solo
+    if (inTutorial && !markerBase) {
       const ent = zoneEntity(TARGET_ZONE)
       const t = ent ? Transform.getOrNull(ent) : null
       if (t) {
@@ -147,11 +180,11 @@ export function setupTutorialVisuals(
         markerBase = Vector3.create(t.position.x, FLAG_TOP + MARKER_CLEARANCE + BOB_HEIGHT, t.position.z)
       }
     }
-    if (wide !== markerShown) {
-      markerShown = wide
-      TextShape.getMutable(marker).text = wide ? MARKER_TEXT : ''
+    if (inTutorial !== markerShown) {
+      markerShown = inTutorial
+      TextShape.getMutable(marker).text = inTutorial ? MARKER_TEXT : ''
     }
-    if (wide && markerBase) {
+    if (inTutorial && markerBase) {
       const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
       Transform.getMutable(marker).position = Vector3.create(markerBase.x, markerBase.y + bob, markerBase.z)
     } else if (Transform.get(marker).position.y !== HIDDEN.y) {

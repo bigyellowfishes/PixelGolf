@@ -19,6 +19,7 @@ export enum EntityNames {
   Ball_18 = "Ball_18",
   Ball_19 = "Ball_19",
   Ball_2 = "Ball_2",
+  Ball_20 = "Ball_20",
   Ball_3 = "Ball_3",
   Ball_4 = "Ball_4",
   Ball_5 = "Ball_5",

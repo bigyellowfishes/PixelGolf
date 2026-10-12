@@ -95,7 +95,8 @@ const GROUP_PATCH = 4
 // Every playable ball in the scene, matched by entity name
 const BALL_NAMES = ['Ball_1', 'Ball_2', 'Ball_3', 'Ball_4', 'Ball_5', 'Ball_6',
                     'Ball_7', 'Ball_8','Ball_9', 'Ball_10', 'Ball_11', 'Ball_12',
-                    'Ball_13', 'Ball_14', 'Ball_15', 'Ball_16', 'Ball_17', 'Ball_18', 'Ball_19']
+                    'Ball_13', 'Ball_14', 'Ball_15', 'Ball_16', 'Ball_17', 'Ball_18',
+                    'Ball_19', 'Ball_20']
 
 type BallRig = {
   name: string
@@ -998,10 +999,12 @@ export function main() {
   setupTutorial(games.find((g) => g.bay === TUTORIAL_BAY))
   // Players hidden from each other during it, and SHOOT HERE over the orange target
   setupTutorialVisuals(
-    games.find((g) => g.bay === TUTORIAL_BAY),
-    games.find((g) => g.bay === TUTORIAL_BAY - 1),
-    (zone) => (ScoreZones as Record<string, Entity | undefined>)[zone]
-  )
+  games.find((g) => g.bay === TUTORIAL_BAY),
+  games.find((g) => g.bay === TUTORIAL_BAY - 1),
+  (zone) => (ScoreZones as Record<string, Entity | undefined>)[zone],
+  games.find((g) => g.bay === 20), // solo bay
+  games.find((g) => g.bay === 1)   // its neighbour, used to line the box up
+)
 
   // Run the Update for the Main Game Loop In Game.ts
   engine.addSystem((dt: number) => {
@@ -1010,4 +1013,4 @@ export function main() {
     Game.UpdateCameraFrame(dt)
     updateSettingsInput()
   })
-}
+}

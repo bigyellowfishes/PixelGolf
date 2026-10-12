@@ -26,7 +26,7 @@ const RACK = {
    * stands on the +Z side of the ball (CLUB.stance in club.ts), so +Z puts the rack
    * beside them. Raise or lower z if it crowds the next pad.
    */
-  offset: { x: 0, z: 2.4 },
+  offset: { x: 0, y: -0.20, z: 2.6 },
   /** Gap between the three clubs, along X. */
   slotSpacing: 0.55,
   /** Height of the model's origin (the grip end) above the ground. */
@@ -59,7 +59,7 @@ function paintPlates(): void {
 function spawnRack(spot: { x: number; y: number; z: number }): void {
   const rack = engine.addEntity()
   Transform.create(rack, {
-    position: Vector3.create(spot.x + RACK.offset.x, spot.y, spot.z + RACK.offset.z)
+    position: Vector3.create(spot.x + RACK.offset.x, spot.y + RACK.offset.y, spot.z + RACK.offset.z)
   })
 
   ORDER.forEach((type, i) => {

@@ -22,7 +22,7 @@ import { playUi } from './sfx'
 
 // The Tee Off panels: clicking one opens the Pixel Golf menu, and its screen shows
 // that bay's score in the same style as the menu.
-//
+// 
 // The panels are one merged model ("Tee Off Panels.glb"), so each panel gets its own
 // invisible click box and its own score screen here. Both are parented to that entity,
 // so they follow it if the Environment is moved in the editor. Positions are in the
@@ -74,6 +74,12 @@ const PANELS: {
   box: { x: number; y: number; z: number; yaw: number }
   screen: { x: number; y: number; z: number; nx: number; ny: number; nz: number }
 }[] = [
+  {
+    // The end panel past bay 18, measured from the model the same way as the others
+    ball: 20,
+    box: { x: -220.14, y: 30.542, z: -84.25, yaw: -102.23 },
+    screen: { x: -220.14, y: 30.678, z: -84.26, nx: -0.158, ny: 0.707, nz: 0.691 }
+  },
   {
     ball: 1,
     box: { x: -224.133, y: 30.552, z: -76.366, yaw: -101.33 },
@@ -165,7 +171,6 @@ const PANELS: {
     screen: { x: -225.144, y: 30.670, z: 71.876, nx: 0.139, ny: 0.707, nz: 0.693 }
   },
   {
-    // The end panel past bay 18, measured from the model the same way as the others
     ball: 19,
     box: { x: -221.141, y: 30.542, z: 79.782, yaw: -77.23 },
     screen: { x: -221.115, y: 30.678, z: 79.903, nx: 0.157, ny: 0.707, nz: 0.69 }
@@ -211,15 +216,28 @@ export function setupTeeOffPanels(): void {
           showToast(locked, 4)
           return
         }
+
         // One player per bay. Clicking a free bay's screen makes it yours (and lets your old one go).
-        const takenBy = bayTakenBy(p.ball)
-        if (takenBy || !claimBay(p.ball)) {
-          playUi('score_miss')
-          showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
-          return
+        if(p.ball != 20)
+        {
+          const takenBy = bayTakenBy(p.ball)
+          if (takenBy || !claimBay(p.ball)) {
+            playUi('score_miss')
+            showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
+            return
+          }
+          activeBay = p.ball
+          openPixelGolfMenu()
+        } else {
+          const takenBy = bayTakenBy(p.ball)
+          if (takenBy || !claimBay(p.ball)) {
+            //playUi('score_miss')
+            //showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
+            //return
+          }
+          activeBay = p.ball
+          openPixelGolfMenu()
         }
-        activeBay = p.ball
-        openPixelGolfMenu()
       }
     )
   }
@@ -305,10 +323,18 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
       specularIntensity: 0
     })
 
-    addText(card, SLOTS.bay, Color4.White(), `BAY ${ball}`)
+    // Dray Bay Text
+    if(ball == 20) {
+      addText(card, SLOTS.bay, Color4.White(), `SOLO BAY`)
+    } else if(ball == 19) {
+      addText(card, SLOTS.bay, Color4.White(), `TUTORIAL`)
+    } else {
+      addText(card, SLOTS.bay, Color4.White(), `BAY ${ball}`)
+    }
+
+    // Display Round Text
     screens.push({
       state: g.state,
-      // The tutorial bay plays the tutorial's short round
       balls: ball === TUTORIAL_BAY ? TUTORIAL_BALLS : ROUND_BALLS,
       score: addText(card, SLOTS.score, INK),
       shots: addText(card, SLOTS.shots, INK),

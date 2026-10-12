@@ -245,9 +245,17 @@ export function getPrompt(): string {
         // One player, one bay
         const takenBy = bayTakenBy(g.bay)
         if (takenBy) return `Bay ${g.bay} is in use by ${takenBy}`
-        return myBay() === 0
-          ? `Click Bay ${g.bay}'s Tee Off screen to play here`
-          : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
+        let mBay = g.bay
+        if(mBay != 20)
+        {
+          return myBay() === 0
+            ? `Click Bay ${mBay}'s Tee Off screen to play here`
+            : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
+        } else {
+          return myBay() === 0
+            ? `Click Solo Bays's Tee Off screen to play here`
+            : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
+        }
       }
       return g.state.shot >= g.roundBalls() ? 'Press E to start a new round' : 'Press E to take your shot'
     }
@@ -1091,4 +1099,4 @@ function rotateByQuat(v: { x: number; y: number; z: number }, q: { x: number; y:
     y: v.y + q.w * ty + (q.z * tx - q.x * tz),
     z: v.z + q.w * tz + (q.x * ty - q.y * tx),
   }
-}
+}
