@@ -18,10 +18,10 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import * as CANNON from 'cannon-es'
 import { courseData } from './collisionData/course_collision'
 
-import { Game, Physics, updateSettingsInput, applySavedSettings, onSettingChanged, onRoundFinished } from './game'
+import { Game, Physics, updateSettingsInput, applySavedSettings, onSettingChanged, onRoundFinished, setMenuOpenCheck } from './game'
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
-import { setupTeeOffPanels, setupTeeOffScreens } from './teeOffPanels'
+import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
@@ -53,6 +53,7 @@ import { state as clubMenu } from './ui/ClubSelectMenu'
 import { state as boardsMenu } from './ui/LeaderboardMenu'
 import { state as settingsMenu } from './ui/SettingsMenu'
 import { setupMobileControls } from './mobile'
+import { setupClubSync } from './clubSync'
 import { showToast } from './ui/RangeHud'
 
 // ---------------------------------------------------------------------------
@@ -242,6 +243,8 @@ function buildWorldFromScene() {
 // ---------------------------------------------------------------------------
 function setupLedger(): void {
   setupLedgerClient()
+  // Other players' clubs in their hands, and yours in theirs
+  setupClubSync()
 
   // The level card on the Pixel Golf menu
   onProfile((p) => setPlayerProgress(p.level, p.levelXp, p.levelNeed))
@@ -981,14 +984,17 @@ export function main() {
   onBayScore((d) => games.find((g) => g.bay === d.bay)?.showBayScore(d))
 
   // Phones: E is the big button while playing; all the phone's buttons hide while a menu is open
-  setupMobileControls(
-    () =>
-      gameModeMenu.display === 'flex' ||
-      clubMenu.display === 'flex' ||
-      boardsMenu.display === 'flex' ||
-      settingsMenu.display === 'flex' ||
-      roundCard.display === 'flex'
-  )
+  const anyMenuOpen = () =>
+    gameModeMenu.display === 'flex' ||
+    clubMenu.display === 'flex' ||
+    boardsMenu.display === 'flex' ||
+    settingsMenu.display === 'flex' ||
+    roundCard.display === 'flex'
+  setupMobileControls(anyMenuOpen)
+  // No shot starts while a menu is open (so the bay menu can't sit over a swing)
+  setMenuOpenCheck(anyMenuOpen)
+  // Phones: walking up to a free bay's ball joins it and opens the Pixel Golf menu
+  setupAutoTeeOff(anyMenuOpen)
 
   // An admin reset the ledger: every bay starts a fresh round (the tutorial follows when the new ledger arrives)
   onLedgerReset(() => {

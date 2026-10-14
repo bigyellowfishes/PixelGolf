@@ -173,8 +173,14 @@ export function LeaderboardMenu(props: {}) {
         display: state.display,
         zIndex: 15
       }}
-      uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+      uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0 } }}
     >
+      {/* The dim behind the menu. Oversized and pinned outside this box, because on a phone the box is
+          only the safe area, and a dim that stops at its edges shows as a dark rectangle */}
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { top: -1500, left: -2000 }, width: 6000, height: 4000, pointerFilter: 'block' }}
+        uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+      />
       <UiEntity
         uiTransform={{
           width: 620,

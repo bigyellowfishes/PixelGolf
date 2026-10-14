@@ -14,7 +14,8 @@ import {
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
-import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub } from './club'
+import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
+import { reportMyClub } from './clubSync'
 import { getSelectedClubType, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
@@ -199,10 +200,22 @@ export function resetTutorialSteps(): void {
 }
 
 
-// True from the first E press until the ball has come to rest and reset.
-// The club rack uses it to lock club selection mid-shot.
+// True from the first E press until the ball has come to rest and reset, for any ball in the
+// player's own bay. The club rack and the Tee Off screens use it to stay shut mid-shot.
 export function isShotInProgress(): boolean {
-  return activeGame !== null
+  return activeGame !== null || allGames.some((g) => g.isMine() && g.state.phase !== 'walking')
+}
+
+// Whether a menu or card is open (set by index.ts). No shot can start while one is, so the
+// bay menu can't be left open over a swing.
+let menuOpenCheck: () => boolean = () => false
+export function setMenuOpenCheck(fn: () => boolean): void {
+  menuOpenCheck = fn
+}
+
+// Every ball's game, for the Tee Off screens' auto-join on phones
+export function getAllGames(): Game[] {
+  return allGames
 }
 
 // The instruction to show the player right now, or '' for none
@@ -381,7 +394,7 @@ export class Game {
         if (activeGame === null) this.UpdateCamera(false)
         this.physics.freeze()
         // Only the ball in your own bay (picked by clicking its Tee Off screen)
-        if (activeGame === null && this.isMine() && this.state.distanceToBall <= HIT_RANGE && this.clicked()) {
+        if (activeGame === null && !menuOpenCheck() && this.isMine() && this.state.distanceToBall <= HIT_RANGE && this.clicked()) {
           // No movement lock while addressing: it stops the swing animations playing.
           // Walking away cancels the shot instead (see below).
           this.beginSwing()
@@ -621,6 +634,9 @@ export class Game {
     // In hand as you walk up to a ball, and for the whole shot
     const nearBall = allGames.some((x) => x.isMine() && x.state.phase === 'walking' && x.state.distanceToBall <= HIT_RANGE)
     setClubVisible(club, g !== null || nearBall || club.strikeTimer > 0)
+
+    // Everyone else sees this club in your hand (clubSync.ts). Sent only when it changes.
+    reportMyClub(club.type, club.visible, isSwingGrip(club))
   }
 
   // Power 0..1: 0% at start, 100% at 50% through the animation, 0% at the end

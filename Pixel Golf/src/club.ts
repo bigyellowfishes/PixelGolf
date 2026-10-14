@@ -261,6 +261,67 @@ export function createClub(type: ClubType = 'iron'): Club {
   }
 }
 
+/** True while the club is held in its swing grip (the take-back, hold and swing). */
+export function isSwingGrip(club: Club): boolean {
+  return club.swingGripOn
+}
+
+// ---------------------------------------------------------------------------
+// Other players' clubs (clubSync.ts)
+// ---------------------------------------------------------------------------
+
+/** A copy of another player's club, in their avatar's right hand on this screen. */
+export type RemoteClub = { anchor: Entity; grip: Entity; model: Entity; type: ClubType; visible: boolean; swing: boolean }
+
+/** Builds another player's club in their right hand. Starts hidden. */
+export function createRemoteClub(avatarId: string, type: ClubType): RemoteClub {
+  const anchor = engine.addEntity()
+  AvatarAttach.create(anchor, { avatarId, anchorPointId: AvatarAnchorPointType.AAPT_RIGHT_HAND })
+  const grip = engine.addEntity()
+  const sc = CLUB.scale * CLUB_TYPES[type].scaleMul
+  Transform.create(grip, { position: HAND_GRIP_POS, rotation: HAND_GRIP_ROT, scale: Vector3.create(sc, sc, sc), parent: anchor })
+  const model = engine.addEntity()
+  Transform.create(model, { rotation: Quaternion.fromEulerDegrees(0, 180, 0), parent: grip })
+  GltfContainer.create(model, {
+    src: CLUB_TYPES[type].model,
+    visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+    invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+  })
+  VisibilityComponent.create(model, { visible: false })
+  return { anchor, grip, model, type, visible: false, swing: false }
+}
+
+/** Matches another player's club to what they have: which club, shown or not, and carry or swing grip. */
+export function setRemoteClub(rc: RemoteClub, type: ClubType, visible: boolean, swing: boolean): void {
+  if (rc.type !== type) {
+    rc.type = type
+    const gltf = GltfContainer.getMutableOrNull(rc.model)
+    if (gltf) gltf.src = CLUB_TYPES[type].model
+    rc.swing = !swing // force the grip below to refresh its scale for the new club
+  }
+  if (rc.visible !== visible) {
+    rc.visible = visible
+    const v = VisibilityComponent.getMutableOrNull(rc.model)
+    if (v) v.visible = visible
+  }
+  if (rc.swing !== swing) {
+    rc.swing = swing
+    const t = Transform.getMutableOrNull(rc.grip)
+    if (!t) return
+    const g = swing && CLUB.swingGrip ? CLUB.swingGrip : null
+    const mul = CLUB_TYPES[type].scaleMul
+    if (g) {
+      t.position = Vector3.create(g.offset.x, g.offset.y, g.offset.z)
+      t.rotation = Quaternion.create(g.rotation.x, g.rotation.y, g.rotation.z, g.rotation.w)
+      t.scale = Vector3.create(g.scale * mul, g.scale * mul, g.scale * mul)
+    } else {
+      t.position = Vector3.create(HAND_GRIP_POS.x, HAND_GRIP_POS.y, HAND_GRIP_POS.z)
+      t.rotation = Quaternion.create(HAND_GRIP_ROT.x, HAND_GRIP_ROT.y, HAND_GRIP_ROT.z, HAND_GRIP_ROT.w)
+      t.scale = Vector3.create(CLUB.scale * mul, CLUB.scale * mul, CLUB.scale * mul)
+    }
+  }
+}
+
 export function setClubVisible(club: Club, visible: boolean): void {
   if (club.visible === visible) return
   club.visible = visible

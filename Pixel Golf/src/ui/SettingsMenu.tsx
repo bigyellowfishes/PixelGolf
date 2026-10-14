@@ -5,7 +5,11 @@ import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
 import { playUi } from '../sfx'
 import { amIAdmin, sendAdminReset } from '../ledger/client'
-import { forTouch } from '../mobile'
+import { forTouch, onPhone, PHONE_RIGHT_SHIFT } from '../mobile'
+import { state as gameModeMenu } from './GameModeMenu'
+import { state as clubMenu } from './ClubSelectMenu'
+import { state as boardsMenu } from './LeaderboardMenu'
+import { state as roundCard } from './RoundResult'
 
 // Settings button (top of the screen, under the score) and the Settings panel it opens.
 // Holds the Ball cam on/off switch (key 1 still toggles it too) and the Orbit camera switch.
@@ -22,6 +26,8 @@ export interface State {
   /** The Reset button has been pressed once and is waiting for the second press. */
   resetArmed: boolean
   resetLabel: string
+  /** The Settings button: hidden while another menu or card is open, so it never sits on top of one */
+  buttonDisplay: 'flex' | 'none'
   /** The rows' explanations, in touch words on a phone */
   ballCamText: string
   orbitCamText: string
@@ -41,6 +47,7 @@ export const state: State = {
   isAdmin: false,
   resetArmed: false,
   resetLabel: 'Reset',
+  buttonDisplay: 'flex',
   ballCamText: '',
   orbitCamText: '',
   resetText: ''
@@ -103,11 +110,21 @@ export function SettingsMenu(props: {}) {
       : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
   )
 
+  // On a phone the button is just the cog, in the top right corner above the range card
+  const compactButton = onPhone()
+  const otherOpen =
+    gameModeMenu.display === 'flex' ||
+    clubMenu.display === 'flex' ||
+    boardsMenu.display === 'flex' ||
+    roundCard.display === 'flex'
+  state.buttonDisplay = otherOpen ? 'none' : 'flex'
   const settingsButton = useInteraction({
     base: {
       uiTransform: {
-        width: 150,
-        height: 38,
+        width: compactButton ? 48 : 150,
+        height: compactButton ? 48 : 38,
+        // On a phone, out towards the right edge with the range card (PHONE_RIGHT_SHIFT)
+        margin: { right: compactButton ? -PHONE_RIGHT_SHIFT : 0 },
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
@@ -233,10 +250,12 @@ export function SettingsMenu(props: {}) {
           width: '100%',
           height: '100%',
           positionType: 'absolute',
-          justifyContent: 'center',
+          // Desktop: top centre, under the score. Phone: top right, lined up with the range card.
+          justifyContent: compactButton ? 'flex-end' : 'center',
           alignItems: 'flex-start',
-          padding: { top: 108 },
-          pointerFilter: 'none'
+          padding: compactButton ? { top: 20, right: 16 } : { top: 108 },
+          pointerFilter: 'none',
+          display: state.buttonDisplay
         }}
       >
         <UiEntity {...settingsButton}>
@@ -249,7 +268,7 @@ export function SettingsMenu(props: {}) {
             fontSize={15}
             color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
             textAlign="middle-left"
-            uiTransform={{ width: 80, height: 30, margin: { left: 8 } }}
+            uiTransform={{ width: 80, height: 30, margin: { left: 8 }, display: compactButton ? 'none' : 'flex' }}
           />
         </UiEntity>
       </UiEntity>
@@ -265,8 +284,14 @@ export function SettingsMenu(props: {}) {
           pointerFilter: 'block',
           display: state.display
         }}
-        uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+        uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0 } }}
       >
+        {/* The dim behind the menu. Oversized and pinned outside this box, because on a phone the box is
+            only the safe area, and a dim that stops at its edges shows as a dark rectangle */}
+        <UiEntity
+          uiTransform={{ positionType: 'absolute', position: { top: -1500, left: -2000 }, width: 6000, height: 4000, pointerFilter: 'block' }}
+          uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+        />
         <UiEntity
           uiTransform={{
             width: 560,

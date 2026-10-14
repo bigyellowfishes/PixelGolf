@@ -3,6 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity } from '@dcl/sdk/react-ecs'
 import {curScore, curRound} from '../game'
 import { Color4 } from '@dcl/sdk/math'
+import { onPhone } from '../mobile'
 
 export interface State {}
 export const state: State = {}
@@ -17,6 +18,8 @@ export function Score(props: {}) {
         justifyContent: 'center',
         alignItems: 'flex-start',
         margin: { top: 50 },
+        // Not on phones: the range card already shows the ball count and score
+        display: onPhone() ? 'none' : 'flex',
       }}
     >
       {/* 2. Progress Bar Background / Track */}

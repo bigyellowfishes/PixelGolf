@@ -1,5 +1,5 @@
 import { engine, InputAction, TouchScreenControls } from '@dcl/sdk/ecs'
-import { isMobile } from '@dcl/sdk/platform'
+import { getPlatform } from '@dcl/sdk/platform'
 
 /**
  * Phones. The scene's UI reads onPhone() to move things clear of the phone's own buttons and
@@ -15,17 +15,29 @@ import { isMobile } from '@dcl/sdk/platform'
 
 let phone: boolean | undefined
 
-/** True on the Decentraland mobile app. Read once: the platform doesn't change mid-visit. */
+/**
+ * True on the Decentraland mobile app. The explorer only says which platform it is a moment
+ * after the scene starts (getPlatform() is null until then), so this keeps asking until it
+ * knows, and only then remembers the answer. Before that it says false.
+ */
 export function onPhone(): boolean {
-  if (phone === undefined) {
-    try {
-      phone = isMobile()
-    } catch {
-      phone = false
-    }
+  if (phone !== undefined) return phone
+  let p: string | null = null
+  try {
+    p = getPlatform()
+  } catch {
+    p = null
   }
-  return phone
+  if (p) phone = p === 'mobile'
+  return phone ?? false
 }
+
+/**
+ * How far the right-hand HUD (the range card and the Settings cog) is pushed past the right
+ * edge of the phone's safe area, in UI pixels. The safe area leaves a wide empty margin on the
+ * right of a phone, so this moves them out towards the edge. 0 keeps them inside it.
+ */
+export const PHONE_RIGHT_SHIFT = 180
 
 // Keyboard wording -> touch wording. Whole phrases first, then single words.
 const TOUCH_WORDS: [RegExp, string][] = [
@@ -59,40 +71,45 @@ export function forTouch(text: string): string {
  * on top of the menu's own buttons (the bottom corners of the big menus are under them).
  */
 export function setupMobileControls(menuOpen: () => boolean): void {
-  if (!onPhone()) return
-  let shown: boolean | null = null
+  // Written straight away and on every platform, as Decentraland's docs advise: desktop ignores
+  // it, and waiting until the scene knows it's on a phone (onPhone) can be too late for the
+  // phone app to pick it up.
+  const playing = () =>
+    TouchScreenControls.createOrReplace(engine.RootEntity, {
+      hideJoystick: false,
+      hideCrosshair: false,
+      mainAction: InputAction.IA_PRIMARY,
+      touchInputs: [
+        InputAction.IA_SECONDARY,
+        InputAction.IA_ACTION_4,
+        InputAction.IA_ACTION_5,
+        InputAction.IA_ACTION_6
+      ].map((inputAction) => ({ inputAction, hide: true }))
+    })
+  const inMenu = () =>
+    TouchScreenControls.createOrReplace(engine.RootEntity, {
+      hideJoystick: true,
+      hideCrosshair: true,
+      mainAction: InputAction.IA_PRIMARY,
+      touchInputs: [
+        InputAction.IA_JUMP,
+        InputAction.IA_POINTER,
+        InputAction.IA_PRIMARY,
+        InputAction.IA_SECONDARY,
+        InputAction.IA_ACTION_3,
+        InputAction.IA_ACTION_4,
+        InputAction.IA_ACTION_5,
+        InputAction.IA_ACTION_6
+      ].map((inputAction) => ({ inputAction, hide: true }))
+    })
+
+  playing()
+  let shown = false
   engine.addSystem(() => {
     const open = menuOpen()
     if (open === shown) return
     shown = open
-    if (open) {
-      TouchScreenControls.createOrReplace(engine.RootEntity, {
-        hideJoystick: true,
-        hideCrosshair: true,
-        mainAction: InputAction.IA_PRIMARY,
-        touchInputs: [
-          InputAction.IA_JUMP,
-          InputAction.IA_POINTER,
-          InputAction.IA_PRIMARY,
-          InputAction.IA_SECONDARY,
-          InputAction.IA_ACTION_3,
-          InputAction.IA_ACTION_4,
-          InputAction.IA_ACTION_5,
-          InputAction.IA_ACTION_6
-        ].map((inputAction) => ({ inputAction, hide: true }))
-      })
-    } else {
-      TouchScreenControls.createOrReplace(engine.RootEntity, {
-        hideJoystick: false,
-        hideCrosshair: false,
-        mainAction: InputAction.IA_PRIMARY,
-        touchInputs: [
-          InputAction.IA_SECONDARY,
-          InputAction.IA_ACTION_4,
-          InputAction.IA_ACTION_5,
-          InputAction.IA_ACTION_6
-        ].map((inputAction) => ({ inputAction, hide: true }))
-      })
-    }
+    if (open) inMenu()
+    else playing()
   })
 }

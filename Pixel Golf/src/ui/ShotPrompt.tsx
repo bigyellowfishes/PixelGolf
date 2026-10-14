@@ -56,6 +56,12 @@ const TUTORIAL_TEXT_W = 400
 const TUTORIAL_FONT = 22
 const TUTORIAL_CHAR_PX = 11.5
 const TUTORIAL_LINE_PX = 30
+// Phones: a smaller card (UI is already drawn larger on a phone), and no E chip, since the
+// phone's own E button is on screen
+const PHONE_TEXT_W = 320
+const PHONE_FONT = 18
+const PHONE_CHAR_PX = 9.5
+const PHONE_LINE_PX = 24
 // Whether the everyday prompts use the tutorial's place and size too
 const ALL_PROMPTS_IN_AREA = true
 // Otherwise the everyday prompt is one line, centred above the power bar
@@ -69,7 +75,7 @@ export function ShotPrompt(props: {}) {
   state.isTutorial = tutorial.active
   const round = getRoundProgress()
   state.shotText = `Shot ${Math.min(round.ball + 1, round.balls)} of ${round.balls}`
-  state.keyDisplay = /\bE\b/.test(text) ? 'flex' : 'none'
+  state.keyDisplay = /\bE\b/.test(text) && !onPhone() ? 'flex' : 'none'
 
   const hasKey = state.keyDisplay === 'flex'
   // Every prompt (Press E to take your shot, power, curve, bay messages) sits where the tutorial's
@@ -78,12 +84,14 @@ export function ShotPrompt(props: {}) {
   const inArea = state.isTutorial || ALL_PROMPTS_IN_AREA
   const area = onPhone() ? TUTORIAL_AREA_PHONE : TUTORIAL_AREA
   const nudge = onPhone() ? TUTORIAL_NUDGE_PHONE : TUTORIAL_NUDGE
-  const charPx = inArea ? TUTORIAL_CHAR_PX : CHAR_PX
-  const textWidth = inArea
-    ? Math.min(TUTORIAL_TEXT_W, Math.max(200, text.length * charPx))
-    : Math.min(PROMPT_MAX_W, Math.max(160, text.length * CHAR_PX))
+  const phone = onPhone()
+  const charPx = phone ? PHONE_CHAR_PX : inArea ? TUTORIAL_CHAR_PX : CHAR_PX
+  const maxW = phone ? PHONE_TEXT_W : inArea ? TUTORIAL_TEXT_W : PROMPT_MAX_W
+  const textWidth = Math.min(maxW, Math.max(inArea ? 200 : 160, text.length * charPx))
   const lines = Math.max(1, Math.ceil((text.length * charPx) / textWidth))
-  const textHeight = Math.max(32, lines * (inArea ? TUTORIAL_LINE_PX : LINE_PX))
+  const lineHeight = phone ? PHONE_LINE_PX : inArea ? TUTORIAL_LINE_PX : LINE_PX
+  const textHeight = Math.max(32, lines * lineHeight)
+  const fontSize = phone ? PHONE_FONT : inArea ? TUTORIAL_FONT : 18
   const cardWidth = textWidth + 44 + (hasKey ? 52 : 0)
 
   return (
@@ -188,7 +196,7 @@ export function ShotPrompt(props: {}) {
           </UiEntity>
           <Label
             value={state.text}
-            fontSize={inArea ? TUTORIAL_FONT : 18}
+            fontSize={fontSize}
             textWrap="wrap"
             color={NAVY}
             textAlign={inArea ? 'middle-left' : 'middle-center'}

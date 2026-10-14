@@ -7,7 +7,7 @@ import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
-import { onPhone, forTouch } from '../mobile'
+import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
 // Set to false before release.
@@ -20,7 +20,20 @@ const SHOW_CALLOUTS = false
 // How far down the card starts. Higher on a phone: its screen is a third shorter, and the
 // phone's round buttons fill the bottom right below the card.
 const CARD_TOP = 150
-const CARD_TOP_PHONE = 100
+// On a phone it sits under the Settings cog in the top right corner
+const CARD_TOP_PHONE = 76
+
+// Phones get a tidier card: no multiplier box (the round card shows the roll), no "Pixel
+// Points" label and no frame rate readout, everything PHONE_SCALE times bigger, and pushed
+// out towards the right edge (PHONE_RIGHT_SHIFT in mobile.ts). PHONE_COMPACT false keeps the
+// full card on phones.
+const PHONE_COMPACT = true
+const PHONE_SCALE = 1.25
+const CARD_WIDTH = 240
+
+// The scale every size in the card goes through: 1 on desktop, PHONE_SCALE on a phone
+let scale = 1
+const z = (n: number) => Math.round(n * scale)
 
 // The range card on the right of the screen: the hot target and its countdown,
 // your ball count and round total, the shared multiplier, your level and Pixel
@@ -41,6 +54,9 @@ export interface State {
   toastDisplay: 'flex' | 'none'
   perfText: string
   perfDisplay: 'flex' | 'none'
+  /** Hidden on a phone's compact card */
+  multiplierDisplay: 'flex' | 'none'
+  pointsLabelDisplay: 'flex' | 'none'
 }
 
 export const state: State = {
@@ -56,6 +72,8 @@ export const state: State = {
   toastText: '',
   toastDisplay: 'none',
   perfText: '',
+  multiplierDisplay: 'flex',
+  pointsLabelDisplay: 'flex',
   perfDisplay: 'none'
 }
 
@@ -101,18 +119,24 @@ export function RangeHud(props: {}) {
   state.levelText = profile.ready ? `LV ${profile.level}` : 'LV -'
   state.pointsText = profile.ready ? fmt(profile.points) : '-'
   state.toastDisplay = SHOW_CALLOUTS && Date.now() < toastUntil ? 'flex' : 'none'
-  state.perfDisplay = PERF_READOUT ? 'flex' : 'none'
+  const compact = PHONE_COMPACT && onPhone()
+  state.perfDisplay = PERF_READOUT && !compact ? 'flex' : 'none'
+  state.multiplierDisplay = compact ? 'none' : 'flex'
+  state.pointsLabelDisplay = compact ? 'none' : 'flex'
+  scale = onPhone() ? PHONE_SCALE : 1
+  const cardWidth = z(CARD_WIDTH)
+  const rightShift = onPhone() ? -PHONE_RIGHT_SHIFT : 0
   state.perfText = `${perfStats.fps} fps  ·  physics ${perfStats.physicsMs} ms`
 
   const boardsButton = useInteraction({
     base: {
       uiTransform: {
         width: '100%',
-        height: 36,
+        height: z(36),
         justifyContent: 'center',
         alignItems: 'center',
-        margin: { top: 10 },
-        borderRadius: 18,
+        margin: { top: z(10) },
+        borderRadius: z(18),
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
       },
@@ -137,13 +161,14 @@ export function RangeHud(props: {}) {
         pointerFilter: 'none'
       }}
     >
-      {/* The card */}
+      {/* The card. Every size goes through z(), which scales it up on a phone (PHONE_SCALE). */}
       <UiEntity
         uiTransform={{
-          width: 240,
+          width: cardWidth,
           flexDirection: 'column',
-          padding: { top: 12, right: 14, bottom: 12, left: 14 },
-          borderRadius: 20,
+          padding: { top: z(12), right: z(14), bottom: z(12), left: z(14) },
+          margin: { right: rightShift },
+          borderRadius: z(20),
           borderWidth: 3,
           borderColor: { r: 1, g: 1, b: 1, a: 1 }
         }}
@@ -153,68 +178,69 @@ export function RangeHud(props: {}) {
         <UiEntity
           uiTransform={{
             width: '100%',
-            height: 46,
+            height: z(46),
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: { left: 12, right: 12 },
-            margin: { bottom: 10 },
-            borderRadius: 14,
+            padding: { left: z(12), right: z(12) },
+            margin: { bottom: z(10) },
+            borderRadius: z(14),
             display: state.hotDisplay
           }}
           uiBackground={{ color: { r: 1, g: 0.549, b: 0.102, a: 1 } }}
         >
-          <UiEntity uiTransform={{ flexDirection: 'column' }}>
-            <Label value="HOT TARGET  2X" fontSize={11} color={{ r: 1, g: 0.925, b: 0.839, a: 1 }} textAlign="middle-left" uiTransform={{ width: 140, height: 14 }} />
-            <Label value={state.hotName} fontSize={18} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: 140, height: 24 }} />
+          <UiEntity uiTransform={{ width: z(112), height: z(38), flexDirection: 'column' }}>
+            <Label value="HOT TARGET  2X" fontSize={z(11)} color={{ r: 1, g: 0.925, b: 0.839, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
+            <Label value={state.hotName} fontSize={z(18)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
           </UiEntity>
-          <Label value={state.hotTime} fontSize={20} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-right" uiTransform={{ width: 60, height: 30 }} />
+          <Label value={state.hotTime} fontSize={z(20)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />
         </UiEntity>
 
         {/* Round */}
-        <UiEntity uiTransform={{ width: '100%', height: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Label value={state.ballText} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 100, height: 26 }} />
-          <Label value={state.roundScore} fontSize={18} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 110, height: 26 }} />
+        <UiEntity uiTransform={{ width: '100%', height: z(28), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Label value={state.ballText} fontSize={z(15)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(26) }} />
+          <Label value={state.roundScore} fontSize={z(18)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(100), height: z(26) }} />
         </UiEntity>
 
         {/* Multiplier */}
         <UiEntity
           uiTransform={{
             width: '100%',
-            height: 44,
+            height: z(44),
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: { left: 10, right: 10 },
-            margin: { top: 6 },
-            borderRadius: 12
+            padding: { left: z(10), right: z(10) },
+            margin: { top: z(6) },
+            borderRadius: z(12),
+            display: state.multiplierDisplay
           }}
           uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
         >
-          <UiEntity uiTransform={{ flexDirection: 'column' }}>
-            <Label value="MULTIPLIER" fontSize={11} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: 110, height: 14 }} />
-            <Label value={state.playersText} fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: 110, height: 18 }} />
+          <UiEntity uiTransform={{ width: z(100), height: z(32), flexDirection: 'column' }}>
+            <Label value="MULTIPLIER" fontSize={z(11)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(14) }} />
+            <Label value={state.playersText} fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(18) }} />
           </UiEntity>
-          <Label value={state.multiplierText} fontSize={17} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: 90, height: 26 }} />
+          <Label value={state.multiplierText} fontSize={z(17)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(80), height: z(26) }} />
         </UiEntity>
 
         {/* Level and Pixel Points */}
-        <UiEntity uiTransform={{ width: '100%', height: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: 8 } }}>
+        <UiEntity uiTransform={{ width: '100%', height: z(30), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: z(8) } }}>
           <UiEntity
-            uiTransform={{ width: 64, height: 26, justifyContent: 'center', alignItems: 'center', borderRadius: 13 }}
+            uiTransform={{ width: z(64), height: z(26), justifyContent: 'center', alignItems: 'center', borderRadius: z(13) }}
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
-            <Label value={state.levelText} fontSize={13} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 64, height: 26 }} />
+            <Label value={state.levelText} fontSize={z(13)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(64), height: z(26) }} />
           </UiEntity>
-          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Label value="Pixel Points" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 80, height: 26 }} />
-            <Label value={state.pointsText} fontSize={16} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 60, height: 26 }} />
+          <UiEntity uiTransform={{ width: z(136), height: z(26), flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <Label value="Pixel Points" fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(76), height: z(26), display: state.pointsLabelDisplay }} />
+            <Label value={state.pointsText} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(60), height: z(26) }} />
           </UiEntity>
         </UiEntity>
 
         {/* Leaderboards */}
         <UiEntity {...boardsButton}>
-          <Label value="Leaderboards" fontSize={14} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: 140, height: 30 }} />
+          <Label value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
         </UiEntity>
       </UiEntity>
 

@@ -254,6 +254,17 @@ const bayOwners = new Map<number, string>()
 /** Everyone playing in the solo bay. Not in bayOwners: it has no one owner. */
 const soloPlayers = new Set<string>()
 
+/** Everyone's club, as they last said (clubState), so a newcomer sees the clubs already out. */
+type ClubShown = { type: string; show: boolean; swing: boolean }
+const clubs = new Map<string, ClubShown>()
+const CLUB_IDS = ['wedge', 'iron', 'driver']
+
+function sendClub(u: string, c: ClubShown, to?: string): void {
+  const data = { u, type: c.type, show: c.show, swing: c.swing }
+  if (to) void room.send('clubSeen', data, { to: [to] })
+  else void room.send('clubSeen', data)
+}
+
 function sendSolo(to?: string): void {
   const json = JSON.stringify(Array.from(soloPlayers))
   if (to) void room.send('soloPlayers', { json }, { to: [to] })
@@ -291,6 +302,13 @@ function releaseAbsentBays(): boolean {
     }
   }
   if (soloChanged) sendSolo()
+  // Players who've left put their club away for everyone
+  for (const [who, c] of clubs) {
+    if (!isPresent(who)) {
+      clubs.delete(who)
+      if (c.show) sendClub(who, { ...c, show: false, swing: false })
+    }
+  }
   for (const [bay, who] of bayOwners) {
     if (!isPresent(who)) {
       bayOwners.delete(bay)
@@ -485,6 +503,7 @@ export function runLedger(): void {
     sendRange(address)
     sendBays(address)
     sendSolo(address)
+    for (const [u, c] of clubs) if (c.show) sendClub(u, c, address)
     void room.send('leaders', { json: leaderJson() }, { to: [address] })
     sendRanks(address)
   })
@@ -535,6 +554,19 @@ export function runLedger(): void {
     bayOwners.set(bay, address)
     sendBays()
     if (leaveSoloBay(address)) sendSolo()
+  })
+
+  // A player's club came out, went away, changed, or moved between carry and swing grip: pass it on
+  room.onMessage('clubState', (data, context) => {
+    const address = context?.from
+    if (!address) return
+    seen.set(address, now())
+    const type = CLUB_IDS.indexOf(String(data.type)) >= 0 ? String(data.type) : 'iron'
+    const c: ClubShown = { type, show: !!data.show, swing: !!data.swing }
+    const was = clubs.get(address)
+    if (was && was.type === c.type && was.show === c.show && was.swing === c.swing) return
+    clubs.set(address, c)
+    sendClub(address, c)
   })
 
   room.onMessage('leaveSolo', (_data, context) => {

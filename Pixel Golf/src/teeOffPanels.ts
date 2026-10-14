@@ -10,13 +10,15 @@ import {
   Font,
   TextAlignMode,
   MeshRenderer,
-  Material
+  Material,
+  PointerEvents
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu } from './ui/GameModeMenu'
-import { isShotInProgress, GameState } from './game'
+import { isShotInProgress, GameState, getAllGames } from './game'
 import { ROUND_BALLS } from './ledger/rules'
-import { bayTakenBy, claimBay, bayLockReason, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
+import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
+import { onPhone } from './mobile'
 import { showToast } from './ui/RangeHud'
 import { playUi } from './sfx'
 
@@ -184,6 +186,72 @@ export function getActiveBay(): number {
   return tutorial.active ? TUTORIAL_BAY : activeBay
 }
 
+/**
+ * What tapping a bay's Tee Off screen does: join that bay and open the Pixel Golf menu. Used by
+ * the screens' click boxes, and on phones by walking up to a bay's ball (setupAutoTeeOff).
+ * quiet: no sound or message when it can't, for the walk-in (which tries every bay you pass).
+ */
+export function teeOff(bay: number, quiet = false): boolean {
+  // Don't interrupt a swing or a ball that's still rolling
+  if (isShotInProgress()) return false
+  // Tutorial rules: your own bay is already picked, and the tutorial bay is closed afterwards
+  if (tutorial.active && bay === TUTORIAL_BAY) {
+    if (!quiet) showToast('This is your tutorial bay. Walk to the ball and press E to take your shot.', 4)
+    return false
+  }
+  const locked = bayLockReason(bay)
+  if (locked) {
+    if (!quiet) {
+      playUi('score_miss')
+      showToast(locked, 4)
+    }
+    return false
+  }
+  // One player per bay (the solo bay takes anyone). Joining a free bay lets your old one go.
+  const takenBy = bayTakenBy(bay)
+  if (takenBy || !claimBay(bay)) {
+    if (!quiet) {
+      playUi('score_miss')
+      showToast(`Bay ${bay} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
+    }
+    return false
+  }
+  activeBay = bay
+  openPixelGolfMenu()
+  return true
+}
+
+// Phones: walking up to a bay's ball (this close, in metres) joins it as if its screen was tapped,
+// because on a phone the Tee Off screens sit under the phone's own buttons
+const AUTO_TEE_OFF_RANGE = 3
+
+/**
+ * On phones, start a game in a bay as soon as the player walks into it: join the bay and open
+ * the Pixel Golf menu. Only once per visit to a bay (walk away and back to do it again), never
+ * for the bay that's already yours, never mid-shot or while a menu is open, and quietly does
+ * nothing for a bay that's in use or closed.
+ */
+export function setupAutoTeeOff(menuOpen: () => boolean): void {
+  let lastBay = 0
+  engine.addSystem(() => {
+    if (!onPhone()) return
+    let near = 0
+    let nearest = AUTO_TEE_OFF_RANGE
+    for (const g of getAllGames()) {
+      if (g.bay > 0 && g.state.distanceToBall <= nearest) {
+        nearest = g.state.distanceToBall
+        near = g.bay
+      }
+    }
+    if (near !== lastBay) {
+      // Left the last bay (or walked into a new one): this one gets its turn
+      lastBay = near
+      if (near === 0 || near === myBay() || menuOpen() || isShotInProgress()) return
+      teeOff(near, true)
+    }
+  })
+}
+
 export function setupTeeOffPanels(): void {
   const panels = engine.getEntityOrNullByName(PANEL_ENTITY_NAME)
   if (!panels) {
@@ -191,6 +259,7 @@ export function setupTeeOffPanels(): void {
     return
   }
 
+  const boxes: Entity[] = []
   for (const p of PANELS) {
     const box: Entity = engine.addEntity()
     Transform.create(box, {
@@ -203,44 +272,28 @@ export function setupTeeOffPanels(): void {
     pointerEventsSystem.onPointerDown(
       { entity: box, opts: { button: InputAction.IA_POINTER, hoverText: HOVER_TEXT, maxDistance: MAX_DISTANCE } },
       () => {
-        // Don't interrupt a swing or a ball that's still rolling
-        if (isShotInProgress()) return
-        // Tutorial rules: your own bay is already picked, and the tutorial bay is closed afterwards
-        if (tutorial.active && p.ball === TUTORIAL_BAY) {
-          showToast('This is your tutorial bay. Walk to the ball and press E to take your shot.', 4)
-          return
-        }
-        const locked = bayLockReason(p.ball)
-        if (locked) {
-          playUi('score_miss')
-          showToast(locked, 4)
-          return
-        }
-
-        // One player per bay. Clicking a free bay's screen makes it yours (and lets your old one go).
-        if(p.ball != 20)
-        {
-          const takenBy = bayTakenBy(p.ball)
-          if (takenBy || !claimBay(p.ball)) {
-            playUi('score_miss')
-            showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
-            return
-          }
-          activeBay = p.ball
-          openPixelGolfMenu()
-        } else {
-          const takenBy = bayTakenBy(p.ball)
-          if (takenBy || !claimBay(p.ball)) {
-            //playUi('score_miss')
-            //showToast(`Bay ${p.ball} is in use by ${takenBy || 'another player'}. Pick a free bay.`, 4)
-            //return
-          }
-          activeBay = p.ball
-          openPixelGolfMenu()
-        }
+        teeOff(p.ball)
       }
     )
+    boxes.push(box)
   }
+
+  // Mid-shot the screens don't offer "Tee Off" at all, so it's clear the menu isn't available
+  let shownBusy = false
+  engine.addSystem(() => {
+    const busy = isShotInProgress()
+    if (busy === shownBusy) return
+    shownBusy = busy
+    for (const box of boxes) {
+      const pe = PointerEvents.getMutableOrNull(box)
+      if (!pe) continue
+      for (const e of pe.pointerEvents) {
+        if (!e.eventInfo) continue
+        e.eventInfo.hoverText = busy ? '' : HOVER_TEXT
+        e.eventInfo.showFeedback = !busy
+      }
+    }
+  })
 }
 
 // --- Score screens -------------------------------------------------------------

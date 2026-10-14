@@ -76,6 +76,12 @@ export const MESSAGES = {
   leaveSolo: Schemas.Map({ n: Schemas.Int }),
 
   /**
+   * My club, so everyone else can see it in my hand: which club ('wedge' | 'iron' | 'driver'),
+   * whether it's out, and whether it's in the swing grip. Sent only when one of those changes.
+   */
+  clubState: Schemas.Map({ type: Schemas.String, show: Schemas.Boolean, swing: Schemas.Boolean }),
+
+  /**
    * Admin only: wipe every player's progress and all eight leaderboards. Refused unless the
    * sender's wallet is in ADMIN.wallets (rules.ts). `confirm` must be RESET_CONFIRM.
    */
@@ -133,6 +139,9 @@ export const MESSAGES = {
    * in the bay; anyone else standing there stays visible.
    */
   soloPlayers: Schemas.Map({ json: Schemas.String }),
+
+  /** Server -> everyone: one player's club (their clubState), with their wallet. */
+  clubSeen: Schemas.Map({ u: Schemas.String, type: Schemas.String, show: Schemas.Boolean, swing: Schemas.Boolean }),
 
   /**
    * Server -> one player: what finishing the tutorial gave them. The XP that took them to
