@@ -233,7 +233,38 @@ export const MESSAGES = {
    * The leaderboards: all-time, monthly, weekly and daily, each with a True
    * Score board and a Multiplier board. One JSON string, see leaders.ts.
    */
-  leaders: Schemas.Map({ json: Schemas.String })
+  leaders: Schemas.Map({ json: Schemas.String }),
+
+  // -------------------------------------------------------------------------
+  // Server-simulated shots (added 2026-10-15). New messages at the end, so
+  // nothing above changes. `shot` and `shotSeen` above are the old velocity
+  // relay: kept for clients still on the old build, no longer used by this one.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Scene -> server: simulate my shot in my bay. id is mine, to match the reply. s* is where
+   * the ball sits (the server uses its own copy of the tee when it has one), v* the launch
+   * velocity in m/s. Sent when the curve is locked, so the answer arrives during the swing.
+   */
+  shotAsk: Schemas.Map({
+    bay: Schemas.Int,
+    id: Schemas.Int,
+    sx: Schemas.Float,
+    sy: Schemas.Float,
+    sz: Schemas.Float,
+    vx: Schemas.Float,
+    vy: Schemas.Float,
+    vz: Schemas.Float
+  }),
+
+  /**
+   * Server -> everyone: a shot, simulated once. u is the shooter's wallet and id their request
+   * id. data is the keyframes, encodePath() in ballSim.ts. Every screen plays the same ball.
+   */
+  shotPath: Schemas.Map({ bay: Schemas.Int, id: Schemas.Int, u: Schemas.String, data: Schemas.String }),
+
+  /** Server -> one player: that shot won't be simulated, and why. The scene plays it locally. */
+  shotNo: Schemas.Map({ bay: Schemas.Int, id: Schemas.Int, reason: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

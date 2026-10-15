@@ -1,4 +1,4 @@
-import { engine } from '@dcl/sdk/ecs'
+import { engine, Name, Transform } from '@dcl/sdk/ecs'
 import { Storage } from '@dcl/sdk/server'
 
 import { room } from './room'
@@ -33,6 +33,7 @@ import {
   tidyName
 } from './leaders'
 import { bumpEpoch, currentEpoch, epochKey, epochReady } from './epoch'
+import { encodePath, sanitiseLaunch, simulateShot, outOfRange, warmUpBallSim, Vec3 } from '../ballSim'
 
 /**
  * The Pixel Golf ledger. Runs only on the Multiplayer Server (see main() in
@@ -51,6 +52,9 @@ import { bumpEpoch, currentEpoch, epochKey, epochReady } from './epoch'
  * player's client, so the server can't see the ball fly; it checks every ball
  * is a possible result, that hot hits were on a target that was really hot,
  * and that rounds can't be posted faster than they can be played.
+ *
+ * Shots in the shared bays are simulated here, once (shotAsk below, ballSim.ts),
+ * and the keyframes go to everyone, so every screen sees the same ball.
  */
 
 // ---------------------------------------------------------------------------
@@ -291,6 +295,39 @@ function sendBays(to?: string): void {
   else void room.send('bays', { json: baysJson() })
 }
 
+// ---------------------------------------------------------------------------
+// Shots: simulated here for the shared bays (see shotAsk)
+// ---------------------------------------------------------------------------
+
+/** A swing takes well over a second, so asks closer together than this are refused. */
+const SHOT_MIN_GAP_MS = 1000
+const lastShotAsk = new Map<string, number>()
+let simCount = 0
+let simMs = 0
+
+/** Each bay's tee, from the scene's Ball_N entities, read the first time a shot is asked for. */
+let tees: Map<number, Vec3> | undefined
+
+/**
+ * Where a bay's ball sits. The server's own copy of the scene when it has one, else the
+ * position the player sent, as long as it's a real number inside the range.
+ */
+function teeFor(bay: number, sent: Vec3): Vec3 | null {
+  if (!tees) {
+    tees = new Map()
+    for (const [, name, t] of engine.getEntitiesWith(Name, Transform)) {
+      const m = /^Ball_(\d+)$/.exec(name.value)
+      if (m) tees.set(Number(m[1]), { x: t.position.x, y: t.position.y, z: t.position.z })
+    }
+    console.log(`[ledger] ${tees.size} tees found in the scene for shot simulation`)
+  }
+  const own = tees.get(bay)
+  if (own) return own
+  if (![sent.x, sent.y, sent.z].every((n) => Number.isFinite(n))) return null
+  if (outOfRange(sent.x, sent.y, sent.z)) return null
+  return sent
+}
+
 /** Lets go of the bays of anyone who has left the space. True if any changed. */
 function releaseAbsentBays(): boolean {
   let changed = false
@@ -469,6 +506,8 @@ function notCounted(address: string, reason: string): void {
 export function runLedger(): void {
   engine.addSystem(ledgerSystem)
   void loadLeaders()
+  // Build the course collision now, so the first shot isn't kept waiting for it
+  warmUpBallSim()
   console.log('[ledger] running')
 
   room.onMessage('hello', async (data, context) => {
@@ -583,6 +622,35 @@ export function runLedger(): void {
     const ok = (n: number) => Number.isFinite(n) && Math.abs(n) < 500
     if (!ok(data.vx) || !ok(data.vy) || !ok(data.vz)) return
     void room.send('shotSeen', { bay: data.bay, vx: data.vx, vy: data.vy, vz: data.vz })
+  })
+
+  // A shared bay's shot: simulate it once and send the same keyframes to everyone, the
+  // shooter included. Only from the player in that bay, and no faster than a swing takes.
+  room.onMessage('shotAsk', (data, context) => {
+    const address = context?.from
+    if (!address) return
+    seen.set(address, now())
+    const bay = Math.floor(Number(data.bay))
+    const id = Math.floor(Number(data.id))
+    const no = (reason: string) => void room.send('shotNo', { bay, id, reason }, { to: [address] })
+
+    if (bay === TUTORIAL_BAY || bay === SOLO_BAY) return no('That bay plays on your own screen.')
+    if (bayOwners.get(bay) !== address) return no(`Bay ${bay} isn't yours.`)
+    const at = Date.now()
+    if (at - (lastShotAsk.get(address) ?? 0) < SHOT_MIN_GAP_MS) return no('Too soon after your last shot.')
+    const launch = sanitiseLaunch({ x: data.vx, y: data.vy, z: data.vz })
+    const start = teeFor(bay, { x: data.sx, y: data.sy, z: data.sz })
+    if (!launch || !start) return no('That shot could not be simulated.')
+    lastShotAsk.set(address, at)
+
+    const path = simulateShot(start, launch)
+    const payload = encodePath(path)
+    void room.send('shotPath', { bay, id, u: address, data: payload })
+    simCount++
+    simMs += Date.now() - at
+    if (simCount % 25 === 1) {
+      console.log(`[ledger] shot simulated: bay ${bay}, ${Date.now() - at} ms, ${payload.length} bytes (avg ${Math.round(simMs / simCount)} ms over ${simCount})`)
+    }
   })
 
   room.onMessage('shotDone', (data, context) => {

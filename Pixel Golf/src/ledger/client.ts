@@ -2,6 +2,7 @@ import { engine } from '@dcl/sdk/ecs'
 import { getPlayer } from '@dcl/sdk/players'
 
 import { room } from './room'
+import { ShotPath, Vec3, decodePath } from '../ballSim'
 import { HOT, Period, PERIODS, levelProgress, multiplierCeiling, isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
 
 /**
@@ -167,18 +168,37 @@ const refusedFns: Fn<string>[] = []
 const settingsFns: Fn<Record<string, boolean>>[] = []
 const resetFns: Fn<string>[] = []
 const tutorialRewardFns: Fn<{ xp: number; level: number; unlocked: string[] }>[] = []
-export type RemoteShot = { bay: number; vx: number; vy: number; vz: number }
+/** A shot the server simulated: which bay, my request id if it's mine, and its keyframes. */
+export type ServerShot = { bay: number; id: number; mine: boolean; path: ShotPath }
 export type BayScore = { bay: number; score: number; shot: number; last: number; zone: string; hot: boolean }
-const remoteShotFns: Fn<RemoteShot>[] = []
+const serverShotFns: Fn<ServerShot>[] = []
+const shotRefusedFns: Fn<{ bay: number; id: number }>[] = []
 const bayScoreFns: Fn<BayScore>[] = []
-/** Another player hit the ball in their bay. */
-export const onRemoteShot = (fn: Fn<RemoteShot>) => remoteShotFns.push(fn)
+/** A shared shot, simulated once on the server: mine (to play) or someone else's (to watch). */
+export const onServerShot = (fn: Fn<ServerShot>) => serverShotFns.push(fn)
+/** The server wouldn't simulate my shot. The scene plays it on this screen only. */
+export const onShotRefused = (fn: Fn<{ bay: number; id: number }>) => shotRefusedFns.push(fn)
 /** Another player's bay numbers after their shot. */
 export const onBayScore = (fn: Fn<BayScore>) => bayScoreFns.push(fn)
 
-/** Tell everyone I just hit, so they can watch the ball fly. */
-export function sendShot(bay: number, vx: number, vy: number, vz: number): void {
-  if (bay > 0 && bay !== TUTORIAL_BAY && bay !== SOLO_BAY) void room.send('shot', { bay, vx, vy, vz })
+let shotSeq = 0
+/**
+ * Asks the server to simulate my shot in a shared bay. It sends the keyframes to everyone,
+ * me included, so every screen plays the same ball. Returns the request id to match the reply.
+ */
+export function askShot(bay: number, start: Vec3, launch: Vec3): number {
+  shotSeq = (shotSeq % 1000000) + 1
+  void room.send('shotAsk', {
+    bay,
+    id: shotSeq,
+    sx: start.x,
+    sy: start.y,
+    sz: start.z,
+    vx: launch.x,
+    vy: launch.y,
+    vz: launch.z
+  })
+  return shotSeq
 }
 
 /** Tell everyone my bay's numbers after the ball settles. */
@@ -405,11 +425,22 @@ export function setupLedgerClient(): void {
     solo.players = parse<string[]>(d.json, []).map((a) => String(a).toLowerCase())
   })
 
-  // Other players' shots and scores. My own bay is already playing them. Nobody's solo bay
-  // shots are shared, since everyone in it has their own ball there.
-  room.onMessage('shotSeen', (d) => {
-    if (tutorial.active || d.bay === myBay() || d.bay === SOLO_BAY) return
-    for (const fn of remoteShotFns) fn({ ...d })
+  // Shared shots, simulated on the server. Mine plays in my bay; other players' play on their
+  // bay's ball. Players in the tutorial don't see anyone else's, and the solo bay is never shared.
+  // (shotSeen, the old relay of a launch velocity, is no longer listened to.)
+  room.onMessage('shotPath', (d) => {
+    const mine = d.u.toLowerCase() === myId().toLowerCase()
+    if (!mine && (tutorial.active || d.bay === myBay() || d.bay === SOLO_BAY)) return
+    const path = decodePath(d.data)
+    if (!path) {
+      console.log(`[ledger] could not read the shot for bay ${d.bay}`)
+      if (mine) for (const fn of shotRefusedFns) fn({ bay: d.bay, id: d.id })
+      return
+    }
+    for (const fn of serverShotFns) fn({ bay: d.bay, id: d.id, mine, path })
+  })
+  room.onMessage('shotNo', (d) => {
+    for (const fn of shotRefusedFns) fn({ bay: d.bay, id: d.id })
   })
   room.onMessage('bayScore', (d) => {
     if (tutorial.active || d.bay === myBay() || d.bay === SOLO_BAY) return

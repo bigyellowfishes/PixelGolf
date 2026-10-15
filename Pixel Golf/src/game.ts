@@ -16,11 +16,12 @@ import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
 import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
 import { reportMyClub } from './clubSync'
-import { getSelectedClubType, onClubSelected } from './clubSelect'
+import { getSelectedClubType, getLaunchPower, onClubSelected } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, sendShot, sendShotDone, RemoteShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY } from './ledger/client'
+import { ShotPath, Vec3, launchVelocity } from './ballSim'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -94,20 +95,22 @@ type SurfaceProbe = (
   aroundY: number
 ) => { y: number; ny: number } | null
 
+// The ball, as the game sees it. Shots aren't simulated live: a shot is simulated from
+// start to finish first (on the server for shared bays, here for the tutorial and solo
+// bay), then played back from its keyframes. See ballSim.ts.
 export type Physics = {
   ballRadius: number
   position(): { x: number; y: number; z: number }
-  speed(): number
-  // Horizontal speed alone, which is what decides a lip-out
-  flatSpeed(): number
+  // True when no shot is playing back (the ball is where the last shot left it)
   settled(): boolean
+  // Puts the ball here at once, cancelling any shot
   place(x: number, y: number, z: number): void
-  strike(dirX: number, dirZ: number, power: number): void
-  chipshot(power: number): void
-  // The ball's velocity, and launching it at a given velocity (for watching others' shots)
-  velocity(): { x: number; y: number; z: number }
-  launch(vx: number, vy: number, vz: number): void
+  // Stops a shot's playback where it is
   freeze(): void
+  // Simulates a shot on this screen, a few steps a frame, then calls done with its path
+  simulate(launch: Vec3, done: (path: ShotPath) => void): void
+  // Plays a simulated shot from its start
+  play(path: ShotPath): void
   probe: SurfaceProbe
   // How far the ball rolls on the flat for a given charge, in metre
   predictRoll(power: number): number
@@ -129,8 +132,13 @@ export let curball: ballStats = {
 // How close (metres) the player needs to be to the ball to hit it
 const HIT_RANGE = 3
 
-// How long the ball needs to sit still before we count it as "stopped"
-const SETTLE_HOLD = 0.5
+// How long the ball sits at rest after its shot has played, before it's scored and reset.
+// The shot itself already ends with about a third of a second of the ball standing still.
+const SETTLE_HOLD = 0.25
+
+// How long to wait for the server's simulation of a shared shot (from the curve being locked)
+// before playing it on this screen only instead. Normally it arrives during the swing.
+const SERVER_WAIT_SECONDS = 4
 
 // ---------------------------------------------------------------------------
 // Swing tunables
@@ -327,6 +335,18 @@ export class Game {
   // Every ball of the round so far, posted to the ledger when the last one lands
   private roundLog: BallResult[] = []
 
+  // --- the shot's path -----------------------------------------------------
+  // The shot is worked out when the curve is locked, so it's (nearly always) ready by
+  // the time the club meets the ball. Waiting: from then until it starts playing.
+  private shotWaiting = false
+  // The simulated shot, once it's here and until it starts playing
+  private pendingPath: ShotPath | null = null
+  // The server request this ball is waiting on (0: none), and how long it has waited
+  private askedId = 0
+  private askedClock = 0
+  // The launch, kept in case the server doesn't answer and this screen has to simulate it
+  private launch: Vec3 = { x: 0, y: 0, z: 0 }
+
   // The bay this ball sits in (Ball_N is in bay N)
   readonly bay: number
 
@@ -358,6 +378,15 @@ export class Game {
     }
 
     if (this.inputLock > 0) this.inputLock -= dt
+
+    // Waiting on the server for a shared shot: past SERVER_WAIT_SECONDS, play it here only
+    if (this.askedId !== 0) {
+      this.askedClock += dt
+      if (this.askedClock > SERVER_WAIT_SECONDS) {
+        console.log(`[golf] no shot from the server for bay ${this.bay} after ${SERVER_WAIT_SECONDS}s, simulating it here`)
+        this.simulateHere()
+      }
+    }
 
     // Only the ball last played drives the score UI
     if (shownGame === this || shownGame === null) UpdateScore(this.state.score, this.state.shot)
@@ -557,6 +586,7 @@ export class Game {
     viewRotate = false
 
     if (club) cancelBackswing(club)
+    this.dropShot()
     this.addressClock = -1
     this.charge = 0
     this.state.phase = 'walking'
@@ -594,6 +624,64 @@ export class Game {
     this.emoteFired = false
     this.state.phase = 'Swinging'
     this.inputLock = 0.2
+
+    // Power, curve and aim are all fixed now, so the shot can be worked out while the swing plays
+    this.prepareShot()
+  }
+
+  // Whether everyone sees this bay's shots, so the server simulates them once for all.
+  // The tutorial and solo bays are private to each player's screen and simulate here.
+  private sharedBay(): boolean {
+    return this.bay > 0 && this.bay !== TUTORIAL_BAY && this.bay !== SOLO_BAY && !tutorial.active
+  }
+
+  // The launch velocity from the stored power and curve: the aim turned by the bend
+  private launchFromSwing(): Vec3 {
+    const aim = this.aimVector()
+    const bend = (this.storedBend * Math.PI) / 180
+    const cos = Math.cos(bend)
+    const sin = Math.sin(bend)
+    const dirX = aim.x * cos + aim.z * sin
+    const dirZ = -aim.x * sin + aim.z * cos
+    return launchVelocity(dirX, dirZ, 0.25 + this.storedPower * 0.75, getLaunchPower())
+  }
+
+  private prepareShot(): void {
+    this.launch = this.launchFromSwing()
+    this.pendingPath = null
+    this.shotWaiting = true
+    if (this.sharedBay()) {
+      // Simulated once on the server and sent to everyone, this player included
+      this.askedId = askShot(this.bay, this.startPos, this.launch)
+      this.askedClock = 0
+    } else {
+      this.simulateHere()
+    }
+  }
+
+  // Simulate the shot on this screen (private bays, or the server didn't answer)
+  private simulateHere(): void {
+    this.askedId = 0
+    this.physics.simulate(this.launch, (path) => {
+      if (this.shotWaiting) this.pendingPath = path
+    })
+  }
+
+  // A shot the server simulated for this bay: mine if I asked for it, otherwise someone else's to watch
+  receiveShot(s: ServerShot): void {
+    if (s.mine) {
+      if (this.askedId !== 0 && s.id === this.askedId && this.shotWaiting) {
+        this.askedId = 0
+        this.pendingPath = s.path
+      }
+      return
+    }
+    this.watchShot(s.path)
+  }
+
+  // The server won't simulate this shot (e.g. it doesn't have me in this bay yet): play it here only
+  shotRefused(id: number): void {
+    if (this.askedId !== 0 && id === this.askedId) this.simulateHere()
   }
 
   // Stage 3: the ball leaves.
@@ -601,10 +689,8 @@ export class Game {
     // Driver lowest, wedge highest; harder swings are louder
     const clubPitch = { driver: 0.92, iron: 1.04, wedge: 1.16 }[getSelectedClubType()]
     playAt('club_hit', this.physics.position(), 0.55 + this.storedPower * 0.45, clubPitch)
-    this.hit(this.storedPower, this.storedBend)
-    // Everyone else plays the same shot on this bay's ball
-    const v = this.physics.velocity()
-    sendShot(this.bay, v.x, v.y, v.z)
+    // The ball leaves as soon as its path is here (normally already, see prepareShot)
+    this.startPendingShot()
     this.state.shot++
     this.state.phase = 'rolling'
     this.settleTimer = 0
@@ -688,19 +774,6 @@ export class Game {
     return inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)
   }
 
-  // When The Ball Is Hit: power 0..1, bendDeg positive = right
-  private hit(power: number, bendDeg: number) {
-    const aim = this.aimVector()
-    const bend = (bendDeg * Math.PI) / 180
-    const cos = Math.cos(bend)
-    const sin = Math.sin(bend)
-    const dirX = aim.x * cos + aim.z * sin
-    const dirZ = -aim.x * sin + aim.z * cos
-
-    this.physics.strike(dirX, dirZ, 0.25 + (power * 0.75))
-    this.physics.chipshot(1)
-  }
-
   // Decides what is in your hand this frame
   private measure(): { x: number; y: number; z: number } {
     const ball = this.physics.position()
@@ -768,19 +841,39 @@ export class Game {
   }
 
   // --- ball in motion ------------------------------------------------------
+  // Plays the shot's path if it has arrived. True once it's playing.
+  private startPendingShot(): boolean {
+    if (!this.shotWaiting) return true
+    if (!this.pendingPath) return false
+    this.physics.play(this.pendingPath)
+    this.pendingPath = null
+    this.shotWaiting = false
+    return true
+  }
+
+  // Forget the shot being prepared (the ball is going back on its tee)
+  private dropShot(): void {
+    this.shotWaiting = false
+    this.pendingPath = null
+    this.askedId = 0
+  }
+
   private updateRolling(dt: number): void {
     const ball = this.measure()
 
+    // The club has hit but the shot's path isn't here yet: the ball waits on the tee
+    if (!this.startPendingShot()) return
+
     // Check if Ball Is OOB
-    if(ball.z > 400 || ball.z < 100 || ball.y < 0) this.ResetBall()
-    
-    // Count Down Ball Settled For Shot Done
+    if (ball.z > 400 || ball.z < 100 || ball.y < 0) {
+      this.ResetBall()
+      return
+    }
+
+    // The path ends with the ball at rest: hold it there a moment, then score it
     if (this.physics.settled()) {
-      this.physics.freeze()
       this.settleTimer += dt
-      if (this.settleTimer >= SETTLE_HOLD) {
-        this.ResetBall()
-      }
+      if (this.settleTimer >= SETTLE_HOLD) this.ResetBall()
     } else {
       this.settleTimer = 0
     }
@@ -789,6 +882,7 @@ export class Game {
   private ResetBall() {
     // Freeze Physics
     this.physics.freeze()
+    this.dropShot()
 
     // Handle Scoring. The hot target doubles a ball's points (see ledger/rules.ts).
     const result = this.scoreBall()
@@ -862,11 +956,12 @@ export class Game {
 
   private watchClock = 0
 
-  // Another player hit the ball in this bay: play the same shot here
-  watchShot(s: RemoteShot): void {
+  // Another player hit the ball in this bay: play the server's path for it here, the same
+  // keyframes every screen gets, so everyone sees the ball land in the same place
+  private watchShot(path: ShotPath): void {
     if (this.isMine() || activeGame === this) return
     this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
-    this.physics.launch(s.vx, s.vy, s.vz)
+    this.physics.play(path)
     this.state.phase = 'watching'
     this.settleTimer = 0
     this.watchClock = 0
@@ -887,6 +982,7 @@ export class Game {
     this.watchClock += dt
     const ball = this.physics.position()
     const out = ball.z > 400 || ball.z < 100 || ball.y < 0
+    // The path has finished playing: the ball is at rest where the server said
     if (this.physics.settled()) this.settleTimer += dt
     else this.settleTimer = 0
     if (out || this.settleTimer >= SETTLE_HOLD || this.watchClock > 20) {
