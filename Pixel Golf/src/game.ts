@@ -111,6 +111,8 @@ export type Physics = {
   simulate(launch: Vec3, done: (path: ShotPath) => void): void
   // Plays a simulated shot from its start
   play(path: ShotPath): void
+  // Jumps a playing shot to its end, where the ball comes to rest
+  skip(): void
   probe: SurfaceProbe
   // How far the ball rolls on the flat for a given charge, in metre
   predictRoll(power: number): number
@@ -139,6 +141,13 @@ const SETTLE_HOLD = 0.25
 // How long to wait for the server's simulation of a shared shot (from the curve being locked)
 // before playing it on this screen only instead. Normally it arrives during the swing.
 const SERVER_WAIT_SECONDS = 4
+
+// Skipping a shot: E jumps the ball to where it comes to rest. Only after the shot has been
+// playing this long, so the E press that hit the ball (or a double tap) can't skip it.
+const SKIP_AFTER_SECONDS = 0.6
+// After a skip, how long the ball sits at its resting spot before it's scored and reset,
+// long enough to see where it ended up
+const SKIP_HOLD = 0.9
 
 // ---------------------------------------------------------------------------
 // Swing tunables
@@ -228,6 +237,12 @@ export function getAllGames(): Game[] {
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
+  // A shot of yours is in the air or rolling: E skips to where it stops
+  if (activeGame && activeGame.canSkip()) {
+    return camMode === 'ball' && orbitCamEnabled
+      ? 'Press E to skip    Drag or A / D to orbit    W / S to zoom'
+      : 'Press E to skip'
+  }
   if(tutorial.active && TUTORIAL_RETRY && !activeGame) return 'Missed! That one doesn\'t count. Press E to try again.'
   if(tutorial.active && TUTORIAL_STEP <= 18)
   {
@@ -346,6 +361,9 @@ export class Game {
   private askedClock = 0
   // The launch, kept in case the server doesn't answer and this screen has to simulate it
   private launch: Vec3 = { x: 0, y: 0, z: 0 }
+  // How long the shot has been playing, and whether the player skipped it
+  private playClock = 0
+  private skipped = false
 
   // The bay this ball sits in (Ball_N is in bay N)
   readonly bay: number
@@ -848,7 +866,20 @@ export class Game {
     this.physics.play(this.pendingPath)
     this.pendingPath = null
     this.shotWaiting = false
+    this.playClock = 0
+    this.skipped = false
     return true
+  }
+
+  // Whether E would skip this shot right now: it's playing, and has been for a moment
+  canSkip(): boolean {
+    return (
+      this.state.phase === 'rolling' &&
+      !this.shotWaiting &&
+      !this.skipped &&
+      !this.physics.settled() &&
+      this.playClock >= SKIP_AFTER_SECONDS
+    )
   }
 
   // Forget the shot being prepared (the ball is going back on its tee)
@@ -863,6 +894,17 @@ export class Game {
 
     // The club has hit but the shot's path isn't here yet: the ball waits on the tee
     if (!this.startPendingShot()) return
+    this.playClock += dt
+
+    // E skips to the end. The path already holds where the ball stops, so this is exact:
+    // it scores the same as watching it all, and anyone watching still sees the whole shot.
+    if (this.canSkip() && this.clicked()) {
+      this.physics.skip()
+      this.skipped = true
+      this.settleTimer = 0
+      playUi('ui_click')
+      return
+    }
 
     // Check if Ball Is OOB
     if (ball.z > 400 || ball.z < 100 || ball.y < 0) {
@@ -873,7 +915,7 @@ export class Game {
     // The path ends with the ball at rest: hold it there a moment, then score it
     if (this.physics.settled()) {
       this.settleTimer += dt
-      if (this.settleTimer >= SETTLE_HOLD) this.ResetBall()
+      if (this.settleTimer >= (this.skipped ? SKIP_HOLD : SETTLE_HOLD)) this.ResetBall()
     } else {
       this.settleTimer = 0
     }

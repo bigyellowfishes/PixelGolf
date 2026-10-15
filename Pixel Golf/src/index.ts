@@ -396,6 +396,21 @@ function makePhysicsBridge(b: BallRig): Physics {
       b.pos.z = b.player.position.z
       drawBall(b)
     },
+    skip() {
+      const p = b.player
+      if (!p) return
+      b.clock = p.duration
+      p.sample(b.clock)
+      b.pos.x = p.position.x
+      b.pos.y = p.position.y
+      b.pos.z = p.position.z
+      b.rot.x = p.rotation.x
+      b.rot.y = p.rotation.y
+      b.rot.z = p.rotation.z
+      b.rot.w = p.rotation.w
+      b.player = null
+      drawBall(b)
+    },
     probe: probeSurface,
     predictRoll
   }

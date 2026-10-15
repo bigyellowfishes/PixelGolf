@@ -10512,7 +10512,9 @@
                 }
               }
             ],
-            "skyboxConfig": {},
+            "skyboxConfig": {
+              "fixedTime": 55380
+            },
             "creator": "",
             "disableNearbyVoiceChat": false,
             "hideLandscapeTerrain": true
