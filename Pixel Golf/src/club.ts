@@ -116,7 +116,7 @@ export const CLUB = {
   strikeDelay: 9 / 30,
 
   /** Seconds after the swing emote fires that the camera stays on the player, so the swing can be seen. */
-  watchSwingTime: 1.4,
+  watchSwingTime: 0.8,
 
   /**
    * Seconds after the swing emote fires to stop it. The clip is 1.8s and ends

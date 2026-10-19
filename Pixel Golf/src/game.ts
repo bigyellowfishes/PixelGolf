@@ -487,7 +487,7 @@ export class Game {
       }
     }
 
-    if (this.swingClock >= 0) {
+    if (this.swingClock >= 0 && (this.pendingPath || this.playClock > 0)) {
       this.swingClock += dt
       if (!this.emoteFired && this.swingClock >= CLUB.emoteDelay) {
         this.emoteFired = true
@@ -510,6 +510,7 @@ export class Game {
         break
 
       case 'Swing_Height':
+        this.freezePlayer(true)
         if (tutorial.active) TUTORIAL_RETRY = false
         if (this.walkedAway()) break
         this.setArrow(ghostShot, true)
@@ -531,11 +532,13 @@ export class Game {
 
       case 'Swinging':
         // The avatar is mid-swing. Launch at the swing's contact.
+        this.freezePlayer(true)
         if (this.emoteFired && this.swingClock >= CLUB.emoteDelay + CLUB.strikeDelay) this.strikeBall()
         break
 
       case 'watching':
         // While Player is watching the ball
+        this.freezePlayer(true)
         this.updateWatching(dt)
         break
 
@@ -543,7 +546,7 @@ export class Game {
         // Stay on the player until the swing has been seen, then follow the ball,
         // unless the player has turned the ball cam off (key 1 or the on-screen button)
         this.setArrow(ghostShot, false)
-        const swingSeen = this.swingClock < 0 || this.swingClock >= CLUB.emoteDelay + CLUB.watchSwingTime
+        const swingSeen = this.swingClock >= CLUB.emoteDelay + CLUB.watchSwingTime
         // ...and not until the ball has actually left: while its shot is still on the way from
         // the server it sits on the tee, and the ball cam would just hover over it
         const useBallCam = ballCamEnabled && swingSeen && !this.shotWaiting
@@ -551,8 +554,8 @@ export class Game {
         // Movement is only locked while the ball cam has the view
         if (useBallCam !== this.rollLock) {
           this.rollLock = useBallCam
-          //this.freezePlayer(useBallCam)
         }
+        this.freezePlayer(true)
         this.updateRolling(dt)
         break
     }
@@ -700,15 +703,14 @@ export class Game {
 
     // Lift the movement lock before the emote fires, so nothing can block it.
     // It goes back on when the camera moves to the ball.
-    //this.freezePlayer(false)
     this.addressClock = -1
     this.swingClock = 0
     this.emoteFired = false
-    this.state.phase = 'Swinging'
     this.inputLock = 0.2
 
     // Power, curve and aim are all fixed now, so the shot can be worked out while the swing plays
     this.prepareShot()
+    this.strikeBall()
   }
 
   // Whether everyone sees this bay's shots, so the server simulates them once for all.
@@ -848,7 +850,6 @@ export class Game {
     //const s = getClubScale() * (0.5 + 0.5 * this.heightMeter())
     const s = lerp(getClubScale(false), getClubScale(true), this.heightMeter())
     t.scale = Vector3.create(s, s, s)
-    console.log(s)
     t.rotation = Quaternion.fromEulerDegrees(0, ((this.lockedYaw * 180)) / Math.PI, 0)
   }
 
@@ -901,7 +902,9 @@ export class Game {
       const colour = key.replace(/\d+$/, '') // Red1 -> Red
       const s = ZONE_SCORES[colour]
       if (!s) continue
-      console.log(key)
+      
+      // TESTING: This displays what hole the game thinks the ball landed in
+      // console.log(key)
 
       const sInRange = Math.round(s.outside + (s.inside - s.outside) * (1 - edge))
       const points = Math.ceil(sInRange / this.scoreClamp) * this.scoreClamp
@@ -931,6 +934,12 @@ export class Game {
   private startPendingShot(): boolean {
     if (!this.shotWaiting) return true
     if (!this.pendingPath) return false
+
+    // Wait For Swing
+    if(this.swingClock < CLUB.emoteDelay + CLUB.strikeDelay) return false
+    
+    this.freezePlayer(false)
+
     this.physics.play(this.pendingPath)
     // Your own shots play at the speed you left it on (watched shots always play at 1x)
     this.physics.setSpeed(shotSpeed)
@@ -1236,7 +1245,7 @@ export function toggleBallCam(): void {
 }
 
 // Whether the player can orbit and zoom the ball cam. Toggled in the Settings panel.
-export let orbitCamEnabled = false
+export let orbitCamEnabled = true
 
 export function toggleOrbitCam(): void {
   orbitCamEnabled = !orbitCamEnabled
