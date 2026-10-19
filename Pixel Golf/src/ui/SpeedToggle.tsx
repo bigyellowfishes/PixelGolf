@@ -17,7 +17,7 @@ const BOTTOM_PHONE = 40
 
 /**
  * 1x 2x 3x, low in the middle while one of your shots is playing. The chosen speed is blue.
- * Click (or tap) one, or press 2 to step through them. It stays on that speed for every shot
+ * Click (or tap) one, or press E to step through them. It stays on that speed for every shot
  * after, and it's saved on the ledger with the other settings.
  */
 export function SpeedToggle(props: {}) {
@@ -48,7 +48,7 @@ export function SpeedToggle(props: {}) {
         uiBackground={{ color: PALE }}
       >
         <Label
-          value={phone ? 'SPEED' : 'SPEED (2)'}
+          value={phone ? 'SPEED' : 'SPEED (E)'}
           fontSize={13}
           color={GREY}
           textAlign="middle-left"

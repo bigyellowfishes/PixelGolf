@@ -5,13 +5,9 @@ import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
 import { playUi } from '../sfx'
 import { amIAdmin, sendAdminReset } from '../ledger/client'
-import { forTouch, onPhone, PHONE_RIGHT_SHIFT } from '../mobile'
-import { state as gameModeMenu } from './GameModeMenu'
-import { state as clubMenu } from './ClubSelectMenu'
-import { state as boardsMenu } from './LeaderboardMenu'
-import { state as roundCard } from './RoundResult'
+import { forTouch } from '../mobile'
 
-// Settings button (top of the screen, under the score) and the Settings panel it opens.
+// The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx).
 // Holds the Ball cam on/off switch (key 1 still toggles it too) and the Orbit camera switch.
 // Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
 
@@ -59,6 +55,11 @@ type UiAction = { state: State; props: Parameters<typeof SettingsMenu>[0]; value
 function openSettings({ state, props }: UiAction) {
   state.display = state.display === 'flex' ? 'none' : 'flex'
   playUi(state.display === 'flex' ? 'ui_open' : 'ui_close')
+}
+
+/** Opens the Settings panel, or closes it if it's open. The button is on the range card (ui/RangeHud.tsx). */
+export function toggleSettings() {
+  openSettings({ state, props: {} })
 }
 
 // @ui-action
@@ -109,37 +110,6 @@ export function SettingsMenu(props: {}) {
       ? 'Press again to wipe everyone. This can\'t be undone.'
       : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
   )
-
-  // On a phone the button is just the cog, in the top right corner above the range card
-  const compactButton = onPhone()
-  const otherOpen =
-    gameModeMenu.display === 'flex' ||
-    clubMenu.display === 'flex' ||
-    boardsMenu.display === 'flex' ||
-    roundCard.display === 'flex'
-  state.buttonDisplay = otherOpen ? 'none' : 'flex'
-  const settingsButton = useInteraction({
-    base: {
-      uiTransform: {
-        width: compactButton ? 48 : 150,
-        height: compactButton ? 48 : 38,
-        // On a phone, out towards the right edge with the range card (PHONE_RIGHT_SHIFT)
-        margin: { right: compactButton ? -PHONE_RIGHT_SHIFT : 0 },
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 19,
-        borderWidth: 2,
-        borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
-      },
-      uiBackground: { color: { r: 1, g: 1, b: 1, a: 0.95 } },
-      onMouseDown: () => openSettings({ state, props })
-    },
-    hover: {
-      uiTransform: { borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } },
-      uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }
-    }
-  })
 
   const closeButton = useInteraction({
     base: {
@@ -244,35 +214,6 @@ export function SettingsMenu(props: {}) {
         zIndex: 10
       }}
     >
-      {/* Settings button, where the Ball cam button used to be */}
-      <UiEntity
-        uiTransform={{
-          width: '100%',
-          height: '100%',
-          positionType: 'absolute',
-          // Desktop: top centre, under the score. Phone: top right, lined up with the range card.
-          justifyContent: compactButton ? 'flex-end' : 'center',
-          alignItems: 'flex-start',
-          padding: compactButton ? { top: 20, right: 16 } : { top: 108 },
-          pointerFilter: 'none',
-          display: state.buttonDisplay
-        }}
-      >
-        <UiEntity {...settingsButton}>
-          <UiEntity
-            uiTransform={{ width: 20, height: 20 }}
-            uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-settings.png' } }}
-          />
-          <Label
-            value="Settings"
-            fontSize={15}
-            color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
-            textAlign="middle-left"
-            uiTransform={{ width: 80, height: 30, margin: { left: 8 }, display: compactButton ? 'none' : 'flex' }}
-          />
-        </UiEntity>
-      </UiEntity>
-
       {/* Settings panel */}
       <UiEntity
         uiTransform={{

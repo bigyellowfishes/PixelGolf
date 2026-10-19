@@ -112,8 +112,6 @@ export type Physics = {
   simulate(launch: Vec3, done: (path: ShotPath) => void): void
   // Plays a simulated shot from its start
   play(path: ShotPath): void
-  // Jumps a playing shot forward so only its last `lead` seconds are left to play
-  skip(lead: number): void
   // Seconds of the playing shot still to go (0 when none is playing)
   remaining(): number
   // Playback speed of the shot playing now (1, 2 or 3). play() starts every shot at 1.
@@ -147,13 +145,9 @@ const SETTLE_HOLD = 0.25
 // before playing it on this screen only instead. Normally it arrives during the swing.
 const SERVER_WAIT_SECONDS = 4
 
-// Skipping a shot: E jumps ahead so only the last SKIP_SHOW_LAST seconds play, so the player
-// still sees the ball come in and settle. Only after the shot has been playing SKIP_AFTER_SECONDS,
-// so the E press that hit the ball (or a double tap) can't skip it, and only while there's more
-// than a moment left to skip.
-const SKIP_AFTER_SECONDS = 0.6
-const SKIP_SHOW_LAST = 1.5
-const SKIP_MIN_SAVING = 0.75
+// While your shot plays, E steps its speed 1x, 2x, 3x. Only once it has been playing this long,
+// so the E press that hit the ball (or a double tap) doesn't change it.
+const SPEED_KEY_AFTER_SECONDS = 0.6
 
 // ---------------------------------------------------------------------------
 // Swing tunables
@@ -315,11 +309,11 @@ export function getAllGames(): Game[] {
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
-  // A shot of yours is in the air or rolling: E skips to where it stops
-  if (activeGame && activeGame.canSkip()) {
+  // A shot of yours is in the air or rolling (the tutorial's too): E changes its speed
+  if (activeGame && activeGame.canChangeSpeed()) {
     return camMode === 'ball' && orbitCamEnabled
-      ? 'Press E to skip    Drag or A / D to orbit    W / S to zoom'
-      : 'Press E to skip'
+      ? 'Press E to change speed    Drag or A / D to orbit    W / S to zoom'
+      : 'Press E to change speed'
   }
   if (tutorial.active) {
     const g = activeGame ?? allGames.find((x) => x.bay === TUTORIAL_BAY)
@@ -421,9 +415,8 @@ export class Game {
   private askedClock = 0
   // The launch, kept in case the server doesn't answer and this screen has to simulate it
   private launch: Vec3 = { x: 0, y: 0, z: 0 }
-  // How long the shot has been playing, and whether the player skipped it
+  // How long the shot has been playing
   private playClock = 0
-  private skipped = false
 
   // The bay this ball sits in (Ball_N is in bay N)
   readonly bay: number
@@ -946,7 +939,6 @@ export class Game {
     this.pendingPath = null
     this.shotWaiting = false
     this.playClock = 0
-    this.skipped = false
     return true
   }
 
@@ -959,17 +951,9 @@ export class Game {
     if (this.shotPlaying()) this.physics.setSpeed(shotSpeed)
   }
 
-  // Whether E would skip this shot right now: it's playing, and has been for a moment
-  canSkip(): boolean {
-    return (
-      this.state.phase === 'rolling' &&
-      !this.shotWaiting &&
-      !this.skipped &&
-      !this.physics.settled() &&
-      this.playClock >= SKIP_AFTER_SECONDS &&
-      // Times here are shot time; at 2x or 3x more of it goes by per second
-      this.physics.remaining() > (SKIP_SHOW_LAST + SKIP_MIN_SAVING) * shotSpeed
-    )
+  // Whether E changes this shot's speed right now: it's playing, and has been for a moment
+  canChangeSpeed(): boolean {
+    return this.shotPlaying() && this.playClock >= SPEED_KEY_AFTER_SECONDS
   }
 
   // Forget the shot being prepared (the ball is going back on its tee)
@@ -986,15 +970,11 @@ export class Game {
     if (!this.startPendingShot()) return
     this.playClock += dt
 
-    // E skips ahead to the last moment or so of the shot. The path already holds where the ball
-    // stops, so this is exact: it scores the same as watching it all, and anyone watching still
-    // sees the whole shot.
-    if (this.canSkip() && this.clicked()) {
-      this.physics.skip(SKIP_SHOW_LAST * shotSpeed)
-      this.skipped = true
-      this.settleTimer = 0
+    // E steps the shot's speed 1x, 2x, 3x, 1x... It's only how fast this screen plays it back,
+    // so the ball ends up in the same place and scores the same. Tutorial shots too.
+    if (this.canChangeSpeed() && this.clicked()) {
+      setShotSpeed(shotSpeed >= 3 ? 1 : shotSpeed + 1)
       playUi('ui_click')
-      return
     }
 
     // Check if Ball Is OOB
@@ -1265,8 +1245,8 @@ export function toggleOrbitCam(): void {
   for (const fn of settingFns) fn('orbitCam', orbitCamEnabled)
 }
 
-// How fast your own shots play back: 1x, 2x or 3x. Changed with the buttons that show while
-// a shot is playing (ui/SpeedToggle.tsx) or key 2, and kept for every shot after. Saved on the
+// How fast your own shots play back: 1x, 2x or 3x. Changed with E or the buttons that show
+// while a shot is playing (ui/SpeedToggle.tsx), and kept for every shot after. Saved on the
 // ledger with the other settings (as speed2 / speed3), so it's the same next visit too.
 export const SHOT_SPEEDS = [1, 2, 3]
 export let shotSpeed = 1
@@ -1325,10 +1305,6 @@ export function getRoundProgress(): { ball: number; balls: number; score: number
 // Key 1 toggles the ball cam. Runs once per frame from index.ts.
 export function updateSettingsInput(): void {
   if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) toggleBallCam()
-  // Key 2 steps the shot speed 1x, 2x, 3x, 1x... while one of your shots is playing
-  if (shotSpeedShown() && inputSystem.isTriggered(InputAction.IA_ACTION_4, PointerEventType.PET_DOWN)) {
-    setShotSpeed(shotSpeed >= 3 ? 1 : shotSpeed + 1)
-  }
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { useInteraction } from './interaction'
 import { profile, range, hotSecondsLeft, currentCeiling, tutorial } from '../ledger/client'
 import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
+import { toggleSettings } from './SettingsMenu'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
 import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
@@ -20,8 +21,8 @@ const SHOW_CALLOUTS = false
 // How far down the card starts. Higher on a phone: its screen is a third shorter, and the
 // phone's round buttons fill the bottom right below the card.
 const CARD_TOP = 150
-// On a phone it sits under the Settings cog in the top right corner
-const CARD_TOP_PHONE = 76
+// On a phone it sits in the top right corner (the Settings cog is on the card itself)
+const CARD_TOP_PHONE = 20
 
 // Phones get a tidier card: no multiplier box (the round card shows the roll), no "Pixel
 // Points" label and no frame rate readout, everything PHONE_SCALE times bigger, and pushed
@@ -37,7 +38,7 @@ const z = (n: number) => Math.round(n * scale)
 
 // The range card on the right of the screen: the hot target and its countdown,
 // your ball count and round total, the shared multiplier, your level and Pixel
-// Points, and the Leaderboards button. Also shows short callouts (level ups, the
+// Points, and the Leaderboards and Settings buttons. Also shows short callouts (level ups, the
 // daily bonus, big multiplier rolls) with showToast().
 
 export interface State {
@@ -88,6 +89,11 @@ export function showToast(text: string, seconds = 4) {
 }
 
 // @ui-action
+function openSettingsPanel({ state, props }: UiAction) {
+  toggleSettings()
+}
+
+// @ui-action
 function openBoards({ state, props }: UiAction) {
   playUi('ui_open')
   openLeaderboards()
@@ -131,17 +137,37 @@ export function RangeHud(props: {}) {
   const boardsButton = useInteraction({
     base: {
       uiTransform: {
-        width: '100%',
+        flexGrow: 1,
         height: z(36),
         justifyContent: 'center',
         alignItems: 'center',
-        margin: { top: z(10) },
         borderRadius: z(18),
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
       },
       uiBackground: { color: { r: 1, g: 1, b: 1, a: 1 } },
       onMouseDown: () => openBoards({ state, props })
+    },
+    hover: {
+      uiTransform: { borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } },
+      uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }
+    }
+  })
+
+  const settingsButton = useInteraction({
+    base: {
+      uiTransform: {
+        width: z(36),
+        height: z(36),
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: { left: z(8) },
+        borderRadius: z(18),
+        borderWidth: 2,
+        borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
+      },
+      uiBackground: { color: { r: 1, g: 1, b: 1, a: 1 } },
+      onMouseDown: () => openSettingsPanel({ state, props })
     },
     hover: {
       uiTransform: { borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } },
@@ -238,9 +264,17 @@ export function RangeHud(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        {/* Leaderboards */}
-        <UiEntity {...boardsButton}>
-          <Label value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
+        {/* Leaderboards, and the Settings cog beside it */}
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', alignItems: 'center', margin: { top: z(10) } }}>
+          <UiEntity {...boardsButton}>
+            <Label value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
+          </UiEntity>
+          <UiEntity {...settingsButton}>
+            <UiEntity
+              uiTransform={{ width: z(20), height: z(20) }}
+              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-settings.png' } }}
+            />
+          </UiEntity>
         </UiEntity>
       </UiEntity>
 
