@@ -3688,7 +3688,7 @@
               },
               {
                 "entity": 550,
-                "open": false,
+                "open": true,
                 "children": [
                   513,
                   514,
