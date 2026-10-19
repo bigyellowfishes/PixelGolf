@@ -3,6 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { openPixelGolfMenu } from './GameModeMenu'
+import { menuReopenBlocked } from '../menuGuard'
 import { ClubType } from '../club'
 import { getSelectedClubType, selectClub } from '../clubSelect'
 import { playUi } from '../sfx'
@@ -126,6 +127,7 @@ function showClub(s: State, type: ClubType) {
 
 /** Opens the club select with the player's current club highlighted. */
 export function openClubSelect(playerName?: string, level?: number) {
+  if (state.display !== 'flex' && menuReopenBlocked()) return
   if (playerName !== undefined) state.playerName = playerName
   if (level !== undefined) state.level = level
   showClub(state, getSelectedClubType())

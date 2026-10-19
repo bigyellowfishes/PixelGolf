@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
 import { playUi } from '../sfx'
+import { menuReopenBlocked } from '../menuGuard'
 import { amIAdmin, sendAdminReset } from '../ledger/client'
 import { forTouch } from '../mobile'
 
@@ -53,6 +54,7 @@ type UiAction = { state: State; props: Parameters<typeof SettingsMenu>[0]; value
 
 // @ui-action
 function openSettings({ state, props }: UiAction) {
+  if (state.display !== 'flex' && menuReopenBlocked()) return
   state.display = state.display === 'flex' ? 'none' : 'flex'
   playUi(state.display === 'flex' ? 'ui_open' : 'ui_close')
 }

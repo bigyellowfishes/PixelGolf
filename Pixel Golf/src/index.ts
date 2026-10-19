@@ -20,7 +20,8 @@ import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
-import { setupShop, shop } from './shop'
+import { setupShop, shop, closeShop } from './shop'
+import { setupMenuGuard } from './menuGuard'
 import { setupWindFlags } from './wind'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
@@ -570,6 +571,16 @@ export function main() {
   setMenuOpenCheck(anyMenuOpen)
   // Phones: walking up to a free bay's ball joins it and opens the Pixel Golf menu
   setupAutoTeeOff(anyMenuOpen)
+  // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
+  setupMenuGuard(anyMenuOpen, () => {
+    if (anyMenuOpen()) playUi('ui_close')
+    gameModeMenu.display = 'none'
+    clubMenu.display = 'none'
+    boardsMenu.display = 'none'
+    settingsMenu.display = 'none'
+    roundCard.display = 'none'
+    if (shop.open) closeShop()
+  })
 
   // An admin reset the ledger: every bay starts a fresh round (the tutorial follows when the new ledger arrives)
   onLedgerReset(() => {

@@ -11,6 +11,7 @@ import {
 import { Quaternion, Vector3, Color3 } from '@dcl/sdk/math'
 import { forTouch } from './mobile'
 import { playUi } from './sfx'
+import { menuReopenBlocked } from './menuGuard'
 import { CosmeticKind } from './ledger/rules'
 import { tutorial, onRefused } from './ledger/client'
 
@@ -111,6 +112,7 @@ export const shop = {
 let dismissed = false
 
 function openShop(k: Keeper): void {
+  if (!shop.open && menuReopenBlocked()) return
   if (!shop.open) playUi('ui_open')
   shop.open = true
   shop.aisle = k.npc.aisle

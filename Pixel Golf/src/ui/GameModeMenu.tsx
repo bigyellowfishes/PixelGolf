@@ -7,6 +7,7 @@ import { openClubSelect } from './ClubSelectMenu'
 import { playUi } from '../sfx'
 import { roundInProgress, abandonRound } from '../game'
 import { forTouch } from '../mobile'
+import { menuReopenBlocked } from '../menuGuard'
 
 // Pixel Golf game mode menu. Hidden until the player clicks a Tee Off panel
 // (see src/teeOffPanels.ts), which calls openPixelGolfMenu().
@@ -32,6 +33,7 @@ export const state: State = {
 type UiAction = { state: State; props: Parameters<typeof GameModeMenu>[0]; value?: unknown }
 
 export function openPixelGolfMenu() {
+  if (state.display !== 'flex' && menuReopenBlocked()) return
   state.display = 'flex'
   playUi('ui_open')
 }

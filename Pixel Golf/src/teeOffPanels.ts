@@ -206,7 +206,7 @@ let menuSeen = false
 // The click that closes a menu (its X, Tee off, Continue) also lands on the Tee Off screen
 // behind it, which opened the menu straight back up. The screens ignore clicks while any menu
 // is open and for this long after.
-const MENU_CLICK_GUARD_MS = 600
+const MENU_CLICK_GUARD_MS = 1000
 let menuOpenFn: () => boolean = () => false
 let menuOpenAt = 0
 function menuJustOpen(): boolean {

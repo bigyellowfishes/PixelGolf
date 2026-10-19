@@ -6,6 +6,7 @@ import { useInteraction } from './interaction'
 import { boards } from '../ledger/client'
 import { Period, secondsToReset } from '../ledger/rules'
 import { playUi } from '../sfx'
+import { menuReopenBlocked } from '../menuGuard'
 
 // The leaderboards: today, this week, this month and all time, each with a True
 // Score board (skill only) and a Multiplier board. Opened from the range card.
@@ -36,6 +37,7 @@ export const state: State = {
 type UiAction = { state: State; props: Parameters<typeof LeaderboardMenu>[0]; value?: unknown }
 
 export function openLeaderboards() {
+  if (state.display !== 'flex' && menuReopenBlocked()) return
   state.display = 'flex'
 }
 
