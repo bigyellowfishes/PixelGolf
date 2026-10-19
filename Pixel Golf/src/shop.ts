@@ -33,14 +33,14 @@ export const SHOP_NPCS: ShopNpc[] = [
   {
     name: 'Caddie Cass',
     bodyShape: 'urn:decentraland:off-chain:base-avatars:BaseFemale',
+    // Only base-avatar wearables checked to exist: one that doesn't can stop the avatar loading.
+    // Face, eyes and mouth are left to the defaults.
     wearables: [
-      'urn:decentraland:off-chain:base-avatars:f_eyes_01',
-      'urn:decentraland:off-chain:base-avatars:f_eyebrows_02',
-      'urn:decentraland:off-chain:base-avatars:f_mouth_03',
-      'urn:decentraland:off-chain:base-avatars:pony_tail',
-      'urn:decentraland:off-chain:base-avatars:f_blue_jacket',
-      'urn:decentraland:off-chain:base-avatars:f_capris',
-      'urn:decentraland:off-chain:base-avatars:sneakers'
+      'urn:decentraland:off-chain:base-avatars:standard_hair',
+      'urn:decentraland:off-chain:base-avatars:f_simple_yellow_tshirt',
+      'urn:decentraland:off-chain:base-avatars:f_brown_trousers',
+      'urn:decentraland:off-chain:base-avatars:bun_shoes',
+      'urn:decentraland:off-chain:base-avatars:blue_bandana'
     ],
     skinColor: { r: 0.8, g: 0.6, b: 0.46 },
     hairColor: { r: 0.36, g: 0.19, b: 0.06 },
@@ -51,11 +51,8 @@ export const SHOP_NPCS: ShopNpc[] = [
     name: 'Pro Pete',
     bodyShape: 'urn:decentraland:off-chain:base-avatars:BaseMale',
     wearables: [
-      'urn:decentraland:off-chain:base-avatars:eyes_00',
-      'urn:decentraland:off-chain:base-avatars:eyebrows_00',
-      'urn:decentraland:off-chain:base-avatars:mouth_00',
       'urn:decentraland:off-chain:base-avatars:casual_hair_01',
-      'urn:decentraland:off-chain:base-avatars:green_tshirt',
+      'urn:decentraland:off-chain:base-avatars:blue_tshirt',
       'urn:decentraland:off-chain:base-avatars:brown_pants',
       'urn:decentraland:off-chain:base-avatars:classic_shoes'
     ],
@@ -141,6 +138,9 @@ type Keeper = {
 
 const keepers: Keeper[] = []
 
+/** The shopkeepers' avatar ids, so the privacy areas (tutorialVisuals.ts) never hide them */
+export const SHOP_NPC_IDS = SHOP_NPCS.map((_, i) => `pixel-golf-shop-${i}`)
+
 /** The world position and turn of an entity, through every parent (crates can sit in groups). */
 function worldTransform(e: Entity): { position: Vector3; rotation: Quaternion } | null {
   let t = Transform.getOrNull(e)
@@ -159,10 +159,13 @@ function worldTransform(e: Entity): { position: Vector3; rotation: Quaternion } 
   return { position, rotation }
 }
 
+const squash = (s: string) => s.toLowerCase().replace(/[\s_\-]+/g, '')
+
 function findPlaceholders(): Entity[] {
   const found: { name: string; entity: Entity }[] = []
   for (const [entity, name] of engine.getEntitiesWith(Name)) {
-    if (name.value.startsWith(PLACEHOLDER_PREFIX)) found.push({ name: name.value, entity })
+    // Any copy of the crate: capitals, spaces and underscores don't matter ("Long Opened Wooden Crate_2" and so on)
+    if (squash(name.value).startsWith(squash(PLACEHOLDER_PREFIX))) found.push({ name: name.value, entity })
   }
   found.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
   return found.map((f) => f.entity)
@@ -182,7 +185,7 @@ function spawnKeeper(spot: Entity, npc: ShopNpc, index: number): void {
     rotation: Quaternion.fromEulerDegrees(0, homeYaw, 0)
   })
   AvatarShape.create(entity, {
-    id: `pixel-golf-shop-${index}`,
+    id: SHOP_NPC_IDS[index],
     name: npc.name,
     bodyShape: npc.bodyShape,
     wearables: npc.wearables,

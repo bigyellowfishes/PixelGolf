@@ -16,6 +16,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { Game } from './game'
 import { tutorial, solo, leaveSoloBay } from './ledger/client'
+import { SHOP_NPC_IDS } from './shop'
 
 /**
  * What the tutorial looks like, as opposed to how it runs (tutorial.ts).
@@ -172,7 +173,8 @@ export function setupTutorialVisuals(
     const me = getPlayer()?.userId ?? ''
     if (me !== shownMe) {
       shownMe = me
-      AvatarModifierArea.getMutable(privacy).excludeIds = me ? [me, me.toLowerCase()] : []
+      // The shopkeepers are avatars too: never hide them
+      AvatarModifierArea.getMutable(privacy).excludeIds = me ? [me, me.toLowerCase(), ...SHOP_NPC_IDS] : [...SHOP_NPC_IDS]
     }
 
     // The solo bay's box leaves out you and everyone who hasn't joined it
@@ -180,6 +182,7 @@ export function setupTutorialVisuals(
       const inSolo = new Set(solo.players)
       const ids: string[] = []
       if (me) ids.push(me, me.toLowerCase())
+      ids.push(...SHOP_NPC_IDS)
       for (const [, who] of engine.getEntitiesWith(PlayerIdentityData)) {
         const a = who.address
         if (a && !inSolo.has(a.toLowerCase())) ids.push(a, a.toLowerCase())
