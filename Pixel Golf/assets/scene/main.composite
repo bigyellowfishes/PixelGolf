@@ -1927,48 +1927,6 @@
             "parent": 583
           }
         },
-        "611": {
-          "json": {
-            "position": {
-              "x": 60.5,
-              "y": 35,
-              "z": 246
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "parent": 0
-          }
-        },
-        "612": {
-          "json": {
-            "position": {
-              "x": 60.5,
-              "y": 35,
-              "z": 253
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "parent": 0
-          }
-        },
         "66068": {
           "json": {
             "position": {
@@ -2737,20 +2695,6 @@
             "invisibleMeshesCollisionMask": 3
           }
         },
-        "611": {
-          "json": {
-            "src": "assets/asset-packs/long_opened_wooden_crate/CrateLong_02/CrateLong_02.glb",
-            "visibleMeshesCollisionMask": 0,
-            "invisibleMeshesCollisionMask": 3
-          }
-        },
-        "612": {
-          "json": {
-            "src": "assets/asset-packs/long_opened_wooden_crate/CrateLong_02/CrateLong_02.glb",
-            "visibleMeshesCollisionMask": 0,
-            "invisibleMeshesCollisionMask": 3
-          }
-        },
         "66068": {
           "json": {
             "src": "assets/Shop/Display Balls.glb",
@@ -3464,16 +3408,6 @@
             "value": "Ball_20"
           }
         },
-        "611": {
-          "json": {
-            "value": "Long Opened Wooden Crate"
-          }
-        },
-        "612": {
-          "json": {
-            "value": "Long Opened Wooden Crate_2"
-          }
-        },
         "66068": {
           "json": {
             "value": "Display Balls.glb"
@@ -3589,7 +3523,7 @@
             "value": [
               {
                 "entity": 0,
-                "open": true,
+                "open": false,
                 "children": [
                   550,
                   568,
@@ -3605,9 +3539,7 @@
                   605,
                   606,
                   599,
-                  600,
-                  611,
-                  612
+                  600
                 ]
               },
               {
@@ -4095,14 +4027,6 @@
               {
                 "entity": 608,
                 "children": []
-              },
-              {
-                "entity": 611,
-                "children": []
-              },
-              {
-                "entity": 612,
-                "children": []
               }
             ]
           }
@@ -4391,12 +4315,6 @@
           "json": {}
         },
         "608": {
-          "json": {}
-        },
-        "611": {
-          "json": {}
-        },
-        "612": {
           "json": {}
         },
         "66068": {

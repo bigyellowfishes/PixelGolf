@@ -312,7 +312,7 @@ export function getPrompt(): string {
   // A shot of yours is in the air or rolling (the tutorial's too): E changes its speed
   if (activeGame && activeGame.canChangeSpeed()) {
     return camMode === 'ball' && orbitCamEnabled
-      ? 'Press E to change speed    Drag or A / D to orbit    W / S to zoom'
+      ? 'Press E to change speed\nDrag or A / D to orbit, W / S to zoom'
       : 'Press E to change speed'
   }
   if (tutorial.active) {
@@ -500,6 +500,7 @@ export class Game {
       case 'walking':
         // Don't reset the camera while another ball is mid-shot
         if (activeGame === null) this.UpdateCamera(false)
+        if(activeGame === null && this.isMine()) this.freezePlayer(false)
         this.physics.freeze()
         // Only the ball in your own bay (picked by clicking its Tee Off screen)
         if (activeGame === null && !menuOpenCheck() && this.isMine() && this.state.distanceToBall <= HIT_RANGE && this.clicked()) {
