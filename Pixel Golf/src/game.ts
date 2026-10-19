@@ -540,7 +540,9 @@ export class Game {
         // unless the player has turned the ball cam off (key 1 or the on-screen button)
         this.setArrow(ghostShot, false)
         const swingSeen = this.swingClock < 0 || this.swingClock >= CLUB.emoteDelay + CLUB.watchSwingTime
-        const useBallCam = ballCamEnabled && swingSeen
+        // ...and not until the ball has actually left: while its shot is still on the way from
+        // the server it sits on the tee, and the ball cam would just hover over it
+        const useBallCam = ballCamEnabled && swingSeen && !this.shotWaiting
         if (swingSeen) this.UpdateCamera(useBallCam)
         // Movement is only locked while the ball cam has the view
         if (useBallCam !== this.rollLock) {
