@@ -205,6 +205,10 @@ export type Cosmetic = {
   level: number
   /** Pixel Points. 0 means it's yours as soon as it unlocks. */
   price: number
+  /** The model it shows (balls: in place of the standard ball). None yet: looks the same as the starter. */
+  model?: string
+  /** Kept for anyone who already owns it, but not shown in the shop (no art yet) */
+  shelved?: boolean
 }
 
 /**
@@ -212,10 +216,17 @@ export type Cosmetic = {
  * straight a ball flies. Placeholder names and prices until the art exists.
  */
 export const CATALOGUE: Cosmetic[] = [
-  { id: 'ball-classic', kind: 'ball', name: 'Classic Ball', level: 1, price: 0 },
-  { id: 'ball-sunshine', kind: 'ball', name: 'Sunshine Ball', level: 3, price: 150 },
-  { id: 'ball-pixel', kind: 'ball', name: 'Pixel Ball', level: 6, price: 400 },
-  { id: 'ball-comet', kind: 'ball', name: 'Comet Trail Ball', level: 10, price: 900 },
+  { id: 'ball-classic', kind: 'ball', name: 'Classic Ball', level: 1, price: 0, model: 'assets/Models/Golf_Ball/Golf_Ball_Single.glb' },
+  // Coloured balls (2026-10-19): free for everyone for now
+  { id: 'ball-red', kind: 'ball', name: 'Red Ball', level: 1, price: 0, model: 'assets/Balls/red_golf_ball.glb' },
+  { id: 'ball-orange', kind: 'ball', name: 'Orange Ball', level: 1, price: 0, model: 'assets/Balls/orange_golf_ball.glb' },
+  { id: 'ball-yellow', kind: 'ball', name: 'Yellow Ball', level: 1, price: 0, model: 'assets/Balls/yellow_golf_ball.glb' },
+  { id: 'ball-green', kind: 'ball', name: 'Green Ball', level: 1, price: 0, model: 'assets/Balls/green_golf_ball.glb' },
+  { id: 'ball-blue', kind: 'ball', name: 'Blue Ball', level: 1, price: 0, model: 'assets/Balls/blue_golf_ball.glb' },
+  { id: 'ball-black', kind: 'ball', name: 'Black Ball', level: 1, price: 0, model: 'assets/Balls/black_golf_ball.glb' },
+  { id: 'ball-sunshine', kind: 'ball', name: 'Sunshine Ball', level: 3, price: 150, shelved: true },
+  { id: 'ball-pixel', kind: 'ball', name: 'Pixel Ball', level: 6, price: 400, shelved: true },
+  { id: 'ball-comet', kind: 'ball', name: 'Comet Trail Ball', level: 10, price: 900, shelved: true },
   { id: 'club-classic', kind: 'club', name: 'Classic Clubs', level: 1, price: 0 },
   { id: 'club-arcade', kind: 'club', name: 'Arcade Clubs', level: 4, price: 250 },
   { id: 'club-canyon', kind: 'club', name: 'Canyon Clubs', level: 8, price: 600 },

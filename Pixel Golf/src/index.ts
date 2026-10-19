@@ -20,6 +20,7 @@ import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
+import { setupShop, shop } from './shop'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
 import { isServer } from '@dcl/sdk/network'
@@ -41,8 +42,11 @@ import {
   onShotRefused,
   onBayScore,
   tutorial,
-  TUTORIAL_BAY
+  TUTORIAL_BAY,
+  profile,
+  myBay
 } from './ledger/client'
+import { itemById } from './ledger/rules'
 import { setupHotTargetMarker } from './hotTarget'
 import { setPlayerProgress } from './ui/GameModeMenu'
 import { showRoundFinished, showRoundCounted, showTutorialReward, state as roundCard } from './ui/RoundResult'
@@ -418,6 +422,28 @@ const BALL_MODEL_SCALE = (BALL_RADIUS * 2) / 0.1285
 
 // The ball cam steers the ball entity's rotation, so the model is a separate entity that
 // follows the ball and takes its roll from the shot's keyframes.
+/**
+ * The ball you're playing shows the ball you've equipped in the shop (ledger/rules.ts CATALOGUE).
+ * Only your own bay's ball (the tutorial or solo bay's when you're in one): every other ball on
+ * your screen stays the standard one for now.
+ */
+function myBallModel(): string {
+  const item = itemById(profile.equipped.ball ?? '')
+  return item && item.model ? item.model : BALL_MODEL
+}
+
+function showEquippedBall() {
+  const mine = myBay()
+  const want = myBallModel()
+  for (const b of balls) {
+    if (!b.model) continue
+    const bay = Number((/^Ball_(\d+)$/.exec(b.name) ?? [])[1] ?? 0)
+    const src = bay !== 0 && bay === mine ? want : BALL_MODEL
+    const g = GltfContainer.getOrNull(b.model)
+    if (g && g.src !== src) GltfContainer.getMutable(b.model).src = src
+  }
+}
+
 function swapBallModels() {
   for (const b of balls) {
     // Hide the placeholder sphere
@@ -466,6 +492,8 @@ export function main() {
 
   buildWorldFromScene()
   swapBallModels()
+  // Your bay's ball wears the ball you've equipped in the shop
+  engine.addSystem(showEquippedBall, undefined, 'equipped-ball')
 
   // The bunker zones are only used for scoring: keep them in the scene, but don't draw them
   for (const zone of [ScoreZones.Bunker1, ScoreZones.Bunker2, ScoreZones.Bunker3, ScoreZones.Bunker4]) {
@@ -483,6 +511,8 @@ export function main() {
 
   // Clicking a Tee Off panel opens the Pixel Golf menu
   setupTeeOffPanels()
+  // The two shopkeepers, on the placeholder crates at the shop
+  setupShop()
 
   SpawnCamera()
   setupUi()
@@ -517,7 +547,8 @@ export function main() {
     clubMenu.display === 'flex' ||
     boardsMenu.display === 'flex' ||
     settingsMenu.display === 'flex' ||
-    roundCard.display === 'flex'
+    roundCard.display === 'flex' ||
+    shop.open
   setupMobileControls(anyMenuOpen)
   // No shot starts while a menu is open (so the bay menu can't sit over a swing)
   setMenuOpenCheck(anyMenuOpen)

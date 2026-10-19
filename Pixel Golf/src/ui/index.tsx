@@ -11,6 +11,7 @@ import { RotateBar } from './RotateBar'
 import { RoundResult } from './RoundResult'
 import { SettingsMenu } from './SettingsMenu'
 import { ShotPrompt } from './ShotPrompt'
+import { ShopMenu } from './ShopMenu'
 import { SkipTutorial } from './SkipTutorial'
 import { SpeedToggle } from './SpeedToggle'
 
@@ -49,6 +50,9 @@ export function setupUi() {
       </ScreenInsetArea>
       <ScreenInsetArea>
         <ShotPrompt />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <ShopMenu />
       </ScreenInsetArea>
       <ScreenInsetArea>
         <SkipTutorial />
