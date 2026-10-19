@@ -396,11 +396,12 @@ function makePhysicsBridge(b: BallRig): Physics {
       b.pos.z = b.player.position.z
       drawBall(b)
     },
-    skip() {
+    skip(lead) {
       const p = b.player
       if (!p) return
-      b.clock = p.duration
-      p.sample(b.clock)
+      // Jump ahead and keep playing from there. The bounces skipped over make no sound.
+      b.clock = Math.max(b.clock, p.duration - lead)
+      p.seek(b.clock)
       b.pos.x = p.position.x
       b.pos.y = p.position.y
       b.pos.z = p.position.z
@@ -408,9 +409,9 @@ function makePhysicsBridge(b: BallRig): Physics {
       b.rot.y = p.rotation.y
       b.rot.z = p.rotation.z
       b.rot.w = p.rotation.w
-      b.player = null
       drawBall(b)
     },
+    remaining: () => (b.player ? Math.max(0, b.player.duration - b.clock) : 0),
     probe: probeSurface,
     predictRoll
   }

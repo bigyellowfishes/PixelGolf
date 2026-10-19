@@ -646,6 +646,12 @@ export class PathPlayer {
     this.set(a, b, f)
   }
 
+  /** Jumps to t seconds in without sounding the bounces passed on the way. */
+  seek(t: number): void {
+    this.hitsUntil(t)
+    this.sample(t)
+  }
+
   /** Bounces passed since the last call, as impact speeds (for the landing sound). */
   hitsUntil(t: number): number[] {
     const out: number[] = []

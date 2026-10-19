@@ -12,6 +12,7 @@ import { RoundResult } from './RoundResult'
 import { Score } from './Score'
 import { SettingsMenu } from './SettingsMenu'
 import { ShotPrompt } from './ShotPrompt'
+import { SkipTutorial } from './SkipTutorial'
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(() => (
@@ -51,6 +52,9 @@ export function setupUi() {
       </ScreenInsetArea>
       <ScreenInsetArea>
         <ShotPrompt />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <SkipTutorial />
       </ScreenInsetArea>
     </UiEntity>
   ))

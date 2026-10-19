@@ -2,7 +2,7 @@ import { engine } from '@dcl/sdk/ecs'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { Vector3 } from '@dcl/sdk/math'
 
-import { Game, onRoundFinished, resetTutorialSteps } from './game'
+import { Game, onRoundFinished, resetTutorialSteps, holdTutorialBayNotice } from './game'
 import { profile, onProfile, tutorial, sendTutorialDone, TUTORIAL_BALLS } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 import { showTutorialComplete } from './ui/RoundResult'
@@ -55,6 +55,30 @@ export function setupTutorial(bay19: Game | undefined): void {
   onRoundFinished((r) => {
     if (tutorial.active) finish(bay19, r.score)
   })
+
+  // The Skip tutorial button (ui/SkipTutorial.tsx)
+  skipFn = () => skip(bay19)
+}
+
+let skipFn: (() => void) | null = null
+
+/**
+ * Skips the rest of the tutorial: the shot under way is dropped, the player gets their movement
+ * back, and the tutorial is ticked off on the ledger exactly as if they'd finished it (the server
+ * gives the same one-off reward). Bay 19 then closes to them like after a normal finish.
+ */
+export function skipTutorial(): void {
+  if (tutorial.active && skipFn) skipFn()
+}
+
+function skip(bay19: Game): void {
+  bay19.cancelForTutorialSkip()
+  tutorial.active = false
+  profile.tutorialDone = true
+  sendTutorialDone()
+  bay19.newRound()
+  holdTutorialBayNotice()
+  showToast('Tutorial skipped. Click any Tee Off screen to pick a bay and play.', 6)
 }
 
 function begin(bay19: Game): void {
@@ -80,6 +104,7 @@ function finish(bay19: Game, score: number): void {
   tutorial.active = false
   profile.tutorialDone = true
   sendTutorialDone()
+  holdTutorialBayNotice()
   showTutorialComplete(score)
 
   // Let them see their score for a moment, then clear the bay and (optionally) move them on
