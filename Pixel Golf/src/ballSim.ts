@@ -304,15 +304,24 @@ function fitPatch(seconds: number): void {
 // ---------------------------------------------------------------------------
 // A ray from where the ball was before a substep to where it is after. If that crosses
 // the course, the ball is put back on the surface and bounced, as the contact would have.
+//
+// The ray is two-sided. The course mesh's triangles are wound so that cannon-es sees their
+// normals pointing down (it was exported with x mirrored), so a ray that skipped back faces
+// never hit anything and the ball could pass straight through a thin floor (the white target
+// was where it showed most: the furthest target, so the fastest landings). The normal is turned
+// to face the side the ball came from instead.
 const passRay = new CANNON.RaycastResult()
+const passDir = new CANNON.Vec3()
 
 function keepOutOfCourse(from: CANNON.Vec3): void {
   const to = ball.position
   if (from.distanceTo(to) < BALL_RADIUS) return // too short a move to have gone through
   passRay.reset()
-  ensureWorld().raycastClosest(from, to, { collisionFilterMask: GROUP_PATCH, skipBackfaces: true }, passRay)
+  ensureWorld().raycastClosest(from, to, { collisionFilterMask: GROUP_PATCH, skipBackfaces: false }, passRay)
   if (!passRay.hasHit) return
   const n = passRay.hitNormalWorld
+  to.vsub(from, passDir)
+  if (n.dot(passDir) > 0) n.negate(n)
   const p = passRay.hitPointWorld
   ball.position.set(p.x + n.x * BALL_RADIUS * 1.05, p.y + n.y * BALL_RADIUS * 1.05, p.z + n.z * BALL_RADIUS * 1.05)
   const v = ball.velocity
