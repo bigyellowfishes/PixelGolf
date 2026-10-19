@@ -1,5 +1,4 @@
 import { CLUB_TYPES, ClubType } from './club'
-import { tutorial } from './ledger/client'
 
 /**
  * Which club is selected. Kept free of scene code on purpose so index.ts (physics),
@@ -20,7 +19,7 @@ export function getLaunchPower(): number {
 }
 
 export function selectClub(type: ClubType): void {
-  if (type === selected || tutorial.active) return
+  if (type === selected) return
   selected = type
   for (const listener of listeners) listener(type)
 }

@@ -24,7 +24,7 @@ import { courseData } from './collisionData/course_collision'
 // ---------------------------------------------------------------------------
 export const BALL_RADIUS = 0.1
 /** Outer steps a second. One keyframe is recorded after each. */
-export const SIM_HZ = 30
+export const SIM_HZ = 40
 /** cannon-es steps inside each outer step (150 Hz in all). */
 export const SUBSTEPS = 5
 const OUTER_DT = 1 / SIM_HZ

@@ -16,7 +16,7 @@ import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
 import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
 import { reportMyClub } from './clubSync'
-import { getSelectedClubType, getLaunchPower, onClubSelected } from './clubSelect'
+import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
@@ -441,6 +441,7 @@ export class Game {
     if (tutorial.active !== tutorialFrozen && this.bay === TUTORIAL_BAY) {
       tutorialFrozen = tutorial.active
       this.freezePlayer(tutorialFrozen)
+      selectClub('iron')
     }
 
     if (this.inputLock > 0) this.inputLock -= dt

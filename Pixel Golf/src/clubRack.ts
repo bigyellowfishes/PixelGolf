@@ -15,6 +15,7 @@ import { CLUB_TYPES, ClubType } from './club'
 import { getSelectedClubType, onClubSelected, selectClub } from './clubSelect'
 import { playUi } from './sfx'
 import { isShotInProgress } from './game'
+import { tutorial } from './ledger/client'
 
 /**
  * A rack of the three clubs beside each pad. Click (or tap) one to pick it: the club
@@ -98,7 +99,7 @@ function spawnRack(spot: { x: number; y: number; z: number }): void {
     }
     // Swapping mid-shot would change the power under a swing that is already under way
     const pick = () => {
-      if (isShotInProgress()) return
+      if (isShotInProgress() || tutorial.active) return
       selectClub(type)
       playUi('ui_select')
     }
