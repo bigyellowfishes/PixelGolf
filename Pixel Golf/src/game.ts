@@ -16,7 +16,7 @@ import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
 import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
 import { reportMyClub } from './clubSync'
-import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub } from './clubSelect'
+import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub, getClubScale } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
@@ -57,6 +57,7 @@ function resetOrbit(): void {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 // Read the player's orbit and zoom input for this frame
 function readOrbitInput(dt: number): void {
@@ -172,7 +173,6 @@ export type Phase =
   | 'Swing_Turn'
   | 'Swinging'
   | 'rolling'
-  // Another player's shot from this bay, playing out so everyone can watch it
   | 'watching'
 
 export type GameState = {
@@ -295,7 +295,10 @@ function tutorialPrompt(g: Game): string {
 // True from the first E press until the ball has come to rest and reset, for any ball in the
 // player's own bay. The club rack and the Tee Off screens use it to stay shut mid-shot.
 export function isShotInProgress(): boolean {
-  return activeGame !== null || allGames.some((g) => g.isMine() && g.state.phase !== 'walking')
+  let a1 = activeGame == null
+  let a2 = allGames.some((g) => g.isMine() && g.state.phase !== 'walking')
+  let a3 = allGames.some((g) => g.isMine() && g.state.phase !== 'Swing_Height')
+  return a1 && a2 && a3
 }
 
 // Whether a menu or card is open (set by index.ts). No shot can start while one is, so the
@@ -436,8 +439,16 @@ export class Game {
     this.setArrow(ghostShot, false)
   }
 
+  private OneSTest = 1
+
   // -------------------------------------------------------------------------
   update(dt: number): void {
+
+    //  this.OneSTest -= dt
+    //  if(this.OneSTest < 0)
+    //  {
+    //    this.OneSTest = 1
+    //  }
 
     // The tutorial keeps the player at the tee: they aim by turning the camera, not by walking
     if (tutorial.active !== tutorialFrozen && this.bay === TUTORIAL_BAY) {
@@ -721,7 +732,7 @@ export class Game {
     const sin = Math.sin(bend)
     const dirX = aim.x * cos + aim.z * sin
     const dirZ = -aim.x * sin + aim.z * cos
-    return launchVelocity(dirX, dirZ, 0.25 + this.storedPower * 0.75, getLaunchPower())
+    return launchVelocity(dirX, dirZ, 0.5 + this.storedPower * 0.5, getLaunchPower())
   }
 
   private prepareShot(): void {
@@ -841,6 +852,10 @@ export class Game {
     const b = this.physics.position()
     const t = Transform.getMutable(ent)
     t.position = Vector3.create(b.x, b.y, b.z)
+    //const s = getClubScale() * (0.5 + 0.5 * this.heightMeter())
+    const s = lerp(getClubScale(false), getClubScale(true), this.heightMeter())
+    t.scale = Vector3.create(s, s, s)
+    console.log(s)
     t.rotation = Quaternion.fromEulerDegrees(0, ((this.lockedYaw * 180)) / Math.PI, 0)
   }
 

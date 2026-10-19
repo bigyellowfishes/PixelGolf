@@ -18,6 +18,11 @@ export function getLaunchPower(): number {
   return CLUB_TYPES[selected].launchPower
 }
 
+/** Scale of selected club */
+export function getClubScale(minMax: boolean): number {
+  return minMax ? CLUB_TYPES[selected].gSizeMax : CLUB_TYPES[selected].gSizeMin
+}
+
 export function selectClub(type: ClubType): void {
   if (type === selected) return
   selected = type

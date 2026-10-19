@@ -151,8 +151,6 @@ function buildWorldFromScene() {
     }
 
     // Find Arrow Entities
-    if(n === 'Arrow_Height') ArwHeightEnt = entity
-    if(n === 'Arrow_Turn') ArwTurnEnt = entity
     if(n === 'Ghost_Shot') ghostShot = entity
 
     // Find Score Zones
