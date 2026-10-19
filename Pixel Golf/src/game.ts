@@ -115,6 +115,8 @@ export type Physics = {
   skip(lead: number): void
   // Seconds of the playing shot still to go (0 when none is playing)
   remaining(): number
+  // Playback speed of the shot playing now (1, 2 or 3). play() starts every shot at 1.
+  setSpeed(speed: number): void
   probe: SurfaceProbe
   // How far the ball rolls on the flat for a given charge, in metre
   predictRoll(power: number): number
@@ -920,11 +922,24 @@ export class Game {
     if (!this.shotWaiting) return true
     if (!this.pendingPath) return false
     this.physics.play(this.pendingPath)
+    // Your own shots play at the speed you left it on (watched shots always play at 1x)
+    this.physics.setSpeed(shotSpeed)
+    // The ball's away: the locked meters make way for the speed buttons
+    showMeters(false, false)
     this.pendingPath = null
     this.shotWaiting = false
     this.playClock = 0
     this.skipped = false
     return true
+  }
+
+  // Your shot is playing, so its speed can be changed
+  shotPlaying(): boolean {
+    return this.state.phase === 'rolling' && !this.shotWaiting && !this.physics.settled()
+  }
+
+  applySpeed(): void {
+    if (this.shotPlaying()) this.physics.setSpeed(shotSpeed)
   }
 
   // Whether E would skip this shot right now: it's playing, and has been for a moment
@@ -935,7 +950,8 @@ export class Game {
       !this.skipped &&
       !this.physics.settled() &&
       this.playClock >= SKIP_AFTER_SECONDS &&
-      this.physics.remaining() > SKIP_SHOW_LAST + SKIP_MIN_SAVING
+      // Times here are shot time; at 2x or 3x more of it goes by per second
+      this.physics.remaining() > (SKIP_SHOW_LAST + SKIP_MIN_SAVING) * shotSpeed
     )
   }
 
@@ -957,7 +973,7 @@ export class Game {
     // stops, so this is exact: it scores the same as watching it all, and anyone watching still
     // sees the whole shot.
     if (this.canSkip() && this.clicked()) {
-      this.physics.skip(SKIP_SHOW_LAST)
+      this.physics.skip(SKIP_SHOW_LAST * shotSpeed)
       this.skipped = true
       this.settleTimer = 0
       playUi('ui_click')
@@ -1232,6 +1248,27 @@ export function toggleOrbitCam(): void {
   for (const fn of settingFns) fn('orbitCam', orbitCamEnabled)
 }
 
+// How fast your own shots play back: 1x, 2x or 3x. Changed with the buttons that show while
+// a shot is playing (ui/SpeedToggle.tsx) or key 2, and kept for every shot after. Saved on the
+// ledger with the other settings (as speed2 / speed3), so it's the same next visit too.
+export const SHOT_SPEEDS = [1, 2, 3]
+export let shotSpeed = 1
+
+export function setShotSpeed(speed: number): void {
+  if (SHOT_SPEEDS.indexOf(speed) < 0 || speed === shotSpeed) return
+  shotSpeed = speed
+  if (activeGame) activeGame.applySpeed()
+  for (const fn of settingFns) {
+    fn('speed2', speed === 2)
+    fn('speed3', speed === 3)
+  }
+}
+
+// Whether the speed buttons should show: one of your shots is in the air or rolling
+export function shotSpeedShown(): boolean {
+  return activeGame !== null && activeGame.shotPlaying()
+}
+
 // Called whenever a camera setting is switched, so it can be saved on the ledger
 const settingFns: ((key: string, on: boolean) => void)[] = []
 export function onSettingChanged(fn: (key: string, on: boolean) => void): void {
@@ -1245,6 +1282,9 @@ export function applySavedSettings(saved: Record<string, boolean>): void {
     orbitCamEnabled = saved.orbitCam
     if (!orbitCamEnabled) resetOrbit()
   }
+  if (saved.speed3 === true) shotSpeed = 3
+  else if (saved.speed2 === true) shotSpeed = 2
+  else if (typeof saved.speed2 === 'boolean' || typeof saved.speed3 === 'boolean') shotSpeed = 1
 }
 
 // ---------------------------------------------------------------------------
@@ -1268,6 +1308,10 @@ export function getRoundProgress(): { ball: number; balls: number; score: number
 // Key 1 toggles the ball cam. Runs once per frame from index.ts.
 export function updateSettingsInput(): void {
   if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) toggleBallCam()
+  // Key 2 steps the shot speed 1x, 2x, 3x, 1x... while one of your shots is playing
+  if (shotSpeedShown() && inputSystem.isTriggered(InputAction.IA_ACTION_4, PointerEventType.PET_DOWN)) {
+    setShotSpeed(shotSpeed >= 3 ? 1 : shotSpeed + 1)
+  }
 }
 
 // ---------------------------------------------------------------------------

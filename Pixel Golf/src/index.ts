@@ -83,9 +83,10 @@ type BallRig = {
   // Where the ball is drawn, and its roll (the model's rotation)
   pos: Vec3
   rot: Quat
-  // The shot being played back, and how far into it we are
+  // The shot being played back, how far into it we are, and how fast it plays (1, 2 or 3)
   player: PathPlayer | null
   clock: number
+  speed: number
   // A local shot being simulated, and who to tell when it's ready
   sim: ShotSim | null
   onSimmed: ((path: ShotPath) => void) | null
@@ -188,6 +189,7 @@ function buildWorldFromScene() {
       rot: { x: 0, y: 0, z: 0, w: 1 },
       player: null,
       clock: 0,
+      speed: 1,
       sim: null,
       onSimmed: null,
       model: undefined
@@ -316,7 +318,7 @@ function playShots(dt: number): void {
   for (const b of balls) {
     const p = b.player
     if (!p) continue
-    b.clock += dt
+    b.clock += dt * b.speed
     p.sample(b.clock)
     b.pos.x = p.position.x
     b.pos.y = p.position.y
@@ -390,6 +392,7 @@ function makePhysicsBridge(b: BallRig): Physics {
       b.onSimmed = null
       b.player = new PathPlayer(path)
       b.clock = 0
+      b.speed = 1
       b.player.sample(0)
       b.pos.x = b.player.position.x
       b.pos.y = b.player.position.y
@@ -410,6 +413,9 @@ function makePhysicsBridge(b: BallRig): Physics {
       b.rot.z = p.rotation.z
       b.rot.w = p.rotation.w
       drawBall(b)
+    },
+    setSpeed(speed) {
+      b.speed = Math.max(1, Math.min(3, speed))
     },
     remaining: () => (b.player ? Math.max(0, b.player.duration - b.clock) : 0),
     probe: probeSurface,

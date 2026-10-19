@@ -9,10 +9,10 @@ import { PowerBar } from './PowerBar'
 import { RangeHud } from './RangeHud'
 import { RotateBar } from './RotateBar'
 import { RoundResult } from './RoundResult'
-import { Score } from './Score'
 import { SettingsMenu } from './SettingsMenu'
 import { ShotPrompt } from './ShotPrompt'
 import { SkipTutorial } from './SkipTutorial'
+import { SpeedToggle } from './SpeedToggle'
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(() => (
@@ -45,9 +45,6 @@ export function setupUi() {
         <RoundResult />
       </ScreenInsetArea>
       <ScreenInsetArea>
-        <Score />
-      </ScreenInsetArea>
-      <ScreenInsetArea>
         <SettingsMenu />
       </ScreenInsetArea>
       <ScreenInsetArea>
@@ -55,6 +52,9 @@ export function setupUi() {
       </ScreenInsetArea>
       <ScreenInsetArea>
         <SkipTutorial />
+      </ScreenInsetArea>
+      <ScreenInsetArea>
+        <SpeedToggle />
       </ScreenInsetArea>
     </UiEntity>
   ))
