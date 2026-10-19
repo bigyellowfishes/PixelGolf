@@ -34,6 +34,17 @@ const RACK = {
   /** Rotation of the model on the rack. If a club shows upside down, try { x: 180, y: 0, z: 0 }. */
   clubRotation: { x: 0, y: 0, z: 0 },
   clubScale: 1,
+  /**
+   * Where each club's head hangs relative to its grip (the model's origin), in metres on the rack:
+   * x along the row (raise it to move that club's head left as you face the pad), z towards the player (+) or the pad (-). The
+   * club is moved back by this so its head sits over the middle of its button. Measured by eye
+   * from a screenshot, so nudge these if a head still sits off its button.
+   */
+  headOffset: {
+    wedge: { x: 0.2, z: 0.03 },
+    iron: { x: 0.21, z: 0.03 },
+    driver: { x: 0.18, z: 0.03 }
+  } as Record<string, { x: number; z: number }>,
   /** Size of the invisible click box over each club's button. */
   plateSize: 0.8,
   clickDistance: 8
@@ -89,10 +100,50 @@ function standModel(rack: Entity, src: string, position: Vector3, rotationY: num
   return e
 }
 
-function spawnRack(spot: { x: number; y: number; z: number }): void {
+type RackSpot = {
+  bay: number
+  x: number
+  y: number
+  z: number
+  yaw: number
+  anchor: { x: number; z: number } | null
+}
+
+/**
+ * The bay whose rack placement the others copy. Its rack sits RACK.offset from its ball; every
+ * other rack sits the same distance from its own bay's Tee Off panel (a fixed point on the pad;
+ * the balls aren't all in quite the same spot on their pads), turned to its bay's angle, so they
+ * all line up front to back the same way.
+ */
+const REFERENCE_BAY = 12
+/** A panel further than this from its own ball is a bad reading: that rack goes by its ball instead. */
+const ANCHOR_SANITY = 15
+/**
+ * Lining a rack up with the reference bay only nudges it (the balls sit within a metre or so of
+ * the same spot on their pads). If any rack would move further than this, the panel readings
+ * aren't to be trusted, and every rack goes by its ball as before.
+ */
+const MAX_NUDGE = 1.5
+
+function rackPlacement(spot: RackSpot, fromAnchor: { x: number; z: number } | null): { x: number; z: number } {
+  const turn = Quaternion.fromEulerDegrees(0, spot.yaw, 0)
+  if (fromAnchor && spot.anchor) {
+    const d = Vector3.rotate(Vector3.create(fromAnchor.x, 0, fromAnchor.z), turn)
+    return { x: spot.anchor.x + d.x, z: spot.anchor.z + d.z }
+  }
+  // No panel for this bay: from the ball, as before
+  const o = Vector3.rotate(Vector3.create(RACK.offset.x, 0, RACK.offset.z), turn)
+  return { x: spot.x + o.x, z: spot.z + o.z }
+}
+
+function spawnRack(spot: RackSpot, fromAnchor: { x: number; z: number } | null): void {
+  // Turned to the bay's angle, so every rack sits the same way relative to its own pad
+  const turn = Quaternion.fromEulerDegrees(0, spot.yaw, 0)
+  const at = rackPlacement(spot, fromAnchor)
   const rack = engine.addEntity()
   Transform.create(rack, {
-    position: Vector3.create(spot.x + RACK.offset.x, spot.y + RACK.offset.y, spot.z + RACK.offset.z)
+    position: Vector3.create(at.x, spot.y + RACK.offset.y, at.z),
+    rotation: turn
   })
 
   // The base, turned so its long side runs along the row of clubs
@@ -121,8 +172,9 @@ function spawnRack(spot: { x: number; y: number; z: number }): void {
 
     // The club itself. Pointer layer only, so it never blocks the player or the ball.
     const model = engine.addEntity()
+    const head = RACK.headOffset[type] ?? { x: 0, z: 0 }
     Transform.create(model, {
-      position: Vector3.create(x, RACK.clubHeight, 0),
+      position: Vector3.create(x + head.x, RACK.clubHeight, -head.z),
       rotation: Quaternion.fromEulerDegrees(RACK.clubRotation.x, RACK.clubRotation.y, RACK.clubRotation.z),
       scale: Vector3.create(RACK.clubScale, RACK.clubScale, RACK.clubScale),
       parent: rack
@@ -149,9 +201,36 @@ function spawnRack(spot: { x: number; y: number; z: number }): void {
   })
 }
 
-/** Builds a rack at each spot. Spots are ground-level positions, one per ball. */
-export function spawnClubRacks(spots: Array<{ x: number; y: number; z: number }>): void {
-  for (const spot of spots) spawnRack(spot)
+/** Builds a rack at each spot. Spots are ground-level ball positions with the bay's angle and panel. */
+export function spawnClubRacks(spots: RackSpot[]): void {
+  for (const s of spots) {
+    if (s.anchor && Math.hypot(s.anchor.x - s.x, s.anchor.z - s.z) > ANCHOR_SANITY) {
+      console.log(`[rack] bay ${s.bay}: panel reads ${Math.round(Math.hypot(s.anchor.x - s.x, s.anchor.z - s.z))} m from its ball, placing that rack by its ball`)
+      s.anchor = null
+    }
+  }
+  // Where the reference bay's rack sits from its panel, in that bay's own frame
+  let fromAnchor: { x: number; z: number } | null = null
+  const ref = spots.find((s) => s.bay === REFERENCE_BAY)
+  if (ref && ref.anchor) {
+    const at = rackPlacement(ref, null)
+    const back = Quaternion.fromEulerDegrees(0, -ref.yaw, 0)
+    const d = Vector3.rotate(Vector3.create(at.x - ref.anchor.x, 0, at.z - ref.anchor.z), back)
+    fromAnchor = { x: d.x, z: d.z }
+  }
+  if (fromAnchor) {
+    for (const s of spots) {
+      const a = rackPlacement(s, fromAnchor)
+      const b = rackPlacement(s, null)
+      const moved = Math.hypot(a.x - b.x, a.z - b.z)
+      if (moved > MAX_NUDGE) {
+        console.log(`[rack] bay ${s.bay} would move ${moved.toFixed(1)} m to line up with bay ${REFERENCE_BAY}; not lining up any racks`)
+        fromAnchor = null
+        break
+      }
+    }
+  }
+  for (const spot of spots) spawnRack(spot, fromAnchor)
   paintPlates()
   onClubSelected(paintPlates)
 }

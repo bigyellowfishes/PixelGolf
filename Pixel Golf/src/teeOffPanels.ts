@@ -252,6 +252,49 @@ export function setupAutoTeeOff(menuOpen: () => boolean): void {
   })
 }
 
+/**
+ * How far a bay is turned from facing straight down the range, in degrees (+ turns the same
+ * way as Quaternion.fromEulerDegrees about Y). The bays sit on a curve and each pad is built at
+ * the same angle as its Tee Off panel, which faces straight down the range at a box yaw of -90.
+ * Includes any turn on the panels model itself. 0 if the bay isn't in PANELS.
+ */
+export function bayYaw(ball: number): number {
+  const p = PANELS.find((x) => x.ball === ball)
+  if (!p) return 0
+  // Any turn on the panels model and the groups it sits in
+  let parentYaw = 0
+  let e: Entity | undefined = engine.getEntityOrNullByName(PANEL_ENTITY_NAME) ?? undefined
+  for (let depth = 0; e !== undefined && depth < 16; depth++) {
+    const t = Transform.getOrNull(e)
+    if (!t) break
+    parentYaw += Quaternion.toEulerAngles(t.rotation).y
+    e = t.parent && t.parent !== engine.RootEntity ? t.parent : undefined
+  }
+  return parentYaw + p.box.yaw + 90
+}
+
+/**
+ * Where a bay's Tee Off panel sits in the scene (its click box centre). The panel is part of the
+ * bay's model, so it's a fixed point on the pad, which the ball isn't quite. null if unknown.
+ */
+export function bayAnchor(ball: number): { x: number; z: number } | null {
+  const p = PANELS.find((x) => x.ball === ball)
+  const panels = engine.getEntityOrNullByName(PANEL_ENTITY_NAME)
+  if (!p || !panels) return null
+  // Up through every parent: the panels model can sit inside a group in the scene, and each
+  // Transform is relative to its own parent
+  let point = Vector3.create(p.box.x, p.box.y, p.box.z)
+  let e: Entity | undefined = panels
+  for (let depth = 0; e !== undefined && depth < 16; depth++) {
+    const t = Transform.getOrNull(e)
+    if (!t) break
+    const scaled = Vector3.create(point.x * t.scale.x, point.y * t.scale.y, point.z * t.scale.z)
+    point = Vector3.add(t.position, Vector3.rotate(scaled, t.rotation))
+    e = t.parent && t.parent !== engine.RootEntity ? t.parent : undefined
+  }
+  return { x: point.x, z: point.z }
+}
+
 export function setupTeeOffPanels(): void {
   const panels = engine.getEntityOrNullByName(PANEL_ENTITY_NAME)
   if (!panels) {

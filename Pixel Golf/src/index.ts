@@ -18,7 +18,7 @@ import { BALL_RADIUS, ShotPath, ShotSim, PathPlayer, probeSurface, warmUpBallSim
 import { Game, Physics, updateSettingsInput, applySavedSettings, onSettingChanged, onRoundFinished, setMenuOpenCheck } from './game'
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
-import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff } from './teeOffPanels'
+import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
@@ -489,8 +489,14 @@ export function main() {
     if (zone) VisibilityComponent.createOrReplace(zone, { visible: false })
   }
 
-  // A rack of the three clubs beside every ball's pad. The ground sits one radius below each ball.
-  spawnClubRacks(balls.map((b) => ({ x: b.pos.x, y: b.pos.y - BALL_RADIUS, z: b.pos.z })))
+  // A rack of the three clubs beside every ball's pad, turned to the pad's angle (the bays sit on
+  // a curve). The ground sits one radius below each ball.
+  spawnClubRacks(
+    balls.map((b) => {
+      const bay = Number(b.name.replace('Ball_', '')) || 0
+      return { bay, x: b.pos.x, y: b.pos.y - BALL_RADIUS, z: b.pos.z, yaw: bayYaw(bay), anchor: bayAnchor(bay) }
+    })
+  )
 
   // Clicking a Tee Off panel opens the Pixel Golf menu
   setupTeeOffPanels()
