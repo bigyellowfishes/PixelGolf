@@ -261,6 +261,32 @@ function sendWind(to?: string): void {
   else void room.send('wind', data)
 }
 
+// Each player's equipped ball (wallet -> ball id), so everyone sees it in that player's bay.
+// Only players with something other than the standard ball are listed.
+const ballLooks = new Map<string, string>()
+
+/** Notes a player's equipped ball. True if that changed what everyone should see. */
+function noteBall(address: string, wallet: Wallet): boolean {
+  const id = wallet.equipped?.ball || DEFAULT_EQUIPPED.ball
+  const before = ballLooks.get(address)
+  if (id === DEFAULT_EQUIPPED.ball) {
+    if (before === undefined) return false
+    ballLooks.delete(address)
+    return true
+  }
+  if (before === id) return false
+  ballLooks.set(address, id)
+  return true
+}
+
+function sendBallLooks(to?: string): void {
+  const looks: Record<string, string> = {}
+  for (const [who, id] of ballLooks) looks[who] = id
+  const data = { json: JSON.stringify(looks) }
+  if (to) void room.send('ballLooks', data, { to: [to] })
+  else void room.send('ballLooks', data)
+}
+
 function sendRange(to?: string): void {
   const data = { hot, seconds: Math.max(0, Math.ceil(hotLeft)), players: present() }
   if (to) void room.send('range', data, { to: [to] })
@@ -566,6 +592,9 @@ export function runLedger(): void {
     sendLedger(address, wallet)
     sendRange(address)
     sendWind(address)
+    // Everyone's balls for the newcomer, and the newcomer's ball for everyone
+    if (noteBall(address, wallet)) sendBallLooks()
+    else sendBallLooks(address)
     sendBays(address)
     sendSolo(address)
     for (const [u, c] of clubs) if (c.show) sendClub(u, c, address)
@@ -632,6 +661,17 @@ export function runLedger(): void {
     if (was && was.type === c.type && was.show === c.show && was.swing === c.swing) return
     clubs.set(address, c)
     sendClub(address, c)
+  })
+
+  // Walked away from their bay: it's free for anyone straight away
+  room.onMessage('leaveBay', (data, context) => {
+    const address = context?.from
+    if (!address) return
+    seen.set(address, now())
+    const bay = Math.floor(Number(data.bay))
+    if (bayOwners.get(bay) !== address) return
+    bayOwners.delete(bay)
+    sendBays()
   })
 
   room.onMessage('leaveSolo', (_data, context) => {
@@ -736,6 +776,9 @@ export function runLedger(): void {
       bayOwners.clear()
       soloPlayers.clear()
       sendSolo()
+      // Everyone's back to the standard ball
+      ballLooks.clear()
+      sendBallLooks()
       resetLeaders()
       await saveLeaders()
       console.log(`[ledger] reset by ${by} (${address}), now epoch ${currentEpoch()}`)
@@ -848,6 +891,7 @@ export function runLedger(): void {
     wallet.equipped[item.kind] = item.id
     touch(address, wallet)
     sendLedger(address, wallet)
+    if (noteBall(address, wallet)) sendBallLooks()
   })
 
   room.onMessage('equip', async (data, context) => {
@@ -860,6 +904,7 @@ export function runLedger(): void {
     wallet.equipped[item.kind] = item.id
     touch(address, wallet)
     sendLedger(address, wallet)
+    if (noteBall(address, wallet)) sendBallLooks()
   })
 
   room.onMessage('settings', async (data, context) => {

@@ -197,6 +197,14 @@ export type GameState = {
 let activeGame: Game | null = null
 // The ball whose score is shown in the UI (the last one played)
 let shownGame: Game | null = null
+
+// Your round belongs to you, not to a bay. While you're in a bay its ball holds the round
+// (roundHolder). Walk away and the round is lifted off that ball (carried); walk into any free
+// bay and it's put on that ball, so you carry on from the same ball number and score. Abandon
+// it from the Pixel Golf menu to start again. Never the tutorial's round.
+type RoundSnapshot = { shot: number; score: number; lastShotScore: number; lastZone: string; lastHot: boolean; log: BallResult[] }
+let roundHolder: Game | null = null
+let carried: RoundSnapshot | null = null
 // Every ball's game, so the UI can work out which prompt to show
 const allGames: Game[] = []
 
@@ -293,6 +301,12 @@ export function isShotInProgress(): boolean {
   let a2 = allGames.some((g) => g.isMine() && g.state.phase !== 'walking')
   let a3 = allGames.some((g) => g.isMine() && g.state.phase !== 'Swing_Height')
   return a1 && a2 && a3
+}
+
+// True while one of the player's own shots is under way (from the first E press until the ball
+// is back on its tee). Walking in and out of bays (teeOffPanels.ts) waits for it.
+export function playerBusy(): boolean {
+  return activeGame !== null
 }
 
 // Whether a menu or card is open (set by index.ts). No shot can start while one is, so the
@@ -487,6 +501,8 @@ export class Game {
       }
     }
 
+    // The swing's clock only starts once the shot's path is here, so the club meets the ball
+    // just as it leaves; until then the avatar keeps holding at the top of the backswing
     if (this.swingClock >= 0 && (this.pendingPath || this.playClock > 0)) {
       this.swingClock += dt
       if (!this.emoteFired && this.swingClock >= CLUB.emoteDelay) {
@@ -532,9 +548,10 @@ export class Game {
         break
 
       case 'Swinging':
-        // The avatar is mid-swing. Launch at the swing's contact.
+        // Waiting at the top for the shot's path, then mid-swing. The ball leaves at contact
+        // (CLUB.strikeDelay after the swing emote fires), never before its path is here.
         this.freezePlayer(true)
-        if (this.emoteFired && this.swingClock >= CLUB.emoteDelay + CLUB.strikeDelay) this.strikeBall()
+        if (this.emoteFired && this.pendingPath && this.swingClock >= CLUB.emoteDelay + CLUB.strikeDelay) this.strikeBall()
         break
 
       case 'watching':
@@ -708,10 +725,15 @@ export class Game {
     this.swingClock = 0
     this.emoteFired = false
     this.inputLock = 0.2
+    // The last shot's playback clock would let this swing start before its path is here
+    this.playClock = 0
 
     // Power, curve and aim are all fixed now, so the shot can be worked out while the swing plays
     this.prepareShot()
-    this.strikeBall()
+    // The avatar holds at the top until the shot's path is here (normally already: a local shot
+    // takes a frame or two, a shared one comes back from the server in a fraction of a second),
+    // then swings, and the ball leaves at the club's contact. See 'Swinging' in update().
+    this.state.phase = 'Swinging'
   }
 
   // Whether everyone sees this bay's shots, so the server simulates them once for all.
@@ -796,6 +818,11 @@ export class Game {
 
   // Runs once per frame after every ball has updated. One club, so one place drives it.
   static UpdateClubFrame(dt: number): void {
+    Game.UpdateRoundHome()
+    // Safety net: with no shot of yours under way (and outside the tutorial) you can always move
+    if (activeGame === null && !tutorialFrozen && InputModifier.has(engine.PlayerEntity)) {
+      InputModifier.deleteFrom(engine.PlayerEntity)
+    }
     if (!club) return
     const g = activeGame
     // At address while setting power and curve; in the hand otherwise
@@ -1117,6 +1144,52 @@ export class Game {
     return { ...this.startPos }
   }
 
+  // Lift this ball's round off it (the player walked away), leaving the bay fresh
+  takeRound(): RoundSnapshot {
+    const s: RoundSnapshot = {
+      shot: this.state.shot,
+      score: this.state.score,
+      lastShotScore: this.state.lastShotScore,
+      lastZone: this.state.lastZone,
+      lastHot: this.state.lastHot,
+      log: this.roundLog.slice()
+    }
+    this.newRound()
+    return s
+  }
+
+  // Put a carried round on this ball (the player walked into this bay)
+  giveRound(s: RoundSnapshot): void {
+    this.state.shot = s.shot
+    this.state.score = s.score
+    this.state.lastShotScore = s.lastShotScore
+    this.state.lastZone = s.lastZone
+    this.state.lastHot = s.lastHot
+    this.roundLog = s.log.slice()
+  }
+
+  // Keeps the player's round on the ball in whichever bay they're in. Runs every frame; nothing
+  // moves mid-shot.
+  static UpdateRoundHome(): void {
+    if (activeGame !== null) return
+    const mine = allGames.find((g) => g.isMine() && g.bay !== TUTORIAL_BAY) ?? null
+    if (mine === roundHolder) return
+    if (roundHolder) {
+      const s = roundHolder.takeRound()
+      // A finished round (or one not started) has nothing to carry
+      if (s.shot > 0 && s.shot < ROUND_BALLS) carried = s
+      roundHolder = null
+    }
+    if (mine) {
+      // This bay's ball may still show another player's numbers: it starts from yours
+      if (carried) mine.giveRound(carried)
+      else mine.newRound()
+      carried = null
+      roundHolder = mine
+      shownGame = mine
+    }
+  }
+
   // Clear the bay for a fresh round of ten
   newRound(): void {
     this.state.shot = 0
@@ -1208,7 +1281,13 @@ export class Game {
     }
   }
 
+  // Locks or frees the player's movement. Only the shot the player is actually playing (or the
+  // tutorial, which keeps them at the tee) can lock it: other players' shots playing out in
+  // nearby bays used to lock it too, and nothing freed it again if the player had no bay.
   private freezePlayer(state: boolean) {
+    if (state && activeGame !== this && !(tutorialFrozen && this.bay === TUTORIAL_BAY)) return
+    if (state && InputModifier.has(engine.PlayerEntity)) return
+    if (!state && !InputModifier.has(engine.PlayerEntity)) return
     if(state)
     {
       // Lock movement only. disableAll also blocks emotes, which stopped the
@@ -1306,9 +1385,34 @@ export function onRoundFinished(fn: (r: RoundFinished) => void): void {
   roundFinishedFns.push(fn)
 }
 
-// The ball count and round total of the bay last played, for the HUD
+/** Your round in progress (started but not finished), wherever it is, or null. Not the tutorial's. */
+export function roundInProgress(): { ball: number; balls: number; score: number } | null {
+  if (roundHolder && roundHolder.state.shot > 0 && roundHolder.state.shot < ROUND_BALLS)
+    return { ball: roundHolder.state.shot, balls: ROUND_BALLS, score: roundHolder.state.score }
+  if (!roundHolder && carried) return { ball: carried.shot, balls: ROUND_BALLS, score: carried.score }
+  return null
+}
+
+/** Throws away your round in progress so the next shot starts a fresh round (the Pixel Golf menu). */
+export function abandonRound(): void {
+  if (activeGame !== null) return
+  carried = null
+  if (roundHolder) {
+    roundHolder.newRound()
+    // Everyone else's screen for this bay shows it fresh too
+    sendShotDone({ bay: roundHolder.bay, score: 0, shot: 0, last: 0, zone: '', hot: false })
+  }
+}
+
+/** The ledger was reset: nothing carries over. */
+export function forgetCarriedRound(): void {
+  carried = null
+}
+
+// The ball count and round total of your round (or the bay last played), for the HUD
 export function getRoundProgress(): { ball: number; balls: number; score: number } {
-  const g = shownGame
+  if (!roundHolder && carried) return { ball: carried.shot, balls: ROUND_BALLS, score: carried.score }
+  const g = roundHolder ?? shownGame
   return { ball: g ? g.state.shot : 0, balls: g ? g.roundBalls() : ROUND_BALLS, score: g ? g.state.score : 0 }
 }
 

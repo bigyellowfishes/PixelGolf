@@ -94,8 +94,15 @@ export const CLUB = {
   takeBackEmote: 'assets/Emotes/Golf_TakeBack_emote.glb', // 1.3s: idle, blend to address, take the club back to the top
   topHoldEmote: 'assets/Emotes/Golf_TopHold_emote.glb', //   2.0s loop: held at the top with a slight settle
   swingEmote: 'assets/Emotes/Golf_Swing_emote.glb', //       1.8s: downswing, impact at 0.3s, follow-through, finish, back to idle
-  /** When the hold loop takes over from the take-back (the take-back clip is 1.3s, so this overlaps slightly). */
-  takeBackSeconds: 1.25,
+  /** When the hold loop takes over from the take-back: when the 1.3s take-back clip has finished. */
+  takeBackSeconds: 1.3,
+  /**
+   * The hold is started again this often while it lasts (setting power and curve, and waiting at
+   * the top for the shot's path). The explorer doesn't always keep a scene emote looping, and
+   * the avatar then went back to idle at the top. Just under the hold clip's 2.0s, so a working
+   * loop is restarted at the same pose it's about to loop to anyway.
+   */
+  topHoldRepeatSeconds: 1.9,
 
   /**
    * Where the player stands for the shot, relative to the ball, so the club
@@ -177,6 +184,8 @@ export type Club = {
   backswingTimer: number
   /** True once the top-of-backswing hold loop has started. */
   holding: boolean
+  /** Seconds until the hold emote is started again (CLUB.topHoldRepeatSeconds) */
+  holdRepeatIn: number
   /** True while the grip is in its swing position (see CLUB.swingGrip). */
   swingGripOn: boolean
 }
@@ -257,6 +266,7 @@ export function createClub(type: ClubType = 'iron'): Club {
     visible: true,
     backswingTimer: -1,
     holding: false,
+    holdRepeatIn: 0,
     swingGripOn: false
   }
 }
@@ -427,6 +437,7 @@ export function startBackswing(club: Club): void {
 
 function startHold(club: Club): void {
   club.holding = true
+  club.holdRepeatIn = CLUB.topHoldRepeatSeconds
   if (!CLUB.topHoldEmote) return
   const mask = CLUB.emoteUpperBodyOnly ? { mask: AvatarMask.AM_UPPER_BODY } : {}
   void triggerSceneEmote({ src: CLUB.topHoldEmote, loop: true, ...mask })
@@ -459,6 +470,11 @@ export function updateClub(club: Club, dt: number, addressing: boolean, charge: 
   if (club.backswingTimer >= 0) {
     club.backswingTimer += dt
     if (!club.holding && club.backswingTimer >= CLUB.takeBackSeconds) startHold(club)
+    // Keep holding at the top for as long as it takes, whatever the explorer did with the loop
+    else if (club.holding) {
+      club.holdRepeatIn -= dt
+      if (club.holdRepeatIn <= 0) startHold(club)
+    }
   }
 
   if (CLUB.addressInHand) addressing = false

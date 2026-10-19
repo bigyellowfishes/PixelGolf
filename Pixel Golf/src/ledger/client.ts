@@ -101,6 +101,15 @@ export const boards: { ready: boolean; tables: Record<Period, Board>; mine: Reco
   }
 }
 
+/** Which ball each player has equipped (wallet, lower case -> ball id), by the server's list. */
+export const ballLooks: Record<string, string> = {}
+
+/** The ball id of whoever holds this bay ('' if nobody, or they have the standard ball). */
+export function bayBallLook(bay: number): string {
+  const o = bays.owners[String(bay)]
+  return o ? ballLooks[o.u.toLowerCase()] ?? '' : ''
+}
+
 /** Who has which bay, by the server's list, and a claim waiting for its answer. */
 export const bays = {
   owners: {} as Record<string, { u: string; n: string }>,
@@ -292,6 +301,24 @@ export function myBay(): number {
 }
 
 /**
+ * Lets this player's bay go (they walked away), so anyone can use it: off this screen's list at
+ * once, and the server frees it for everyone. The solo bay is left the same way. Their round in
+ * progress stays with them (game.ts) for the next bay they play in.
+ */
+export function leaveBay(): void {
+  const bay = myBay()
+  bays.pending = 0
+  if (!bay || bay === TUTORIAL_BAY) return
+  if (bay === SOLO_BAY) {
+    leaveSoloBay()
+    return
+  }
+  const me = myId()
+  if (me) delete bays.owners[String(bay)]
+  void room.send('leaveBay', { bay })
+}
+
+/**
  * Asks for a bay. Returns false straight away if someone else has it. Otherwise
  * it's yours at once on this screen, and the server confirms it (or, if someone
  * beat you to it, says so and it's taken back).
@@ -445,6 +472,12 @@ export function setupLedgerClient(): void {
   room.onMessage('myRanks', (d) => {
     const m = parse<Partial<Record<Period, MyRank>>>(d.json, {})
     for (const p of PERIODS) if (m[p]) boards.mine[p] = m[p] as MyRank
+  })
+
+  room.onMessage('ballLooks', (d) => {
+    const looks = parse<Record<string, string>>(d.json, {})
+    for (const k of Object.keys(ballLooks)) delete ballLooks[k]
+    for (const k in looks) ballLooks[k.toLowerCase()] = looks[k]
   })
 
   room.onMessage('bays', (d) => {

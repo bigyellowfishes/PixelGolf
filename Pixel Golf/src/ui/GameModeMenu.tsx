@@ -5,6 +5,8 @@ import { getPlayer } from '@dcl/sdk/players'
 import { useInteraction } from './interaction'
 import { openClubSelect } from './ClubSelectMenu'
 import { playUi } from '../sfx'
+import { roundInProgress, abandonRound } from '../game'
+import { forTouch } from '../mobile'
 
 // Pixel Golf game mode menu. Hidden until the player clicks a Tee Off panel
 // (see src/teeOffPanels.ts), which calls openPixelGolfMenu().
@@ -49,6 +51,32 @@ function closeMenu({ state, props }: UiAction) {
   playUi('ui_close')
 }
 
+// Abandon takes two presses: the first asks, the second (within a few seconds) does it
+const ABANDON_CONFIRM_MS = 4000
+let abandonArmedUntil = 0
+
+// @ui-action
+function pressAbandon({ state, props }: UiAction) {
+  if (Date.now() < abandonArmedUntil) {
+    abandonArmedUntil = 0
+    abandonRound()
+    playUi('ui_close')
+    return
+  }
+  abandonArmedUntil = Date.now() + ABANDON_CONFIRM_MS
+  playUi('ui_click')
+}
+
+function fmt(n: number): string {
+  const s = String(Math.abs(Math.round(n)))
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 === 0) out += ','
+    out += s[i]
+  }
+  return (n < 0 ? '-' : '') + out
+}
+
 // @ui-action
 function chooseClub({ state, props }: UiAction) {
   state.display = 'none'
@@ -59,6 +87,28 @@ function chooseClub({ state, props }: UiAction) {
 export function GameModeMenu(props: {}) {
   const player = getPlayer()
   if (player && player.name) state.playerName = player.name
+
+  // A round you've started (in any bay) carries on here; it can be thrown away to start fresh
+  const round = roundInProgress()
+  const abandonArmed = round !== null && Date.now() < abandonArmedUntil
+  const abandonButton = useInteraction({
+    base: {
+      uiTransform: {
+        width: 168,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 22,
+        borderWidth: 2,
+        borderColor: { r: 0.851, g: 0.341, b: 0.239, a: 1 }
+      },
+      uiBackground: { color: abandonArmed ? { r: 0.851, g: 0.341, b: 0.239, a: 1 } : { r: 1, g: 1, b: 1, a: 1 } },
+      onMouseDown: () => pressAbandon({ state, props })
+    },
+    hover: {
+      uiBackground: { color: abandonArmed ? { r: 0.769, g: 0.282, b: 0.188, a: 1 } : { r: 0.992, g: 0.910, b: 0.894, a: 1 } }
+    }
+  })
 
   const closeButton = useInteraction({
     base: {
@@ -489,15 +539,46 @@ export function GameModeMenu(props: {}) {
             width: '100%',
             height: 84,
             flexDirection: 'row',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            padding: { right: 32 },
+            padding: { left: 32, right: 32 },
             borderRadius: { bottomLeft: 24, bottomRight: 24 },
             borderWidth: { top: 2, right: 0, bottom: 0, left: 0 },
             borderColor: { r: 0.835, g: 0.863, b: 0.886, a: 1 }
           }}
           uiBackground={{ color: { r: 1, g: 1, b: 1, a: 0.85 } }}
         >
+          {/* Your round in progress, if any, and Abandon round */}
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', display: round ? 'flex' : 'none' }}>
+            <UiEntity uiTransform={{ width: 190, flexDirection: 'column' }}>
+              <Label
+                value="ROUND IN PROGRESS"
+                fontSize={12}
+                color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }}
+                textAlign="middle-left"
+                uiTransform={{ width: 190, height: 16 }}
+              />
+              <Label
+                value={round ? `Ball ${round.ball}/${round.balls}  ·  ${fmt(round.score)} pts` : ''}
+                fontSize={16}
+                color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
+                textAlign="middle-left"
+                uiTransform={{ width: 190, height: 24 }}
+              />
+            </UiEntity>
+            <UiEntity {...abandonButton}>
+              <Label
+                value={abandonArmed ? forTouch('Click to confirm') : 'Abandon round'}
+                fontSize={15}
+                color={abandonArmed ? { r: 1, g: 1, b: 1, a: 1 } : { r: 0.851, g: 0.341, b: 0.239, a: 1 }}
+                textAlign="middle-center"
+                uiTransform={{ width: 160, height: 30 }}
+              />
+            </UiEntity>
+          </UiEntity>
+          {/* Keeps Choose Club on the right when there's no round to show */}
+          <UiEntity uiTransform={{ width: 1, height: 1, display: round ? 'none' : 'flex' }} />
+
           <UiEntity {...chooseClubButton}>
             <Label
               value="Choose Club"

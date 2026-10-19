@@ -14,10 +14,11 @@ import {
   PointerEvents
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
-import { openPixelGolfMenu } from './ui/GameModeMenu'
-import { isShotInProgress, GameState, getAllGames } from './game'
+import { openPixelGolfMenu, state as pixelGolfMenu } from './ui/GameModeMenu'
+import { state as clubMenu } from './ui/ClubSelectMenu'
+import { isShotInProgress, GameState, getAllGames, playerBusy } from './game'
 import { ROUND_BALLS } from './ledger/rules'
-import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
+import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
 import { onPhone } from './mobile'
 import { showToast } from './ui/RangeHud'
 import { playUi } from './sfx'
@@ -191,7 +192,32 @@ export function getActiveBay(): number {
  * the screens' click boxes, and on phones by walking up to a bay's ball (setupAutoTeeOff).
  * quiet: no sound or message when it can't, for the walk-in (which tries every bay you pass).
  */
-export function teeOff(bay: number, quiet = false): boolean {
+/** The bay's menus (the Pixel Golf menu and the club picker) close when you walk off. */
+function closeBayMenus(): void {
+  if (pixelGolfMenu.display === 'flex' || clubMenu.display === 'flex') playUi('ui_close')
+  pixelGolfMenu.display = 'none'
+  clubMenu.display = 'none'
+}
+
+// Walking into a bay only opens the Pixel Golf menu until the player has seen it once. After
+// that a walk-in just takes the bay, and the menu opens when they click a Tee Off screen.
+let menuSeen = false
+
+// The click that closes a menu (its X, Tee off, Continue) also lands on the Tee Off screen
+// behind it, which opened the menu straight back up. The screens ignore clicks while any menu
+// is open and for this long after.
+const MENU_CLICK_GUARD_MS = 600
+let menuOpenFn: () => boolean = () => false
+let menuOpenAt = 0
+function menuJustOpen(): boolean {
+  return menuOpenFn() || Date.now() - menuOpenAt < MENU_CLICK_GUARD_MS
+}
+
+/**
+ * Takes a bay. quiet: no sounds or callouts when it can't (walking past). menu: open the Pixel
+ * Golf menu ('auto' = only if the player hasn't seen it yet this visit).
+ */
+export function teeOff(bay: number, quiet = false, menu: boolean | 'auto' = true): boolean {
   // Don't interrupt a swing or a ball that's still rolling
   if (isShotInProgress()) return false
   // Tutorial rules: your own bay is already picked, and the tutorial bay is closed afterwards
@@ -217,37 +243,65 @@ export function teeOff(bay: number, quiet = false): boolean {
     return false
   }
   activeBay = bay
-  openPixelGolfMenu()
+  if (menu === true || (menu === 'auto' && !menuSeen)) {
+    menuSeen = true
+    openPixelGolfMenu()
+  }
   return true
 }
 
-// Phones: walking up to a bay's ball (this close, in metres) joins it as if its screen was tapped,
-// because on a phone the Tee Off screens sit under the phone's own buttons
+// Walking up to a bay's ball (this close, in metres) joins it as if its Tee Off screen was
+// clicked, and opens the Pixel Golf menu
 const AUTO_TEE_OFF_RANGE = 3
+// Walking this far (metres) from your own bay's ball lets the bay go, so anyone can use it.
+// Your round in progress goes with you to the next bay you walk into (game.ts).
+const LEAVE_BAY_RANGE = 10
 
 /**
- * On phones, start a game in a bay as soon as the player walks into it: join the bay and open
- * the Pixel Golf menu. Only once per visit to a bay (walk away and back to do it again), never
- * for the bay that's already yours, never mid-shot or while a menu is open, and quietly does
- * nothing for a bay that's in use or closed.
+ * Bays by walking, on every platform:
+ *   - walk up to a free bay's ball and it's yours (once per visit: walk away and back to do it
+ *     again; never for the bay that's already yours, mid-shot or with a menu open; quietly
+ *     nothing for a bay that's in use or closed). The Pixel Golf menu only opens the first time;
+ *     after that, click a Tee Off screen for it.
+ *   - walk away from your bay's ball and the bay is freed for everyone, and the menus close
+ * The Tee Off screens still work as before.
  */
 export function setupAutoTeeOff(menuOpen: () => boolean): void {
   let lastBay = 0
+  // A bay is only let go once you've been near its ball since it became yours, so clicking a
+  // Tee Off screen from a little way off doesn't lose the bay before you've walked up to it
+  let armedFor = 0
+  menuOpenFn = menuOpen
   engine.addSystem(() => {
-    if (!onPhone()) return
+    if (menuOpen()) menuOpenAt = Date.now()
+    if (playerBusy()) return
     let near = 0
     let nearest = AUTO_TEE_OFF_RANGE
+    let mineDistance = -1
+    const mine = myBay()
     for (const g of getAllGames()) {
       if (g.bay > 0 && g.state.distanceToBall <= nearest) {
         nearest = g.state.distanceToBall
         near = g.bay
       }
+      if (g.bay === mine) mineDistance = g.state.distanceToBall
     }
+
+    // Walked away from your bay: free it (not the tutorial bay, which is never claimed)
+    if (mine && mine !== TUTORIAL_BAY && mineDistance >= 0) {
+      if (mineDistance <= LEAVE_BAY_RANGE) armedFor = mine
+      else if (armedFor === mine) {
+        armedFor = 0
+        leaveBay()
+        closeBayMenus()
+      }
+    }
+
     if (near !== lastBay) {
       // Left the last bay (or walked into a new one): this one gets its turn
       lastBay = near
-      if (near === 0 || near === myBay() || menuOpen() || isShotInProgress()) return
-      teeOff(near, true)
+      if (near === 0 || near === myBay() || menuOpen()) return
+      if (teeOff(near, true, 'auto')) armedFor = near
     }
   })
 }
@@ -315,6 +369,7 @@ export function setupTeeOffPanels(): void {
     pointerEventsSystem.onPointerDown(
       { entity: box, opts: { button: InputAction.IA_POINTER, hoverText: HOVER_TEXT, maxDistance: MAX_DISTANCE } },
       () => {
+        if (menuJustOpen()) return
         teeOff(p.ball)
       }
     )

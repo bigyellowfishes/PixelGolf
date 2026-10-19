@@ -5,6 +5,7 @@ import { useInteraction } from './interaction'
 import { boards } from '../ledger/client'
 import { playUi } from '../sfx'
 import { forTouch } from '../mobile'
+import { openPixelGolfMenu } from './GameModeMenu'
 
 // The card that opens when the tenth ball lands. It shows your True Score
 // straight away, then fills in the multiplier roll, XP and Pixel Points when the
@@ -130,14 +131,19 @@ export function showTutorialReward(r: { xp: number; level: number; unlocked: str
   state.rewardText = r.xp > 0 ? `+${fmt(r.xp)} XP` : ''
   state.statusText = forTouch(
     r.unlocked.length
-      ? `Unlocked: ${r.unlocked.join(', ')}. Click a free bay's Tee Off screen to play.`
-      : "Click a free bay's Tee Off screen to start playing for real."
+      ? `Unlocked: ${r.unlocked.join(', ')}. Walk up to a free bay to play.`
+      : 'Walk up to a free bay to start playing for real.'
   )
 }
 
 // @ui-action
 function closeCard({ state, props }: UiAction) {
   state.display = 'none'
+  // A finished round: back to the Pixel Golf menu to pick a club and go again
+  if (state.title !== 'Tutorial complete!') {
+    openPixelGolfMenu()
+    return
+  }
   playUi('ui_close')
 }
 

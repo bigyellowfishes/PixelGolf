@@ -15,7 +15,7 @@ import { Vector3, Quaternion } from '@dcl/sdk/math'
 
 import { BALL_RADIUS, ShotPath, ShotSim, PathPlayer, probeSurface, warmUpBallSim, Vec3, Quat } from './ballSim'
 
-import { Game, Physics, updateSettingsInput, applySavedSettings, onSettingChanged, onRoundFinished, setMenuOpenCheck } from './game'
+import { Game, Physics, forgetCarriedRound, updateSettingsInput, applySavedSettings, onSettingChanged, onRoundFinished, setMenuOpenCheck } from './game'
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
@@ -46,7 +46,9 @@ import {
   TUTORIAL_BAY,
   profile,
   myBay,
-  shotWind
+  shotWind,
+  bayBallLook,
+  SOLO_BAY
 } from './ledger/client'
 import { itemById } from './ledger/rules'
 import { setupHotTargetMarker } from './hotTarget'
@@ -426,13 +428,17 @@ const BALL_MODEL_SCALE = (BALL_RADIUS * 2) / 0.1285
 // The ball cam steers the ball entity's rotation, so the model is a separate entity that
 // follows the ball and takes its roll from the shot's keyframes.
 /**
- * The ball you're playing shows the ball you've equipped in the shop (ledger/rules.ts CATALOGUE).
- * Only your own bay's ball (the tutorial or solo bay's when you're in one): every other ball on
- * your screen stays the standard one for now.
+ * Each bay's ball shows the ball its player has equipped in the shop (ledger/rules.ts CATALOGUE):
+ * yours from your own profile (straight away when you equip), everyone else's from the server's
+ * list (ballLooks). The tutorial and solo bays are private, so only yours shows there.
  */
-function myBallModel(): string {
-  const item = itemById(profile.equipped.ball ?? '')
+function ballModel(id: string): string {
+  const item = itemById(id)
   return item && item.model ? item.model : BALL_MODEL
+}
+
+function myBallModel(): string {
+  return ballModel(profile.equipped.ball ?? '')
 }
 
 function showEquippedBall() {
@@ -441,7 +447,12 @@ function showEquippedBall() {
   for (const b of balls) {
     if (!b.model) continue
     const bay = Number((/^Ball_(\d+)$/.exec(b.name) ?? [])[1] ?? 0)
-    const src = bay !== 0 && bay === mine ? want : BALL_MODEL
+    const src =
+      bay !== 0 && bay === mine
+        ? want
+        : bay !== 0 && bay !== TUTORIAL_BAY && bay !== SOLO_BAY
+          ? ballModel(bayBallLook(bay))
+          : BALL_MODEL
     const g = GltfContainer.getOrNull(b.model)
     if (g && g.src !== src) GltfContainer.getMutable(b.model).src = src
   }
@@ -514,7 +525,7 @@ export function main() {
 
   // Clicking a Tee Off panel opens the Pixel Golf menu
   setupTeeOffPanels()
-  // The two shopkeepers, on the placeholder crates at the shop
+  // The two shopkeepers, behind the shop counter (spots in SHOP_NPCS, shop.ts)
   setupShop()
   // The target flags turn to show the wind
   setupWindFlags()
@@ -563,6 +574,7 @@ export function main() {
   // An admin reset the ledger: every bay starts a fresh round (the tutorial follows when the new ledger arrives)
   onLedgerReset(() => {
     for (const game of games) game.newRound()
+    forgetCarriedRound()
   })
 
   // New players start in the tutorial bay (Ball_19) with a first round of ten

@@ -272,7 +272,21 @@ export const MESSAGES = {
    * Server -> everyone: the range's wind. dir is where it blows to in degrees (0 = +z, 90 = +x),
    * speed in m/s, seconds until it next changes. Sent when it changes and on hello.
    */
-  wind: Schemas.Map({ dir: Schemas.Float, speed: Schemas.Float, seconds: Schemas.Int })
+  wind: Schemas.Map({ dir: Schemas.Float, speed: Schemas.Float, seconds: Schemas.Int }),
+
+  // Leaving a bay (added 2026-10-19)
+
+  /** Scene -> server: I've walked away from this bay, so free it for anyone. Ignored if it isn't mine. */
+  leaveBay: Schemas.Map({ bay: Schemas.Int }),
+
+  // Ball looks (added 2026-10-19)
+
+  /**
+   * Server -> everyone: which ball each player has equipped, as a JSON { wallet: ballId } (only
+   * players with something other than the standard ball). Sent whenever one changes, and on
+   * hello. Every screen shows each bay's ball in its player's ball.
+   */
+  ballLooks: Schemas.Map({ json: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

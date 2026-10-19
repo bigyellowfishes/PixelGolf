@@ -1,9 +1,7 @@
 import {
   engine,
   Entity,
-  Name,
   Transform,
-  GltfContainer,
   AvatarShape,
   MeshCollider,
   ColliderLayer,
@@ -17,21 +15,23 @@ import { CosmeticKind } from './ledger/rules'
 import { tutorial, onRefused } from './ledger/client'
 
 /**
- * The two shopkeepers. Each stands where one of the placeholder crates is in the scene
- * ("Long Opened Wooden Crate" and its copy), facing the same way, and the crate is hidden.
+ * The two shopkeepers, behind the shop counter at fixed spots (SHOP_NPCS position and facing).
  * They turn to face you when you come near and wave when you walk up.
  *
  * Walking within OPEN_RANGE of either opens the shop (ui/ShopMenu.tsx) and walking past
  * CLOSE_RANGE closes it. Closing it with the X keeps it shut until you've walked away and come
  * back, or click a shopkeeper. Each shopkeeper opens it on their own aisle (SHOP_NPCS aisle).
  *
- * The first crate (by name) gets SHOP_NPCS[0], the second SHOP_NPCS[1]. Names, looks and
- * greetings are placeholders: change them here. Wearables are Decentraland base-avatar URNs
+ * Names, looks, greetings and spots are all set here. Positions are scene coordinates (the
+ * same numbers Creator Hub shows), with y the floor they stand on. facing is the way they look
+ * when nobody's near, in degrees (0 = +z, 90 = +x). Wearables are Decentraland base-avatar URNs
  * (free, always loadable); any collection wearable URN works too.
  */
 export const SHOP_NPCS: ShopNpc[] = [
   {
     name: 'Caddie Cass',
+    position: { x: 60.5, y: 35, z: 246.25 },
+    facing: 90,
     bodyShape: 'urn:decentraland:off-chain:base-avatars:BaseFemale',
     // Only base-avatar wearables checked to exist: one that doesn't can stop the avatar loading.
     // Face, eyes and mouth are left to the defaults.
@@ -49,6 +49,8 @@ export const SHOP_NPCS: ShopNpc[] = [
   },
   {
     name: 'Pro Pete',
+    position: { x: 60.5, y: 35, z: 254 },
+    facing: 90,
     bodyShape: 'urn:decentraland:off-chain:base-avatars:BaseMale',
     wearables: [
       'urn:decentraland:off-chain:base-avatars:casual_hair_01',
@@ -65,6 +67,10 @@ export const SHOP_NPCS: ShopNpc[] = [
 
 export type ShopNpc = {
   name: string
+  /** Where they stand: scene coordinates, y = the floor */
+  position: { x: number; y: number; z: number }
+  /** Which way they look when nobody's near, degrees (0 = +z, 90 = +x) */
+  facing: number
   bodyShape: string
   wearables: string[]
   skinColor?: { r: number; g: number; b: number }
@@ -75,8 +81,6 @@ export type ShopNpc = {
   greeting: string
 }
 
-/** Every entity whose name starts with this is a shopkeeper's spot, in name order. */
-const PLACEHOLDER_PREFIX = 'Long Opened Wooden Crate'
 /** Close enough for them to turn to you (metres) */
 const LOOK_RANGE = 10
 /** Walk this close to a shopkeeper (metres) and the shop opens */
@@ -89,8 +93,6 @@ const CLICK_RANGE = 8
 const TURN_SPEED = 180
 /** Before a shopkeeper waves at you again after you've walked off */
 const WAVE_AGAIN_SECONDS = 30
-/** Give up looking for the crates after this long (the scene's entities load with it) */
-const FIND_TIMEOUT_SECONDS = 10
 
 // --- what the shop shows (ui/ShopMenu.tsx reads this) ---------------------
 export const shop = {
@@ -128,7 +130,7 @@ export function closeShop(): void {
 type Keeper = {
   npc: ShopNpc
   entity: Entity
-  /** Which way the crate faced, so they settle back to it when you walk away */
+  /** Which way they face when nobody's near (SHOP_NPCS facing), so they settle back to it */
   homeYaw: number
   yaw: number
   /** Seconds since you were last in look range; a wave is due when you come back after long enough */
@@ -141,47 +143,11 @@ const keepers: Keeper[] = []
 /** The shopkeepers' avatar ids, so the privacy areas (tutorialVisuals.ts) never hide them */
 export const SHOP_NPC_IDS = SHOP_NPCS.map((_, i) => `pixel-golf-shop-${i}`)
 
-/** The world position and turn of an entity, through every parent (crates can sit in groups). */
-function worldTransform(e: Entity): { position: Vector3; rotation: Quaternion } | null {
-  let t = Transform.getOrNull(e)
-  if (!t) return null
-  let position = Vector3.clone(t.position)
-  let rotation = Quaternion.create(t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w)
-  let parent = t.parent
-  for (let depth = 0; parent !== undefined && parent !== engine.RootEntity && depth < 16; depth++) {
-    const p = Transform.getOrNull(parent)
-    if (!p) break
-    const scaled = Vector3.create(position.x * p.scale.x, position.y * p.scale.y, position.z * p.scale.z)
-    position = Vector3.add(p.position, Vector3.rotate(scaled, p.rotation))
-    rotation = Quaternion.multiply(p.rotation, rotation)
-    parent = p.parent
-  }
-  return { position, rotation }
-}
-
-const squash = (s: string) => s.toLowerCase().replace(/[\s_\-]+/g, '')
-
-function findPlaceholders(): Entity[] {
-  const found: { name: string; entity: Entity }[] = []
-  for (const [entity, name] of engine.getEntitiesWith(Name)) {
-    // Any copy of the crate: capitals, spaces and underscores don't matter ("Long Opened Wooden Crate_2" and so on)
-    if (squash(name.value).startsWith(squash(PLACEHOLDER_PREFIX))) found.push({ name: name.value, entity })
-  }
-  found.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-  return found.map((f) => f.entity)
-}
-
-function spawnKeeper(spot: Entity, npc: ShopNpc, index: number): void {
-  const where = worldTransform(spot)
-  if (!where) return
-  const homeYaw = Quaternion.toEulerAngles(where.rotation).y
-
-  // The crate was only marking the spot
-  GltfContainer.deleteFrom(spot)
-
+function spawnKeeper(npc: ShopNpc, index: number): void {
+  const homeYaw = npc.facing
   const entity = engine.addEntity()
   Transform.create(entity, {
-    position: where.position,
+    position: Vector3.create(npc.position.x, npc.position.y, npc.position.z),
     rotation: Quaternion.fromEulerDegrees(0, homeYaw, 0)
   })
   AvatarShape.create(entity, {
@@ -236,7 +202,7 @@ function updateKeepers(dt: number): void {
     const dz = me.position.z - t.position.z
     const dist = Math.sqrt(dx * dx + dz * dz)
 
-    // Face you while you're near, otherwise back to how the crate faced
+    // Face you while you're near, otherwise back to their resting direction
     const near = dist < LOOK_RANGE
     const target = near ? (Math.atan2(dx, dz) * 180) / Math.PI : k.homeYaw
     const d = angleDelta(k.yaw, target)
@@ -274,7 +240,7 @@ function updateKeepers(dt: number): void {
   }
 }
 
-/** Finds the placeholder crates (waiting for the scene to load if need be) and puts a shopkeeper on each. */
+/** Puts the shopkeepers in the shop and runs them (turning, waving, the shop trigger). */
 export function setupShop(): void {
   // A buy the server turned down (not enough points, level too low, no wallet): say why in the shop
   onRefused((reason) => {
@@ -282,22 +248,6 @@ export function setupShop(): void {
     shop.notice = reason
     shop.noticeUntil = Date.now() + 5000
   })
-  let waited = 0
-  let placed = false
-  engine.addSystem((dt: number) => {
-    if (!placed) {
-      waited += dt
-      const spots = findPlaceholders()
-      if (spots.length >= SHOP_NPCS.length || (spots.length > 0 && waited > 1)) {
-        spots.slice(0, SHOP_NPCS.length).forEach((spot, i) => spawnKeeper(spot, SHOP_NPCS[i], i))
-        placed = true
-        console.log(`[shop] ${keepers.length} shopkeeper(s) placed`)
-      } else if (waited > FIND_TIMEOUT_SECONDS) {
-        console.log(`[shop] no "${PLACEHOLDER_PREFIX}" in the scene, so no shopkeepers`)
-        placed = true
-      }
-      return
-    }
-    updateKeepers(dt)
-  }, undefined, 'shop-keepers')
+  SHOP_NPCS.forEach((npc, i) => spawnKeeper(npc, i))
+  engine.addSystem(updateKeepers, undefined, 'shop-keepers')
 }

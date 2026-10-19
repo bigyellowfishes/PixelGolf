@@ -13,7 +13,8 @@ import { wind, tutorial } from './ledger/client'
  * model's +z, 90 = its +x). If the flags point into the wind instead of with it, add 180; if
  * they're a quarter turn out, add or take 90.
  */
-const FLAG_CLOTH_YAW = 90
+// The cloth sits along the model's +x in Blender, which Decentraland mirrors to -x
+const FLAG_CLOTH_YAW = -90
 const FLAG_MODEL = /(^|\/)Flag\.glb$/i
 /** Below this the wind counts as calm (m/s) */
 const CALM = 0.3

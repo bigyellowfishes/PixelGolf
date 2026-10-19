@@ -58,6 +58,8 @@ export enum EntityNames {
   Hook_Railing_glb = "Hook Railing.glb",
   Logo_glb = "Logo.glb",
   Logos_glb = "Logos.glb",
+  Long_Opened_Wooden_Crate = "Long Opened Wooden Crate",
+  Long_Opened_Wooden_Crate_2 = "Long Opened Wooden Crate_2",
   Main_Building_glb = "Main Building.glb",
   Mechanics = "Mechanics",
   Mountains_glb = "Mountains.glb",
