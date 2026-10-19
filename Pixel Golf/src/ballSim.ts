@@ -456,7 +456,7 @@ export class ShotSim {
       // Wind pushes the ball while it's in the air (cannon clears the force after each step)
       //const inAir = clear || this.substep - this.lastTouch > AIR_SUBSTEPS
       const inAir = this.pos.y > 10
-      const yAirMulti = clamp((this.pos.y * 10) - 10, 0, 1)
+      const yAirMulti = clamp((this.pos.y * 0.1) - 1, 0, 1)
       if ((this.windX !== 0 || this.windZ !== 0) && inAir) ball.force.set(this.windX * yAirMulti, 0, this.windZ * yAirMulti)
       world!.step(SUB_DT)
       this.substep++
