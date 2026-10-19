@@ -79,6 +79,35 @@ export const HOT = {
 }
 
 // ---------------------------------------------------------------------------
+// Wind
+// ---------------------------------------------------------------------------
+
+/**
+ * One wind for the whole range, set by the server so every shot (and every screen) uses the
+ * same one. It holds for `seconds`, then changes: a new strength, and a direction that drifts
+ * up to `maxTurn` degrees from the last. The tutorial is always calm.
+ */
+export const WIND = {
+  seconds: 120,
+  /** Strength range, m/s (1 m/s is about 2.2 mph) */
+  minSpeed: 0,
+  maxSpeed: 6,
+  /** Most the direction swings round at each change, degrees */
+  maxTurn: 90,
+  /**
+   * How hard it pushes the ball while it's in the air: m/s² of push per m/s of wind. Tune this
+   * to make wind matter more or less. On the ground the wind does nothing.
+   */
+  push: 0.25
+}
+
+/** Wind as a vector along the ground, m/s. dir is where it blows TO, degrees (0 = +z, 90 = +x). */
+export function windVector(dir: number, speed: number): { x: number; z: number } {
+  const r = (dir * Math.PI) / 180
+  return { x: Math.sin(r) * speed, z: Math.cos(r) * speed }
+}
+
+// ---------------------------------------------------------------------------
 // Shared multiplier
 // ---------------------------------------------------------------------------
 

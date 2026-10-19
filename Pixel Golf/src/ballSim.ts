@@ -1,5 +1,6 @@
 import * as CANNON from 'cannon-es'
 import { courseData } from './collisionData/course_collision'
+import { WIND } from './ledger/rules'
 
 /**
  * The ball's physics, run ahead of time.
@@ -139,7 +140,10 @@ function ensureWorld(): CANNON.World {
   })
   ball.allowSleep = false
   ball.addEventListener('collide', (e: { contact: CANNON.ContactEquation }) => {
-    if (current) current.noteHit(Math.abs(e.contact.getImpactVelocityAlongNormal()))
+    if (current) {
+      current.touched()
+      current.noteHit(Math.abs(e.contact.getImpactVelocityAlongNormal()))
+    }
   })
   w.addBody(ball)
 
@@ -329,7 +333,10 @@ function keepOutOfCourse(from: CANNON.Vec3): void {
   if (into < 0) {
     const k = (1 + RESTITUTION) * into
     v.set(v.x - k * n.x, v.y - k * n.y, v.z - k * n.z)
-    if (current) current.noteHit(-into)
+    if (current) {
+      current.touched()
+      current.noteHit(-into)
+    }
   }
 }
 
@@ -352,6 +359,23 @@ const spinAxis = new CANNON.Vec3()
  * The world has a single ball body; each ShotSim keeps its own state and loads it into
  * that body while it runs, so two sims never mix.
  */
+// ---------------------------------------------------------------------------
+// Wind
+// ---------------------------------------------------------------------------
+
+/** The wind along the ground, m/s (windVector in ledger/rules.ts). */
+export type Wind = { x: number; z: number }
+
+/** The ball counts as in the air once it hasn't touched the course for this many substeps */
+const AIR_SUBSTEPS = 3
+
+/** The push on the ball (mass 1, so a force is an acceleration) for this wind. */
+function windPush(wind?: Wind): { x: number; z: number } {
+  if (!wind || !Number.isFinite(wind.x) || !Number.isFinite(wind.z)) return { x: 0, z: 0 }
+  return { x: wind.x * WIND.push, z: wind.z * WIND.push }
+}
+
+
 export class ShotSim {
   done = false
   private step = 0
@@ -367,12 +391,27 @@ export class ShotSim {
   private readonly raw: number[] = []
   private readonly hits: number[] = []
 
-  constructor(start: Vec3, launch: Vec3, spin?: Quat) {
+  // Wind push while airborne, m/s² along the ground (WIND.push x the wind, see windPush)
+  private readonly windX: number
+  private readonly windZ: number
+  // Substeps run, and the last one the ball touched the course in (for the wind: air only)
+  private substep = 0
+  private lastTouch = -1000
+
+  constructor(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind) {
+    const push = windPush(wind)
+    this.windX = push.x
+    this.windZ = push.z
     this.pos.set(start.x, start.y, start.z)
     this.vel.set(launch.x, launch.y, launch.z)
     clampSpeed(this.vel, MAX_BALL_SPEED)
     if (spin) this.spin.set(spin.x, spin.y, spin.z, spin.w).normalize()
     this.record()
+  }
+
+  /** The ball is touching the course (the collide event, or the ray guard putting it back). */
+  touched(): void {
+    this.lastTouch = this.substep
   }
 
   /** A bounce, for the landing sound. Called by the ball's collide event and the ray guard. */
@@ -412,7 +451,11 @@ export class ShotSim {
 
     for (let s = 0; s < SUBSTEPS; s++) {
       fromPrev.copy(ball.position)
+      // Wind pushes the ball while it's in the air (cannon clears the force after each step)
+      const inAir = clear || this.substep - this.lastTouch > AIR_SUBSTEPS
+      if ((this.windX !== 0 || this.windZ !== 0) && inAir) ball.force.set(this.windX, 0, this.windZ)
       world!.step(SUB_DT)
+      this.substep++
       if (!clear) keepOutOfCourse(fromPrev)
       clampSpeed(ball.velocity, MAX_BALL_SPEED)
       this.roll(ball.position.x - fromPrev.x, ball.position.z - fromPrev.z)
@@ -480,8 +523,8 @@ function trimRedundant(raw: number[]): number[] {
 }
 
 /** The whole shot at once. What the server runs. */
-export function simulateShot(start: Vec3, launch: Vec3, spin?: Quat): ShotPath {
-  const sim = new ShotSim(start, launch, spin)
+export function simulateShot(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind): ShotPath {
+  const sim = new ShotSim(start, launch, spin, wind)
   sim.run(MAX_STEPS + 1)
   return sim.result()
 }

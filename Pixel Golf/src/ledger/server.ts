@@ -21,6 +21,7 @@ import {
   TUTORIAL_LEVEL,
   xpToReach
 } from './rules'
+import { WIND, windVector } from './rules'
 import {
   leaderJson,
   leadersChanged,
@@ -243,6 +244,23 @@ function wasHot(zone: string): boolean {
   return hotHistory.some((h) => h.zone === zone && h.until >= cutoff)
 }
 
+// The wind: one for the whole range, so every shot simulated here uses it (WIND in rules.ts)
+let windDir = Math.random() * 360
+let windSpeed = WIND.minSpeed + Math.random() * (WIND.maxSpeed - WIND.minSpeed)
+let windLeft = WIND.seconds
+
+function changeWind(): void {
+  windDir = (windDir + (Math.random() * 2 - 1) * WIND.maxTurn + 360) % 360
+  windSpeed = WIND.minSpeed + Math.random() * (WIND.maxSpeed - WIND.minSpeed)
+  windLeft = WIND.seconds
+}
+
+function sendWind(to?: string): void {
+  const data = { dir: Math.round(windDir * 10) / 10, speed: Math.round(windSpeed * 10) / 10, seconds: Math.max(0, Math.ceil(windLeft)) }
+  if (to) void room.send('wind', data, { to: [to] })
+  else void room.send('wind', data)
+}
+
 function sendRange(to?: string): void {
   const data = { hot, seconds: Math.max(0, Math.ceil(hotLeft)), players: present() }
   if (to) void room.send('range', data, { to: [to] })
@@ -371,6 +389,13 @@ const BOARD_SECONDS = 15
 let sincePresence = 0
 
 function ledgerSystem(dt: number): void {
+  // Wind
+  windLeft -= dt
+  if (windLeft <= 0) {
+    changeWind()
+    sendWind()
+  }
+
   // Hot target
   hotLeft -= dt
   if (hotLeft <= 0) {
@@ -540,6 +565,7 @@ export function runLedger(): void {
 
     sendLedger(address, wallet)
     sendRange(address)
+    sendWind(address)
     sendBays(address)
     sendSolo(address)
     for (const [u, c] of clubs) if (c.show) sendClub(u, c, address)
@@ -643,7 +669,8 @@ export function runLedger(): void {
     if (!launch || !start) return no('That shot could not be simulated.')
     lastShotAsk.set(address, at)
 
-    const path = simulateShot(start, launch)
+    // The same rounded wind every screen was sent, so a shot played locally would match
+    const path = simulateShot(start, launch, undefined, windVector(Math.round(windDir * 10) / 10, Math.round(windSpeed * 10) / 10))
     const payload = encodePath(path)
     void room.send('shotPath', { bay, id, u: address, data: payload })
     simCount++

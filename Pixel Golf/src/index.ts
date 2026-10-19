@@ -21,6 +21,7 @@ import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop } from './shop'
+import { setupWindFlags } from './wind'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
 import { isServer } from '@dcl/sdk/network'
@@ -44,7 +45,8 @@ import {
   tutorial,
   TUTORIAL_BAY,
   profile,
-  myBay
+  myBay,
+  shotWind
 } from './ledger/client'
 import { itemById } from './ledger/rules'
 import { setupHotTargetMarker } from './hotTarget'
@@ -386,7 +388,8 @@ function makePhysicsBridge(b: BallRig): Physics {
     },
     simulate(launch, done) {
       // Start the roll from where the model is now, so the ball doesn't snap round
-      b.sim = new ShotSim(b.pos, launch, b.rot)
+      // In the range's wind (calm in the tutorial), the same one the server uses for shared shots
+      b.sim = new ShotSim(b.pos, launch, b.rot, shotWind())
       b.onSimmed = done
     },
     play(path) {
@@ -513,6 +516,8 @@ export function main() {
   setupTeeOffPanels()
   // The two shopkeepers, on the placeholder crates at the shop
   setupShop()
+  // The target flags turn to show the wind
+  setupWindFlags()
 
   SpawnCamera()
   setupUi()

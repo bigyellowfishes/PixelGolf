@@ -3,7 +3,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { room } from './room'
 import { ShotPath, Vec3, decodePath } from '../ballSim'
-import { HOT, Period, PERIODS, levelProgress, multiplierCeiling, isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
+import { WIND, windVector, HOT, Period, PERIODS, levelProgress, multiplierCeiling, isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
 
 /**
  * The scene's side of the ledger.
@@ -46,6 +46,31 @@ export const profile = {
    */
   tutorialDone: true
 }
+
+/**
+ * The range's wind, from the server ('wind'). dir is where it blows to, degrees (0 = +z,
+ * 90 = +x), speed m/s. Calm until the server says otherwise.
+ */
+export const wind = {
+  dir: 0,
+  speed: 0,
+  changesAt: 0,
+  ready: false
+}
+
+/** The wind a shot should fly in right now: the range's, or calm in the tutorial. */
+export function shotWind(): { x: number; z: number } {
+  if (tutorial.active || !wind.ready) return { x: 0, z: 0 }
+  return windVector(wind.dir, wind.speed)
+}
+
+/** Seconds until the wind changes */
+export function windSecondsLeft(): number {
+  return Math.max(0, Math.ceil((wind.changesAt - Date.now()) / 1000))
+}
+
+/** Strongest wind, for scaling a gauge */
+export const WIND_MAX = WIND.maxSpeed
 
 export const range = {
   /** The hot target's zone name, or '' until the server says. */
@@ -396,6 +421,13 @@ export function setupLedgerClient(): void {
   room.onMessage('mySettings', (d) => {
     const s = parse<Record<string, boolean>>(d.json, {})
     for (const fn of settingsFns) fn(s)
+  })
+
+  room.onMessage('wind', (d) => {
+    wind.dir = d.dir
+    wind.speed = d.speed
+    wind.changesAt = Date.now() + d.seconds * 1000
+    wind.ready = true
   })
 
   room.onMessage('range', (d) => {

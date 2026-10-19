@@ -264,7 +264,15 @@ export const MESSAGES = {
   shotPath: Schemas.Map({ bay: Schemas.Int, id: Schemas.Int, u: Schemas.String, data: Schemas.String }),
 
   /** Server -> one player: that shot won't be simulated, and why. The scene plays it locally. */
-  shotNo: Schemas.Map({ bay: Schemas.Int, id: Schemas.Int, reason: Schemas.String })
+  shotNo: Schemas.Map({ bay: Schemas.Int, id: Schemas.Int, reason: Schemas.String }),
+
+  // Wind (added 2026-10-19)
+
+  /**
+   * Server -> everyone: the range's wind. dir is where it blows to in degrees (0 = +z, 90 = +x),
+   * speed in m/s, seconds until it next changes. Sent when it changes and on hello.
+   */
+  wind: Schemas.Map({ dir: Schemas.Float, speed: Schemas.Float, seconds: Schemas.Int })
 }
 
 export const room = registerMessages(MESSAGES)

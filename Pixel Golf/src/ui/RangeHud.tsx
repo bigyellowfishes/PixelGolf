@@ -6,6 +6,7 @@ import { profile, range, hotSecondsLeft, currentCeiling, tutorial } from '../led
 import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
 import { toggleSettings } from './SettingsMenu'
+import { windReadout } from '../wind'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
 import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
@@ -37,7 +38,7 @@ let scale = 1
 const z = (n: number) => Math.round(n * scale)
 
 // The range card on the right of the screen: the hot target and its countdown,
-// your ball count and round total, the shared multiplier, your level and Pixel
+// your ball count and round total, the wind, the shared multiplier, your level and Pixel
 // Points, and the Leaderboards and Settings buttons. Also shows short callouts (level ups, the
 // daily bonus, big multiplier rolls) with showToast().
 
@@ -132,6 +133,7 @@ export function RangeHud(props: {}) {
   scale = onPhone() ? PHONE_SCALE : 1
   const cardWidth = z(CARD_WIDTH)
   const rightShift = onPhone() ? -PHONE_RIGHT_SHIFT : 0
+  const wind = windReadout()
   state.perfText = `${perfStats.fps} fps  ·  physics ${perfStats.physicsMs} ms`
 
   const boardsButton = useInteraction({
@@ -226,6 +228,36 @@ export function RangeHud(props: {}) {
         <UiEntity uiTransform={{ width: '100%', height: z(28), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Label value={state.ballText} fontSize={z(15)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(26) }} />
           <Label value={state.roundScore} fontSize={z(18)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(100), height: z(26) }} />
+        </UiEntity>
+
+        {/* Wind: the arrow is as you're looking (up = blowing away from you) */}
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: z(wind.words && !compact ? 44 : 32),
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: { left: z(10), right: z(10) },
+            margin: { top: z(6) },
+            borderRadius: z(12)
+          }}
+          uiBackground={{ color: { r: 0.886, g: 0.957, b: 0.882, a: 1 } }}
+        >
+          <UiEntity uiTransform={{ width: z(130), flexDirection: 'column' }}>
+            <Label value="WIND" fontSize={z(11)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(130), height: z(14) }} />
+            <Label
+              value={wind.words}
+              fontSize={z(12)}
+              color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
+              textAlign="middle-left"
+              uiTransform={{ width: z(130), height: z(18), display: wind.words && !compact ? 'flex' : 'none' }}
+            />
+          </UiEntity>
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <Label value={wind.arrow} fontSize={z(20)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(22), height: z(24), display: wind.calm ? 'none' : 'flex' }} />
+            <Label value={wind.mph} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(50), height: z(24) }} />
+          </UiEntity>
         </UiEntity>
 
         {/* Multiplier */}
