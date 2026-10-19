@@ -71,6 +71,7 @@ export function outOfRange(x: number, y: number, z: number): boolean {
 
 export type Vec3 = { x: number; y: number; z: number }
 export type Quat = { x: number; y: number; z: number; w: number }
+const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
 
 /**
  * A recorded shot, decoded and ready to play.
@@ -373,6 +374,7 @@ const AIR_SUBSTEPS = 3
 function windPush(wind?: Wind): { x: number; z: number } {
   if (!wind || !Number.isFinite(wind.x) || !Number.isFinite(wind.z)) return { x: 0, z: 0 }
   return { x: wind.x * WIND.push, z: wind.z * WIND.push }
+  //return { x: 10, z: 10 }
 }
 
 
@@ -452,8 +454,10 @@ export class ShotSim {
     for (let s = 0; s < SUBSTEPS; s++) {
       fromPrev.copy(ball.position)
       // Wind pushes the ball while it's in the air (cannon clears the force after each step)
-      const inAir = clear || this.substep - this.lastTouch > AIR_SUBSTEPS
-      if ((this.windX !== 0 || this.windZ !== 0) && inAir) ball.force.set(this.windX, 0, this.windZ)
+      //const inAir = clear || this.substep - this.lastTouch > AIR_SUBSTEPS
+      const inAir = this.pos.y > 10
+      const yAirMulti = clamp((this.pos.y * 10) - 10, 0, 1)
+      if ((this.windX !== 0 || this.windZ !== 0) && inAir) ball.force.set(this.windX * yAirMulti, 0, this.windZ * yAirMulti)
       world!.step(SUB_DT)
       this.substep++
       if (!clear) keepOutOfCourse(fromPrev)
