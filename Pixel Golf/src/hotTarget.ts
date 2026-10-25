@@ -1,88 +1,125 @@
-import { engine, Entity, Transform, TextShape, Billboard, BillboardMode, Font, TextAlignMode } from '@dcl/sdk/ecs'
-import { Color4, Vector3 } from '@dcl/sdk/math'
-import { range, hotSecondsLeft, tutorial } from './ledger/client'
-import { HOT } from './ledger/rules'
+import { engine, Entity, Transform, MeshRenderer, Material, MaterialTransparencyMode } from '@dcl/sdk/ecs'
+import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
+import { effectiveHot, hotSecondsLeft, tutorial } from './ledger/client'
+import { courseSurfaceAt } from './ballSim'
 
-// The hot target marker: a big "2X" floating over whichever target is hot right now,
-// with the seconds it has left. The server picks the target and rotates it every
-// 30 seconds for everyone (ledger/server.ts). It hides until the server has said, and
-// during the tutorial, which has its own SHOOT HERE marker instead (tutorialVisuals.ts).
+// The hot target marker: a glowing gold ring lying flat round the hot target's edge, pulsing
+// brighter and dimmer, so the target itself looks lit up from anywhere on the range. It sits on
+// the grass at the rim, so it never covers other targets, the flag or the ground. In the last
+// few seconds before the hot target moves on it flashes faster and harder, as a warning.
+// The countdown itself is on the range card. The server picks the target and rotates it every
+// 30 seconds for everyone (ledger/server.ts); in the tutorial it's the lesson target on its last
+// shot (effectiveHot). Hidden while nothing is hot.
+//
+// Earlier markers are kept: the ring with the floating 2X badge (src/hotTarget.rimbadge.ts.bak),
+// the coin (src/hotTarget.coin.ts.bak, assets/hot/Multiplierv3.glb), the Multiplier band
+// (src/hotTarget.ring.ts.bak, assets/hot/Multiplier.glb) and the first 2X badge (src/hotTarget.ts.bak).
 
-// Height of the "2X" as a share of the target's width, and its limits in metres
-const MARKER_SIZE = 0.35
-const MARKER_MIN = 2
-const MARKER_MAX = 9
-// How far above the target the marker floats, in multiples of its own height
-const MARKER_LIFT = 1.2
-// Gentle bob, in metres and seconds per bob
-const BOB_HEIGHT = 0.4
-const BOB_SECONDS = 2.4
+const RIM_TEXTURE = 'assets/hot/rim.png'
+/**
+ * Custom glow for some targets, by colour. Black is a long strip (20 x 150 m) seen almost edge-on
+ * from the bays, where a ring shrinks to a thin line: it gets the whole strip lit up instead, a
+ * soft fill with a bright band round its edge (drawn for a 20 x 150 strip, at RIM_SPAN).
+ */
+const RIM_TEXTURE_FOR: { [colour: string]: string } = { Black: 'assets/hot/rim-black.png' }
+/** The glow's colour (gold). Any colour works: it's tinted in code. */
+const RIM_COLOUR = Color3.create(1, 0.76, 0.1)
+/**
+ * The texture is a ring whose solid band sits at 81 to 90% of its half-width and fades out to
+ * the edge. RIM_SPAN sets how far past the target's edge the texture reaches (1.2 = 20% wider),
+ * which puts the solid band from 97% to 108% of the target's radius: right on its lip.
+ */
+const RIM_SPAN = 1.2
+/** Glow strength: pulses between these, once every RIM_PULSE_SECONDS */
+const RIM_GLOW_MIN = 1.5
+const RIM_GLOW_MAX = 5
+const RIM_PULSE_SECONDS = 1.2
+/** The warning: for the last WARN_SECONDS it flashes this fast, between these strengths */
+const WARN_SECONDS = 5
+const WARN_PULSE_SECONDS = 0.35
+const WARN_GLOW_MIN = 0.3
+const WARN_GLOW_MAX = 8
+/** Just above the grass at the rim, so it never flickers into it (metres) */
+const RIM_LIFT = 0.06
+/** Ground more than this above the hole counts as a wall, not the rim (the cliff by Black) */
+const CLIFF_SKIP = 10
 
-const HOT_COLOUR = Color4.create(1, 0.55, 0.1, 1)
-const OUTLINE = Color4.create(0.2, 0.08, 0, 1)
+const HIDDEN = Vector3.create(0, -100, 0)
+
+let rimTexture = RIM_TEXTURE
+
+function rimMaterial(rim: Entity, glow: number): void {
+  Material.setPbrMaterial(rim, {
+    texture: Material.Texture.Common({ src: rimTexture }),
+    albedoColor: Color4.create(RIM_COLOUR.r, RIM_COLOUR.g, RIM_COLOUR.b, 1),
+    emissiveColor: RIM_COLOUR,
+    emissiveTexture: Material.Texture.Common({ src: rimTexture }),
+    emissiveIntensity: glow,
+    transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
+    castShadows: false,
+    metallic: 0,
+    roughness: 1
+  })
+}
 
 export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | undefined): void {
-  const marker = engine.addEntity()
-  Transform.create(marker, { position: Vector3.create(0, -100, 0) })
-  Billboard.create(marker, { billboardMode: BillboardMode.BM_Y })
-  TextShape.create(marker, {
-    text: '',
-    fontSize: 40,
-    font: Font.F_SANS_SERIF,
-    textColor: HOT_COLOUR,
-    outlineColor: OUTLINE,
-    outlineWidth: 0.15,
-    textAlign: TextAlignMode.TAM_BOTTOM_CENTER,
-    textWrapping: false
-  })
-  // The countdown, under the 2X. Scaled with the marker, so it stays in proportion.
-  const timer = engine.addEntity()
-  Transform.create(timer, { parent: marker, position: Vector3.create(0, -0.2, 0) })
-  TextShape.create(timer, {
-    text: '',
-    fontSize: 16,
-    font: Font.F_SANS_SERIF,
-    textColor: Color4.White(),
-    outlineColor: OUTLINE,
-    outlineWidth: 0.2,
-    textAlign: TextAlignMode.TAM_TOP_CENTER,
-    textWrapping: false
-  })
+  // A flat plane with the ring texture, laid on the ground
+  const rim = engine.addEntity()
+  Transform.create(rim, { position: HIDDEN })
+  MeshRenderer.setPlane(rim)
+  rimMaterial(rim, RIM_GLOW_MIN)
 
   let shownZone = ''
-  let shownText = ''
-  let base = Vector3.create(0, -100, 0)
+  let showing = false
   let clock = 0
 
   engine.addSystem((dt) => {
-    clock += dt
-    const zone = range.hot
+    const zone = effectiveHot()
     if (zone !== shownZone) {
       shownZone = zone
       const ent = zone ? zoneEntity(zone) : undefined
       const t = ent ? Transform.getOrNull(ent) : null
       if (!t) {
-        base = Vector3.create(0, -100, 0)
+        showing = false
+        Transform.getMutable(rim).position = HIDDEN
+        if (zone) console.log(`[hot] no target entity named ${zone}, the marker is hidden`)
       } else {
-        const width = Math.max(Math.abs(t.scale.x), Math.abs(t.scale.z))
-        const height = Math.min(MARKER_MAX, Math.max(MARKER_MIN, width * MARKER_SIZE))
-        // Letters are about 0.072 m tall per font size unit
-        TextShape.getMutable(marker).fontSize = height / 0.072
-        TextShape.getMutable(timer).fontSize = (height * 0.4) / 0.072
-        Transform.getMutable(timer).position = Vector3.create(0, -height * 0.15, 0)
-        base = Vector3.create(t.position.x, t.position.y + height * MARKER_LIFT, t.position.z)
+        const x = t.position.x
+        const z = t.position.z
+        const rx = Math.abs(t.scale.x) / 2
+        const rz = Math.abs(t.scale.z) / 2
+        // The rim's height: the highest real grass just outside the target's edge, round it
+        const hole = courseSurfaceAt(x, z) ?? t.position.y
+        let grass = hole
+        for (const f of [1, 1.1]) {
+          for (let i = 0; i < 48; i++) {
+            const a = (i / 48) * Math.PI * 2
+            const local = Vector3.rotate(Vector3.create(Math.sin(a) * rx * f, 0, Math.cos(a) * rz * f), t.rotation)
+            const h = courseSurfaceAt(x + local.x, z + local.z)
+            if (h !== null && h > grass && h <= hole + CLIFF_SKIP) grass = h
+          }
+        }
+        rimTexture = RIM_TEXTURE_FOR[zone.replace(/\d+$/, '')] ?? RIM_TEXTURE
+        // Flat on the ground, the target's own shape and turn (the long Black strip gets its own glow)
+        const rt = Transform.getMutable(rim)
+        rt.position = Vector3.create(x, grass + RIM_LIFT, z)
+        rt.rotation = Quaternion.multiply(t.rotation, Quaternion.fromEulerDegrees(90, 0, 0))
+        rt.scale = Vector3.create(rx * 2 * RIM_SPAN, rz * 2 * RIM_SPAN, 1)
+        showing = true
+        console.log(`[hot] rim on ${zone} at ${(grass + RIM_LIFT).toFixed(1)} m`)
       }
     }
+    if (!showing) return
 
+    // The pulse: gentle normally, fast and hard in the last few seconds (not in the tutorial's
+    // lesson, which has no countdown)
+    clock += dt
     const left = hotSecondsLeft()
-    const text = shownZone && left > 0 && !tutorial.active ? `HOT  0:${left < 10 ? '0' : ''}${left}` : ''
-    if (text !== shownText) {
-      shownText = text
-      TextShape.getMutable(marker).text = text ? `${HOT.factor}X` : ''
-      TextShape.getMutable(timer).text = text
-    }
-
-    const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
-    Transform.getMutable(marker).position = text ? Vector3.create(base.x, base.y + bob, base.z) : Vector3.create(0, -100, 0)
+    const warn = !tutorial.active && left > 0 && left <= WARN_SECONDS
+    const period = warn ? WARN_PULSE_SECONDS : RIM_PULSE_SECONDS
+    const low = warn ? WARN_GLOW_MIN : RIM_GLOW_MIN
+    const high = warn ? WARN_GLOW_MAX : RIM_GLOW_MAX
+    const wave = 0.5 + 0.5 * Math.sin((clock / period) * Math.PI * 2)
+    rimMaterial(rim, low + (high - low) * wave)
   })
 }

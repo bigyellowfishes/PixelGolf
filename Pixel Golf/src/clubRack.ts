@@ -187,7 +187,8 @@ function spawnRack(spot: RackSpot, fromAnchor: { x: number; z: number } | null):
 
     const opts = {
       button: InputAction.IA_POINTER,
-      hoverText: `${def.label} (power ${def.launchPower})`,
+      // The key that picks the same club (game.ts CLUB_KEYS: 1 wedge, 2 iron, 3 driver)
+      hoverText: `${def.label}  (key ${({ wedge: 1, iron: 2, driver: 3 } as Record<string, number>)[type]})`,
       maxDistance: RACK.clickDistance
     }
     // Swapping mid-shot would change the power under a swing that is already under way

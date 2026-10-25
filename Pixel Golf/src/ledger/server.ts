@@ -15,6 +15,7 @@ import {
   itemById,
   levelFor,
   multiplierCeiling,
+  multiplierFloor,
   validBall,
   isAdminWallet,
   RESET_CONFIRM,
@@ -223,6 +224,22 @@ function present(): number {
   return n
 }
 
+// Dev panel (admin only): pretend extra players, and holds on the hot target and the wind
+let fakePlayers = 0
+let hotHold = false
+let windHold = false
+
+/** Players in the space for the multiplier: the real ones plus any pretend ones from the dev panel. */
+function players(): number {
+  return present() + fakePlayers
+}
+
+function sendDevState(to?: string): void {
+  const data = { json: JSON.stringify({ extra: fakePlayers, hotHold, windHold }) }
+  if (to) void room.send('devState', data, { to: [to] })
+  else void room.send('devState', data)
+}
+
 let hot = HOT.targets[Math.floor(Math.random() * HOT.targets.length)]
 let hotLeft = HOT.seconds
 /** Every target that has been hot recently, and until when. */
@@ -288,7 +305,7 @@ function sendBallLooks(to?: string): void {
 }
 
 function sendRange(to?: string): void {
-  const data = { hot, seconds: Math.max(0, Math.ceil(hotLeft)), players: present() }
+  const data = { hot, seconds: Math.max(0, Math.ceil(hotLeft)), players: players() }
   if (to) void room.send('range', data, { to: [to] })
   else void room.send('range', data)
 }
@@ -415,15 +432,15 @@ const BOARD_SECONDS = 15
 let sincePresence = 0
 
 function ledgerSystem(dt: number): void {
-  // Wind
-  windLeft -= dt
+  // Wind (held still from the dev panel: no countdown)
+  if (!windHold) windLeft -= dt
   if (windLeft <= 0) {
     changeWind()
     sendWind()
   }
 
-  // Hot target
-  hotLeft -= dt
+  // Hot target (held from the dev panel: no countdown)
+  if (!hotHold) hotLeft -= dt
   if (hotLeft <= 0) {
     rotateHot()
     sendRange()
@@ -433,9 +450,9 @@ function ledgerSystem(dt: number): void {
   sincePresence += dt
   if (sincePresence >= 5) {
     sincePresence = 0
-    const players = present()
-    if (players !== lastPlayers) {
-      lastPlayers = players
+    const count = players()
+    if (count !== lastPlayers) {
+      lastPlayers = count
       sendRange()
     }
     if (releaseAbsentBays()) sendBays()
@@ -536,7 +553,7 @@ function notCounted(address: string, reason: string): void {
     {
       trueScore: 0,
       roll: 0,
-      players: present(),
+      players: players(),
       multiScore: 0,
       hotHits: 0,
       xp: 0,
@@ -592,6 +609,7 @@ export function runLedger(): void {
     sendLedger(address, wallet)
     sendRange(address)
     sendWind(address)
+    sendDevState(address)
     // Everyone's balls for the newcomer, and the newcomer's ball for everyone
     if (noteBall(address, wallet)) sendBallLooks()
     else sendBallLooks(address)
@@ -752,6 +770,53 @@ export function runLedger(): void {
     sendLedger(address, wallet)
   })
 
+  // Dev panel (admin only): the hot target, pretend players, the wind
+  const adminOnly = (address: string | undefined): address is string => {
+    if (!address) return false
+    if (isAdminWallet(address)) return true
+    void room.send('refused', { reason: 'Only admins can use the dev panel. Your wallet is not on the admin list.' }, { to: [address] })
+    return false
+  }
+  room.onMessage('adminHot', (data, context) => {
+    if (!adminOnly(context?.from)) return
+    if (data.zone === '') {
+      hotHold = false
+      rotateHot()
+    } else if (HOT.targets.indexOf(data.zone) >= 0) {
+      // Like a normal change, so a ball landing on the old one in the next moment still counts
+      hotHistory.push({ zone: hot, until: now() + 2 })
+      hot = data.zone
+      hotLeft = HOT.seconds
+      hotHold = data.hold
+    } else return
+    console.log(`[ledger] dev: hot target ${hot}${hotHold ? ' (held)' : ''}`)
+    sendRange()
+    sendDevState()
+  })
+  room.onMessage('adminPlayers', (data, context) => {
+    if (!adminOnly(context?.from)) return
+    fakePlayers = Math.max(0, Math.min(100, Math.round(data.extra)))
+    lastPlayers = players()
+    console.log(`[ledger] dev: ${fakePlayers} pretend players (${lastPlayers} in all)`)
+    sendRange()
+    sendDevState()
+  })
+  room.onMessage('adminWind', (data, context) => {
+    if (!adminOnly(context?.from)) return
+    if (data.speed < 0) {
+      windHold = false
+      changeWind()
+    } else {
+      windDir = ((data.dir % 360) + 360) % 360
+      windSpeed = Math.min(15, data.speed)
+      windLeft = WIND.seconds
+      windHold = data.hold
+    }
+    console.log(`[ledger] dev: wind ${windSpeed.toFixed(1)} m/s to ${windDir.toFixed(0)}${windHold ? ' (held)' : ''}`)
+    sendWind()
+    sendDevState()
+  })
+
   // Admin only: wipe everyone's progress and the boards (the Reset ledger button in Settings)
   let resetting = false
   room.onMessage('adminReset', async (data, context) => {
@@ -820,9 +885,11 @@ export function runLedger(): void {
       xp += ballXp(b.z, b.h === 1)
     }
 
-    // The shared multiplier: a roll from 2x to the number of players in the space
-    const players = Math.max(1, present())
-    const r = roll(MULTIPLIER.floor, multiplierCeiling(players))
+    // The shared multiplier: a whole-number roll from the crowd's minimum (2x, or 5x at 5+
+    // players, 10x at 10+, ...) up to the number of players in the space
+    const here = Math.max(1, players())
+    const lowest = multiplierFloor(here)
+    const r = roll(lowest, multiplierCeiling(here))
     const multiScore = trueScore > 0 ? trueScore * r : trueScore
 
     let points = POINTS.roundComplete + Math.floor(Math.max(0, trueScore) / POINTS.perScore)
@@ -843,15 +910,16 @@ export function runLedger(): void {
 
     void room.send(
       'roundResult',
-      { trueScore, roll: r, players, multiScore, hotHits, xp, points, personalBest, counted: true, reason: '' },
+      { trueScore, roll: r, players: here, multiScore, hotHits, xp, points, personalBest, counted: true, reason: '' },
       { to: [address] }
     )
-    if (r >= MULTIPLIER.shoutAt) {
+    // Only a lucky roll is news: the crowd's guaranteed minimum would announce every round
+    if (r >= MULTIPLIER.shoutAt && r > lowest) {
       void room.send('rolled', { name: wallet.name || tidyName('', address), roll: r, score: multiScore })
     }
     sendLedger(address, wallet)
     sendRanks(address)
-    console.log(`[ledger] round ${address}: ${trueScore} x${r} (${players} here), +${xp} XP, +${points} PP`)
+    console.log(`[ledger] round ${address}: ${trueScore} x${r} (${here} here), +${xp} XP, +${points} PP`)
   })
 
   room.onMessage('afk', async (_data, context) => {

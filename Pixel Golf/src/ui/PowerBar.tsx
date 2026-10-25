@@ -52,7 +52,7 @@ export function PowerBar(props: {}) {
     >
       <UiEntity
         uiTransform={{
-          flexDirection: 'column',
+          flexDirection: 'row',
           alignItems: 'center',
           padding: { top: 6, bottom: 6, left: 12, right: 12 },
           borderRadius: 14,
@@ -61,8 +61,10 @@ export function PowerBar(props: {}) {
         }}
         uiBackground={{ color: PALE }}
       >
-        <PowerRow />
-        <CurveRow />
+        <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'center' }}>
+          <PowerRow />
+          <CurveRow />
+        </UiEntity>
       </UiEntity>
     </UiEntity>
   )

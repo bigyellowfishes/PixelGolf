@@ -1,11 +1,11 @@
 import { engine, Entity, GltfContainer, Transform } from '@dcl/sdk/ecs'
 import { Quaternion } from '@dcl/sdk/math'
-import { wind, tutorial } from './ledger/client'
+import { effectiveWind } from './ledger/client'
 
 /**
  * Turns every target flag in the scene (any entity showing assets/Course/Flag.glb, 11 of them)
  * so its cloth points the way the wind is blowing, swinging round smoothly when it changes.
- * In a calm (or in the tutorial, which is always calm) they're left as they were placed.
+ * In a calm (the tutorial is calm except for its wind lesson) they're left as they were placed.
  *
  * Each flag turns about its own origin, which should be the bottom of its pole.
  *
@@ -13,8 +13,9 @@ import { wind, tutorial } from './ledger/client'
  * model's +z, 90 = its +x). If the flags point into the wind instead of with it, add 180; if
  * they're a quarter turn out, add or take 90.
  */
-// The cloth sits along the model's +x in Blender, which Decentraland mirrors to -x
-const FLAG_CLOTH_YAW = -90
+// Measured from Flag.glb: the pole is on the model's origin and the cloth reaches out along the
+// model's -z (to 4.25 m behind it), so the cloth points at 180
+const FLAG_CLOTH_YAW = 180
 const FLAG_MODEL = /(^|\/)Flag\.glb$/i
 /** Below this the wind counts as calm (m/s) */
 const CALM = 0.3
@@ -63,7 +64,8 @@ function windFlagsSystem(dt: number): void {
     if (flags.length) console.log(`[wind] ${flags.length} flags found`)
     if (!flags.length) return
   }
-  const calm = !wind.ready || wind.speed < CALM || tutorial.active
+  const wind = effectiveWind()
+  const calm = !wind.ready || wind.speed < CALM
   for (const f of flags) {
     // The flag's own (local) turn that points its cloth downwind
     const target = calm ? f.placedYaw : wind.dir - FLAG_CLOTH_YAW - f.parentYaw
@@ -90,7 +92,8 @@ const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖']
  * looking), its strength in mph, and a word or two for what it'll do to a shot hit that way.
  */
 export function windReadout(): { arrow: string; mph: string; words: string; calm: boolean } {
-  if (tutorial.active || !wind.ready || wind.speed < CALM) return { arrow: '', mph: 'Calm', words: '', calm: true }
+  const wind = effectiveWind()
+  if (!wind.ready || wind.speed < CALM) return { arrow: '', mph: 'Calm', words: '', calm: true }
   const cam = Transform.getOrNull(engine.CameraEntity)
   const camYaw = cam ? Quaternion.toEulerAngles(cam.rotation).y : 0
   const rel = ((wind.dir - camYaw) % 360 + 360) % 360

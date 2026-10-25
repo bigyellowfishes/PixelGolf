@@ -11,12 +11,15 @@ import {
   TextAlignMode,
   MeshRenderer,
   Material,
-  PointerEvents
+  PointerEvents,
+  raycastSystem,
+  RaycastQueryType
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu, state as pixelGolfMenu } from './ui/GameModeMenu'
 import { state as clubMenu } from './ui/ClubSelectMenu'
-import { isShotInProgress, GameState, getAllGames, playerBusy } from './game'
+import { isShotInProgress, GameState, getAllGames, playerBusy, roundInProgress, requestShotStart, stepOutForMenu, menuKeyAllowed } from './game'
+import { onMenuKey } from './menuGuard'
 import { ROUND_BALLS } from './ledger/rules'
 import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
 import { onPhone } from './mobile'
@@ -213,6 +216,7 @@ function menuJustOpen(): boolean {
   return menuOpenFn() || Date.now() - menuOpenAt < MENU_CLICK_GUARD_MS
 }
 
+
 /**
  * Takes a bay. quiet: no sounds or callouts when it can't (walking past). menu: open the Pixel
  * Golf menu ('auto' = only if the player hasn't seen it yet this visit).
@@ -245,7 +249,9 @@ export function teeOff(bay: number, quiet = false, menu: boolean | 'auto' = true
   activeBay = bay
   if (menu === true || (menu === 'auto' && !menuSeen)) {
     menuSeen = true
-    openPixelGolfMenu()
+    // Walking in (quiet) isn't held up by the second's wait after a menu closes: that wait is
+    // for clicks, which could land on the screen behind the menu just closed
+    openPixelGolfMenu(quiet)
   }
   return true
 }
@@ -256,36 +262,150 @@ const AUTO_TEE_OFF_RANGE = 3
 // Walking this far (metres) from your own bay's ball lets the bay go, so anyone can use it.
 // Your round in progress goes with you to the next bay you walk into (game.ts).
 const LEAVE_BAY_RANGE = 10
+// Leaving a bay's walk-in zone takes this much further (metres) than entering it
+const EDGE_LEEWAY = 1.5
+
+// --- On the putting area or on the wood --------------------------------------
+// The bay menus only stay open while you're standing on a putting area. The putting areas are
+// part of Tee Off Panels.glb and the wood between and behind them isn't, so a ray straight down
+// from the player says which you're on: any hit on the Tee Off Panels model is a putting area.
+// Until the ray has found that model under you once, nothing is held back (so if the model ever
+// stops having floor colliders, the bays work by distance alone as they did before).
+/** Seconds off a putting area before the menus close, so a seam or a hop doesn't shut them */
+const OFF_PAD_SECONDS = 0.25
+/** The ray starts this far above the player's position and reaches this far down (metres) */
+const PAD_RAY_LIFT = 1
+const PAD_RAY_LENGTH = 4
+let padSeen = false
+let onPadNow = false
+let offPadFor = 0
+let lastPadMesh = ''
+
+function setupPadCheck(): void {
+  const panels = engine.getEntityOrNullByName(PANEL_ENTITY_NAME)
+  if (!panels) return
+  const probe = engine.addEntity()
+  Transform.create(probe, { position: Vector3.create(0, -100, 0) })
+  // Follows the player; the continuous ray goes with it. Only moved when the player has moved a
+  // little, so standing still doesn't send it to the renderer every frame.
+  let at = Vector3.create(0, -100, 0)
+  engine.addSystem(() => {
+    const me = Transform.getOrNull(engine.PlayerEntity)
+    if (!me) return
+    const p = me.position
+    if (Math.abs(p.x - at.x) < 0.05 && Math.abs(p.z - at.z) < 0.05 && Math.abs(p.y + PAD_RAY_LIFT - at.y) < 0.05) return
+    at = Vector3.create(p.x, p.y + PAD_RAY_LIFT, p.z)
+    Transform.getMutable(probe).position = at
+  })
+  raycastSystem.registerGlobalDirectionRaycast(
+    {
+      entity: probe,
+      opts: {
+        direction: Vector3.create(0, -1, 0),
+        maxDistance: PAD_RAY_LENGTH,
+        queryType: RaycastQueryType.RQT_QUERY_ALL,
+        continuous: true,
+        collisionMask: ColliderLayer.CL_PHYSICS
+      }
+    },
+    (result) => {
+      let pad = false
+      let mesh = ''
+      for (const hit of result.hits) {
+        if (hit.entityId === panels) {
+          pad = true
+          mesh = hit.meshName ?? ''
+          break
+        }
+        if (!mesh) mesh = `${hit.meshName ?? '?'} (entity ${hit.entityId})`
+      }
+      if (pad) padSeen = true
+      onPadNow = pad
+      if (mesh !== lastPadMesh) {
+        lastPadMesh = mesh
+        console.log(`[tee-off] standing on ${pad ? 'a putting area' : 'something else'}: ${mesh || 'nothing'}`)
+      }
+    }
+  )
+}
+
+/** On a putting area (or not known yet). Held true for a moment after stepping off. */
+function onPuttingArea(dt: number): boolean {
+  if (!padSeen) return true
+  offPadFor = onPadNow ? 0 : offPadFor + dt
+  return offPadFor < OFF_PAD_SECONDS
+}
 
 /**
  * Bays by walking, on every platform:
  *   - walk up to a free bay's ball and it's yours (once per visit: walk away and back to do it
  *     again; never for the bay that's already yours, mid-shot or with a menu open; quietly
- *     nothing for a bay that's in use or closed). The Pixel Golf menu only opens the first time;
- *     after that, click a Tee Off screen for it.
+ *     nothing for a bay that's in use or closed). With a round in progress the next shot starts
+ *     straight away; otherwise the Pixel Golf menu opens (Tee off in the club picker then starts
+ *     the shot). Clicking a Tee Off screen always opens the menu.
  *   - walk away from your bay's ball and the bay is freed for everyone, and the menus close
  * The Tee Off screens still work as before.
  */
+/**
+ * F (with no menu open): the Pixel Golf menu for the bay you're standing in, the same as clicking
+ * its Tee Off screen used to. Free bay: it becomes yours. Mid-shot it works while you're setting
+ * power or curve; the shot is put on hold and you're back at the power meter when the menu
+ * closes. Not in the tutorial, and nothing if you're not in a bay.
+ */
+function openBayMenuByKey(): void {
+  if (tutorial.active || !menuKeyAllowed()) return
+  // Mid-shot the walk-in check is paused, so the bay is the one you're playing
+  const bay = playerBusy() ? myBay() : bayHere
+  if (!bay || bay === TUTORIAL_BAY) return
+  stepOutForMenu()
+  teeOff(bay, false, true)
+}
+
+/** The bay you're standing in (on its putting area, near its ball), or 0 */
+let bayHere = 0
+
 export function setupAutoTeeOff(menuOpen: () => boolean): void {
   let lastBay = 0
+  onMenuKey(openBayMenuByKey)
   // A bay is only let go once you've been near its ball since it became yours, so clicking a
   // Tee Off screen from a little way off doesn't lose the bay before you've walked up to it
   let armedFor = 0
   menuOpenFn = menuOpen
-  engine.addSystem(() => {
+  setupPadCheck()
+  engine.addSystem((dt) => {
     if (menuOpen()) menuOpenAt = Date.now()
+    const onPad = onPuttingArea(dt)
+    // Stepped off the putting area onto the wood: the bay's menus close (the bay stays yours
+    // until you walk 10 m away; step back on and the menu opens again)
+    if (!onPad && !tutorial.active && (pixelGolfMenu.display === 'flex' || clubMenu.display === 'flex')) closeBayMenus()
     if (playerBusy()) return
     let near = 0
     let nearest = AUTO_TEE_OFF_RANGE
     let mineDistance = -1
+    let stillIn = false
     const mine = myBay()
+    // Distances from each bay's tee, not its ball: the ball is out on the range during a shot,
+    // and for a frame after it's put back its distance is still the old one, which once read as
+    // the player walking away and let their bay go
+    const me = Transform.getOrNull(engine.PlayerEntity)
+    if (!me) return
     for (const g of getAllGames()) {
-      if (g.bay > 0 && g.state.distanceToBall <= nearest) {
-        nearest = g.state.distanceToBall
+      const t = g.teePosition()
+      const dx = t.x - me.position.x
+      const dz = t.z - me.position.z
+      const d = Math.sqrt(dx * dx + dz * dz)
+      if (g.bay > 0 && d <= nearest) {
+        nearest = d
         near = g.bay
       }
-      if (g.bay === mine) mineDistance = g.state.distanceToBall
+      if (g.bay === mine) mineDistance = d
+      // Still counts as in the last bay until you're a little further out than you came in,
+      // so standing on the edge doesn't keep opening the menu
+      if (near === 0 && g.bay === lastBay && d <= AUTO_TEE_OFF_RANGE + EDGE_LEEWAY) stillIn = true
     }
+    if (near === 0 && stillIn) near = lastBay
+    // Only on a putting area counts as in a bay
+    if (!onPad) near = 0
 
     // Walked away from your bay: free it (not the tutorial bay, which is never claimed)
     if (mine && mine !== TUTORIAL_BAY && mineDistance >= 0) {
@@ -297,11 +417,23 @@ export function setupAutoTeeOff(menuOpen: () => boolean): void {
       }
     }
 
+    bayHere = near
     if (near !== lastBay) {
       // Left the last bay (or walked into a new one): this one gets its turn
       lastBay = near
-      if (near === 0 || near === myBay() || menuOpen()) return
-      if (teeOff(near, true, 'auto')) armedFor = near
+      if (near === 0 || menuOpen()) return
+      // Walked back into your own bay after stepping out of it: the menu opens again
+      if (near === myBay()) {
+        if (near !== TUTORIAL_BAY && !tutorial.active) openPixelGolfMenu(true)
+        return
+      }
+      // With a round in progress you carry straight on with your next shot; otherwise the menu
+      // opens to pick a club, and Tee off puts you into the shot
+      const continuing = roundInProgress() !== null
+      if (teeOff(near, true, !continuing)) {
+        armedFor = near
+        if (continuing) requestShotStart(0, true)
+      }
     }
   })
 }
@@ -356,42 +488,7 @@ export function setupTeeOffPanels(): void {
     return
   }
 
-  const boxes: Entity[] = []
-  for (const p of PANELS) {
-    const box: Entity = engine.addEntity()
-    Transform.create(box, {
-      parent: panels,
-      position: Vector3.create(p.box.x, p.box.y, p.box.z),
-      rotation: Quaternion.fromEulerDegrees(0, p.box.yaw, 0),
-      scale: Vector3.create(BOX_SIZE.x, BOX_SIZE.y, BOX_SIZE.z)
-    })
-    MeshCollider.setBox(box, ColliderLayer.CL_POINTER)
-    pointerEventsSystem.onPointerDown(
-      { entity: box, opts: { button: InputAction.IA_POINTER, hoverText: HOVER_TEXT, maxDistance: MAX_DISTANCE } },
-      () => {
-        if (menuJustOpen()) return
-        teeOff(p.ball)
-      }
-    )
-    boxes.push(box)
-  }
-
-  // Mid-shot the screens don't offer "Tee Off" at all, so it's clear the menu isn't available
-  let shownBusy = false
-  engine.addSystem(() => {
-    const busy = isShotInProgress()
-    if (busy === shownBusy) return
-    shownBusy = busy
-    for (const box of boxes) {
-      const pe = PointerEvents.getMutableOrNull(box)
-      if (!pe) continue
-      for (const e of pe.pointerEvents) {
-        if (!e.eventInfo) continue
-        e.eventInfo.hoverText = busy ? '' : HOVER_TEXT
-        e.eventInfo.showFeedback = !busy
-      }
-    }
-  })
+  // The screens aren't clickable any more: F opens the bay's menu instead (openBayMenuByKey)
 }
 
 // --- Score screens -------------------------------------------------------------

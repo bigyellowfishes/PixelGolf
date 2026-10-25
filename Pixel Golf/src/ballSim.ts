@@ -71,7 +71,6 @@ export function outOfRange(x: number, y: number, z: number): boolean {
 
 export type Vec3 = { x: number; y: number; z: number }
 export type Quat = { x: number; y: number; z: number; w: number }
-const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
 
 /**
  * A recorded shot, decoded and ready to play.
@@ -225,6 +224,28 @@ function courseTop(x: number, z: number): number {
 
 const NEIGHBOURS = [[0, 0], [CLEAR_CELL, 0], [-CLEAR_CELL, 0], [0, CLEAR_CELL], [0, -CLEAR_CELL]]
 
+/**
+ * The highest point of the course under a ring of this radius round (x, z), scene coordinates:
+ * sampled every 2 m round the ring, a cell in and a cell out. Each sample is the top of a 4 m
+ * square, so it's never lower than the ground there. -Infinity if the course isn't there.
+ * Samples higher than ignoreAbove are left out (a cliff wall beside a target, say).
+ * For the hot target ring (hotTarget.ts), so it never dips into a hill.
+ */
+export function courseHighestOnRing(x: number, z: number, radius: number, ignoreAbove = Infinity): number {
+  ensureWorld()
+  let top = -Infinity
+  const steps = Math.max(12, Math.ceil((2 * Math.PI * radius) / 2))
+  for (const r of [radius - CLEAR_CELL, radius, radius + CLEAR_CELL]) {
+    if (r < 0) continue
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2
+      const h = courseTop(x + Math.sin(a) * r, z + Math.cos(a) * r)
+      if (h > top && h < 1e8 && h <= ignoreAbove) top = h
+    }
+  }
+  return top
+}
+
 /** Whether the ball's path over the next `seconds` is clear of everything under it. */
 function clearOfCourse(seconds: number): boolean {
   const p = ball.position
@@ -369,12 +390,13 @@ export type Wind = { x: number; z: number }
 
 /** The ball counts as in the air once it hasn't touched the course for this many substeps */
 const AIR_SUBSTEPS = 3
+/** A headwind never slows the ball's ground speed below this (m/s), so it can't blow it back */
+const WIND_MIN_GROUND_SPEED = 2
 
 /** The push on the ball (mass 1, so a force is an acceleration) for this wind. */
 function windPush(wind?: Wind): { x: number; z: number } {
   if (!wind || !Number.isFinite(wind.x) || !Number.isFinite(wind.z)) return { x: 0, z: 0 }
   return { x: wind.x * WIND.push, z: wind.z * WIND.push }
-  //return { x: 10, z: 10 }
 }
 
 
@@ -399,6 +421,10 @@ export class ShotSim {
   // Substeps run, and the last one the ball touched the course in (for the wind: air only)
   private substep = 0
   private lastTouch = -1000
+  // Came down for the first time after being in the air. From then on (the bounces and the
+  // roll) the wind leaves the ball alone: pushing it on the little hops after landing is what
+  // let a headwind roll balls backwards.
+  private landed = false
 
   constructor(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind) {
     const push = windPush(wind)
@@ -413,6 +439,7 @@ export class ShotSim {
 
   /** The ball is touching the course (the collide event, or the ray guard putting it back). */
   touched(): void {
+    if (this.substep > AIR_SUBSTEPS && this.substep - this.lastTouch > AIR_SUBSTEPS) this.landed = true
     this.lastTouch = this.substep
   }
 
@@ -454,10 +481,8 @@ export class ShotSim {
     for (let s = 0; s < SUBSTEPS; s++) {
       fromPrev.copy(ball.position)
       // Wind pushes the ball while it's in the air (cannon clears the force after each step)
-      //const inAir = clear || this.substep - this.lastTouch > AIR_SUBSTEPS
-      const inAir = this.pos.y > 10
-      const yAirMulti = clamp((this.pos.y * 0.1) - 1, 0, 1)
-      if ((this.windX !== 0 || this.windZ !== 0) && inAir) ball.force.set(this.windX * yAirMulti, 0, this.windZ * yAirMulti)
+      const inAir = !this.landed && (clear || this.substep - this.lastTouch > AIR_SUBSTEPS)
+      if ((this.windX !== 0 || this.windZ !== 0) && inAir) this.pushWithWind()
       world!.step(SUB_DT)
       this.substep++
       if (!clear) keepOutOfCourse(fromPrev)
@@ -478,6 +503,31 @@ export class ShotSim {
       this.done = true
     }
     this.record()
+  }
+
+  /**
+   * The wind's push for this substep. A tailwind or crosswind always applies; a headwind can
+   * slow the ball but never turn it round: once the ball's ground speed is down to
+   * WIND_MIN_GROUND_SPEED the part of the push against its travel is dropped.
+   */
+  private pushWithWind(): void {
+    let fx = this.windX
+    let fz = this.windZ
+    const v = ball.velocity
+    const speed = Math.sqrt(v.x * v.x + v.z * v.z)
+    if (speed > 1e-4) {
+      const ux = v.x / speed
+      const uz = v.z / speed
+      const along = fx * ux + fz * uz
+      if (along < 0) {
+        // Never take off more than would bring it down to the floor this substep
+        const room = Math.max(0, speed - WIND_MIN_GROUND_SPEED) / SUB_DT
+        const keep = Math.max(along, -room)
+        fx += (keep - along) * ux
+        fz += (keep - along) * uz
+      }
+    }
+    ball.force.set(fx, 0, fz)
   }
 
   private roll(dx: number, dz: number): void {
@@ -762,6 +812,35 @@ export function probeSurface(x: number, z: number, aroundY: number): { y: number
     ny: probeRay.hitNormalWorld.y,
     nz: probeRay.hitNormalWorld.z
   }
+}
+
+/**
+ * The exact height of the course at (x, z), scene coordinates: the highest course triangle
+ * straight above or below that point, worked out from the triangles themselves (no physics ray).
+ * null if no part of the course is there.
+ */
+export function courseSurfaceAt(x: number, z: number): number | null {
+  ensureWorld()
+  const lx = x - COURSE_OFFSET.x
+  const lz = z - COURSE_OFFSET.z
+  const ix = Math.floor((lx - clearMinX) / CLEAR_CELL)
+  const iz = Math.floor((lz - clearMinZ) / CLEAR_CELL)
+  if (ix < 0 || iz < 0 || ix >= clearNX || iz >= clearNZ) return null
+  let best: number | null = null
+  for (const t of cellTris[ix * clearNZ + iz]) {
+    const a = courseIdx[t * 3] * 3, b = courseIdx[t * 3 + 1] * 3, c = courseIdx[t * 3 + 2] * 3
+    const V = courseVerts
+    const x0 = V[a], z0 = V[a + 2], x1 = V[b], z1 = V[b + 2], x2 = V[c], z2 = V[c + 2]
+    const den = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2)
+    if (Math.abs(den) < 1e-9) continue
+    const w0 = ((z1 - z2) * (lx - x2) + (x2 - x1) * (lz - z2)) / den
+    const w1 = ((z2 - z0) * (lx - x2) + (x0 - x2) * (lz - z2)) / den
+    const w2 = 1 - w0 - w1
+    if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue
+    const y = w0 * V[a + 1] + w1 * V[b + 1] + w2 * V[c + 1] + COURSE_OFFSET.y
+    if (best === null || y > best) best = y
+  }
+  return best
 }
 
 /** Builds the physics world now rather than on the first shot (it takes a moment). */

@@ -2,7 +2,7 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
-import { shop, closeShop } from '../shop'
+import { shop, closeShop, SHOW_CLUBS } from '../shop'
 import { profile, buyCosmetic, equipCosmetic } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind } from '../ledger/rules'
 import { playUi } from '../sfx'
@@ -174,7 +174,7 @@ export function ShopMenu(props: {}) {
         />
 
         {/* Tabs */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { bottom: 10 } }}>
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { bottom: 10 }, display: SHOW_CLUBS ? 'flex' : 'none' }}>
           {tab('Balls', 'ball', (width - 40) / 2)}
           {tab('Clubs', 'club', (width - 40) / 2)}
         </UiEntity>

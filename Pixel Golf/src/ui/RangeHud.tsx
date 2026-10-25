@@ -2,7 +2,8 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
-import { profile, range, hotSecondsLeft, currentCeiling, tutorial } from '../ledger/client'
+import { profile, range, hotSecondsLeft, currentCeiling, currentFloor, tutorial, effectiveHot } from '../ledger/client'
+import { hotLook, faded } from '../hotLooks'
 import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
 import { toggleSettings } from './SettingsMenu'
@@ -25,12 +26,12 @@ const CARD_TOP = 150
 // On a phone it sits in the top right corner (the Settings cog is on the card itself)
 const CARD_TOP_PHONE = 20
 
-// Phones get a tidier card: no multiplier box (the round card shows the roll), no "Pixel
-// Points" label and no frame rate readout, everything PHONE_SCALE times bigger, and pushed
-// out towards the right edge (PHONE_RIGHT_SHIFT in mobile.ts). PHONE_COMPACT false keeps the
-// full card on phones.
-const PHONE_COMPACT = true
-const PHONE_SCALE = 1.25
+// Phones get the same card as desktop (2026-10-20: same look everywhere), PHONE_SCALE times
+// bigger and pushed out towards the right edge (PHONE_RIGHT_SHIFT in mobile.ts). PHONE_COMPACT
+// true brings back the old tidier phone card (no multiplier box, no "Pixel Points" label, no
+// frame rate readout, no wind words). The previous version is in RangeHud.tsx.bak.
+const PHONE_COMPACT = false
+const PHONE_SCALE = 1.1
 const CARD_WIDTH = 240
 
 // The scale every size in the card goes through: 1 on desktop, PHONE_SCALE on a phone
@@ -114,14 +115,18 @@ export function RangeHud(props: {}) {
   // Read the live values each frame
   const left = hotSecondsLeft()
   // No hot target during the tutorial
-  state.hotDisplay = range.hot && left > 0 && !tutorial.active ? 'flex' : 'none'
-  state.hotName = range.hot.replace(/\d+$/, '')
-  state.hotTime = `0:${left < 10 ? '0' : ''}${left}`
+  // In the tutorial only its lesson hot target (shot 5), which has no countdown
+  const hotZone = effectiveHot()
+  state.hotDisplay = hotZone && (tutorial.active || left > 0) ? 'flex' : 'none'
+  state.hotName = hotZone.replace(/\d+$/, '')
+  state.hotTime = tutorial.active ? 'Now' : `0:${left < 10 ? '0' : ''}${left}`
+  const hot = hotLook(state.hotName)
   const round = getRoundProgress()
   state.ballText = `Ball ${round.ball}/${round.balls}`
   state.roundScore = fmt(round.score)
   const ceiling = currentCeiling()
-  state.multiplierText = ceiling > 2 ? `2x to ${ceiling}x` : '2x'
+  const floor = currentFloor()
+  state.multiplierText = ceiling > floor ? `${floor}x to ${ceiling}x` : `${floor}x`
   state.playersText = range.players === 1 ? '1 player here' : `${range.players} players here`
   state.levelText = profile.ready ? `LV ${profile.level}` : 'LV -'
   state.pointsText = profile.ready ? fmt(profile.points) : '-'
@@ -213,15 +218,17 @@ export function RangeHud(props: {}) {
             padding: { left: z(12), right: z(12) },
             margin: { bottom: z(10) },
             borderRadius: z(14),
+            borderWidth: z(2),
+            borderColor: hot.rim,
             display: state.hotDisplay
           }}
-          uiBackground={{ color: { r: 1, g: 0.549, b: 0.102, a: 1 } }}
+          uiBackground={{ color: hot.fill }}
         >
           <UiEntity uiTransform={{ width: z(112), height: z(38), flexDirection: 'column' }}>
-            <Label value="HOT TARGET  2X" fontSize={z(11)} color={{ r: 1, g: 0.925, b: 0.839, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
-            <Label value={state.hotName} fontSize={z(18)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
+            <Label value="HOT TARGET  2X" fontSize={z(11)} color={faded(hot.text)} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
+            <Label value={state.hotName} fontSize={z(18)} color={hot.text} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
           </UiEntity>
-          <Label value={state.hotTime} fontSize={z(20)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />
+          <Label value={state.hotTime} fontSize={z(20)} color={hot.text} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />
         </UiEntity>
 
         {/* Round */}

@@ -15,7 +15,7 @@ import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { getPlayer } from '@dcl/sdk/players'
 
 import { Game } from './game'
-import { tutorial, solo, leaveSoloBay } from './ledger/client'
+import { tutorial, solo, leaveSoloBay, tutorialLesson } from './ledger/client'
 import { SHOP_NPC_IDS } from './shop'
 
 /**
@@ -24,9 +24,10 @@ import { SHOP_NPC_IDS } from './shop'
  * Players don't see each other while one of them is in the tutorial, both ways round:
  *   - a player in the tutorial has every other avatar in the scene hidden from them
  *   - everyone else has bay 19 hidden from them, so tutorial players are invisible to the range
- * Both are one AvatarModifierArea on this player's own screen, which always leaves this player
- * out (excludeIds), so you never vanish from your own view. It covers the whole scene while the
- * tutorial runs and just bay 19 the rest of the time.
+ * Both are AvatarModifierAreas on this player's own screen, which always leave this player out
+ * (excludeIds), so you never vanish from your own view: a fixed box round bay 19 all the time,
+ * and a whole-scene area added while you're in the tutorial or the solo bay. Every couple of
+ * seconds each area is nudged so the explorer re-checks who is inside (phones missed some).
  *
  * And a floating "SHOOT HERE" over the orange target, the first thing the tutorial asks for. The
  * hot target's 2X is hidden during the tutorial (hotTarget.ts), so this is the only marker.
@@ -36,6 +37,12 @@ import { SHOP_NPC_IDS } from './shop'
 // The area is a little bigger than that, so nobody at the edge is missed.
 const SCENE_CENTRE = Vector3.create(224, 60, 224)
 const SCENE_SIZE = Vector3.create(640, 320, 640)
+
+// Every this often each privacy area is nudged (its size changes by a hair and back), which makes
+// the explorer check again who is inside it. Phones in particular didn't always hide avatars that
+// were already standing inside an area when it appeared, moved or changed.
+const REFRESH_SECONDS = 2
+const NUDGE = 0.01
 
 // Bay 19's private box: wide along the line of bays (they're about 9 m apart, so it stops short
 // of bay 18), deep enough for the player standing behind the ball, and tall enough for a jump.
@@ -132,8 +139,22 @@ export function setupTutorialVisuals(
     })
   }
 
+  // While you're in the tutorial or the solo bay: everyone else in the whole scene is hidden from
+  // you. Its own fixed entity, added and removed whole, rather than the bay 19 box being moved and
+  // resized (phones didn't always pick that up).
+  const widePrivacy = engine.addEntity()
+  Transform.create(widePrivacy, { position: SCENE_CENTRE })
+  const wideModifiers = [
+    AvatarModifierType.AMT_HIDE_AVATARS,
+    AvatarModifierType.AMT_HIDE_NAMETAGS,
+    AvatarModifierType.AMT_DISABLE_PASSPORTS
+  ]
+  let myIds: string[] = [...SHOP_NPC_IDS]
+
   let shownWide: boolean | null = null
   let shownMe = ''
+  let refreshClock = 0
+  let nudged = false
 
   // --- The marker -----------------------------------------------------------
   const marker = engine.addEntity()
@@ -174,7 +195,9 @@ export function setupTutorialVisuals(
     if (me !== shownMe) {
       shownMe = me
       // The shopkeepers are avatars too: never hide them
-      AvatarModifierArea.getMutable(privacy).excludeIds = me ? [me, me.toLowerCase(), ...SHOP_NPC_IDS] : [...SHOP_NPC_IDS]
+      myIds = me ? [me, me.toLowerCase(), ...SHOP_NPC_IDS] : [...SHOP_NPC_IDS]
+      AvatarModifierArea.getMutable(privacy).excludeIds = myIds
+      if (AvatarModifierArea.has(widePrivacy)) AvatarModifierArea.getMutable(widePrivacy).excludeIds = myIds
     }
 
     // The solo bay's box leaves out you and everyone who hasn't joined it
@@ -195,13 +218,22 @@ export function setupTutorialVisuals(
       }
     }
 
-    // The whole scene while you're in the tutorial, otherwise just bay 19
+    // The whole scene while you're in the tutorial or the solo bay; bay 19's box is always there
     if (wide !== shownWide) {
       shownWide = wide
-      const t = Transform.getMutable(privacy)
-      t.position = wide ? SCENE_CENTRE : bayCentre
-      t.rotation = wide ? Quaternion.Identity() : bayRotation
-      AvatarModifierArea.getMutable(privacy).area = wide ? SCENE_SIZE : baySize
+      if (wide) AvatarModifierArea.createOrReplace(widePrivacy, { area: SCENE_SIZE, excludeIds: myIds, modifiers: wideModifiers })
+      else AvatarModifierArea.deleteFrom(widePrivacy)
+    }
+
+    // Every couple of seconds, nudge each area so the explorer checks again who's inside
+    refreshClock += dt
+    if (refreshClock >= REFRESH_SECONDS) {
+      refreshClock = 0
+      nudged = !nudged
+      const d = nudged ? NUDGE : 0
+      AvatarModifierArea.getMutable(privacy).area = Vector3.create(baySize.x + d, baySize.y, baySize.z)
+      if (soloPrivacy) AvatarModifierArea.getMutable(soloPrivacy).area = Vector3.create(baySize.x + d, baySize.y, baySize.z)
+      if (AvatarModifierArea.has(widePrivacy)) AvatarModifierArea.getMutable(widePrivacy).area = Vector3.create(SCENE_SIZE.x + d, SCENE_SIZE.y, SCENE_SIZE.z)
     }
 
     // SHOOT HERE: tutorial only, not solo
@@ -216,11 +248,13 @@ export function setupTutorialVisuals(
         markerBase = Vector3.create(t.position.x, FLAG_TOP + MARKER_CLEARANCE + BOB_HEIGHT, t.position.z)
       }
     }
-    if (inTutorial !== markerShown) {
-      markerShown = inTutorial
-      TextShape.getMutable(marker).text = inTutorial ? MARKER_TEXT : ''
+    // On the hot target lesson the 2X marker floats over the orange target instead
+    const showMarker = inTutorial && !tutorialLesson.hot
+    if (showMarker !== markerShown) {
+      markerShown = showMarker
+      TextShape.getMutable(marker).text = showMarker ? MARKER_TEXT : ''
     }
-    if (inTutorial && markerBase) {
+    if (showMarker && markerBase) {
       const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
       Transform.getMutable(marker).position = Vector3.create(markerBase.x, markerBase.y + bob, markerBase.z)
     } else if (Transform.get(marker).position.y !== HIDDEN.y) {

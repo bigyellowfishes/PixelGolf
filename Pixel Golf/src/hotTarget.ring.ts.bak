@@ -1,0 +1,125 @@
+import { engine, Entity, Transform, GltfContainer, ColliderLayer } from '@dcl/sdk/ecs'
+import { Quaternion, Vector3 } from '@dcl/sdk/math'
+import { effectiveHot } from './ledger/client'
+import { courseSurfaceAt } from './ballSim'
+
+// The hot target marker: the Multiplier ring (assets/hot/Multiplier.glb), a see-through band with
+// MULTIPLIER and an arrow round it, sitting around whichever target is hot right now, spinning
+// slowly and bobbing up and down. The server picks the target and rotates it every 30 seconds
+// for everyone (ledger/server.ts); in the tutorial it's the lesson target on its last shot
+// (effectiveHot). Hidden while nothing is hot.
+//
+// The previous marker (the 2X badge with its timer pill) is kept in src/hotTarget.ts.bak, with
+// its textures still in assets/hot.
+
+const MODEL = 'assets/hot/Multiplier.glb'
+// The ring in the model is 2 m across (radius 1) and 0.6 m tall, centred on its origin.
+const MODEL_RADIUS = 1
+const MODEL_HEIGHT = 0.6
+/**
+ * Every part of the model and how far its bottom hangs below the origin (model units), so each
+ * one can be kept clear of the ground under it. disc: a flat filled circle (the ground under all
+ * of it counts); otherwise a ring (only the ground under its edge counts).
+ * The current model is just the band. (Multiplierv2 with the funnel circles under it had them
+ * here too: { radius: 1.027, below: 0.196, disc: true }, { radius: 0.68, below: 0.43, disc: true }.)
+ */
+const PARTS: { radius: number; below: number; disc: boolean }[] = [{ radius: 1, below: 0.3, disc: false }]
+/**
+ * How high the band's centre sits above the hole in the middle of the target, at the bottom of
+ * the bob, in model units (so it scales with the ring). 0.75 keeps it where it was when the
+ * funnel's last circle touched the hole.
+ */
+const CENTRE_ABOVE_HOLE = 0.75
+/** The ring's radius as a share of the target's radius: a little outside its edge */
+const RING_MARGIN = 1.08
+/** Biggest ring radius (metres), for the long Black target (150 m) */
+const RADIUS_MAX = 26
+/**
+ * The band and the other circles stay at least this far above the real ground under them (at the
+ * bottom of the bob), so nothing ever dips into a slope or a hill (metres)
+ */
+const PART_CLEAR = 0.5
+/** Ground more than this far above the target's own ground counts as a wall, not ground (metres) */
+const CLIFF_SKIP = 10
+/** Bob: metres up and down, and seconds per bob */
+const BOB_HEIGHT = 0.6
+const BOB_SECONDS = 2.4
+/** Spin, degrees a second. The sign sets the direction: flip it to spin the other way. */
+const SPIN_SPEED = -25
+const HIDDEN = Vector3.create(0, -100, 0)
+
+export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | undefined): void {
+  const ring = engine.addEntity()
+  Transform.create(ring, { position: HIDDEN })
+  GltfContainer.create(ring, {
+    src: MODEL,
+    // Looks only: the ball and the player pass straight through it
+    visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+    invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+  })
+
+  let shownZone = ''
+  let base = HIDDEN
+  let scale = Vector3.One()
+  let clock = 0
+  let yaw = 0
+
+  engine.addSystem((dt) => {
+    const zone = effectiveHot()
+    if (zone !== shownZone) {
+      shownZone = zone
+      const ent = zone ? zoneEntity(zone) : undefined
+      const t = ent ? Transform.getOrNull(ent) : null
+      if (!t) {
+        base = HIDDEN
+        if (zone) console.log(`[hot] no target entity named ${zone}, the ring is hidden`)
+      } else {
+        // Sized by the target's narrower side: the long Black strip (20 x 150) gets a ring round
+        // its width, not one reaching out into the cliffs
+        const radius = Math.min(RADIUS_MAX, (Math.min(Math.abs(t.scale.x), Math.abs(t.scale.z)) / 2) * RING_MARGIN)
+        // Always one scale for all three: the ring is never stretched or squashed
+        const s = radius / MODEL_RADIUS
+        scale = Vector3.create(s, s, s)
+        // The highest ground under the ring, leaving out walls more than CLIFF_SKIP above the
+        // ground at the target (the back cliff beside Black would otherwise lift its ring 80 m)
+        const x = t.position.x
+        const z = t.position.z
+        // The hole's surface in the middle of the target (exact, from the course's triangles)
+        const hole = courseSurfaceAt(x, z) ?? t.position.y
+        // The highest real ground under a ring (or a whole disc) of this radius, leaving out
+        // walls more than CLIFF_SKIP above the hole (the back cliff beside Black)
+        const groundUnder = (r: number, disc: boolean) => {
+          let g = hole
+          for (const f of disc ? [0.25, 0.5, 0.75, 1] : [1]) {
+            const steps = Math.max(16, Math.ceil((2 * Math.PI * r * f) / 2))
+            for (let i = 0; i < steps; i++) {
+              const a = (i / steps) * Math.PI * 2
+              const h = courseSurfaceAt(x + Math.sin(a) * r * f, z + Math.cos(a) * r * f)
+              if (h !== null && h > g && h <= hole + CLIFF_SKIP) g = h
+            }
+          }
+          return g
+        }
+        // The band's centre CENTRE_ABOVE_HOLE above the hole at the bottom of the bob...
+        let y = hole + CENTRE_ABOVE_HOLE * s
+        // ...unless that would put it into the ground, then it sits higher
+        for (const p of PARTS) y = Math.max(y, groundUnder(p.radius * s, p.disc) + PART_CLEAR + p.below * s)
+        base = Vector3.create(x, y, z)
+        console.log(`[hot] ring on ${zone} at ${base.x.toFixed(1)}, ${base.y.toFixed(1)}, ${base.z.toFixed(1)}, scale ${s.toFixed(1)} (${(2 * radius).toFixed(0)} m across, ${(MODEL_HEIGHT * s).toFixed(1)} m tall)`)
+      }
+    }
+
+    // Nothing hot: put away once, not every frame
+    if (base === HIDDEN) {
+      if (Transform.get(ring).position.y !== HIDDEN.y) Transform.getMutable(ring).position = HIDDEN
+      return
+    }
+    clock += dt
+    yaw = (((yaw + SPIN_SPEED * dt) % 360) + 360) % 360
+    const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
+    const tr = Transform.getMutable(ring)
+    tr.position = Vector3.create(base.x, base.y + BOB_HEIGHT + bob, base.z)
+    tr.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
+    tr.scale = scale
+  })
+}

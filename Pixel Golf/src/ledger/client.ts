@@ -3,7 +3,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { room } from './room'
 import { ShotPath, Vec3, decodePath } from '../ballSim'
-import { WIND, windVector, HOT, Period, PERIODS, levelProgress, multiplierCeiling, isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
+import { WIND, windVector, HOT, Period, PERIODS, levelProgress, multiplierCeiling, multiplierFloor,isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
 
 /**
  * The scene's side of the ledger.
@@ -58,10 +58,29 @@ export const wind = {
   ready: false
 }
 
-/** The wind a shot should fly in right now: the range's, or calm in the tutorial. */
+/**
+ * The tutorial's own wind and hot target, set by game.ts for the lesson on each shot: a slight
+ * wind on shot 4 and a 2X hot target on the orange target on shot 5. Everything else in the
+ * tutorial is calm and has no hot target. Only on this player's screen.
+ */
+export const tutorialLesson = { windDir: 0, windSpeed: 0, hot: '' }
+
+/** The wind as this player sees it: the tutorial's lesson wind in the tutorial, else the range's. */
+export function effectiveWind(): { dir: number; speed: number; ready: boolean } {
+  if (tutorial.active) return { dir: tutorialLesson.windDir, speed: tutorialLesson.windSpeed, ready: tutorialLesson.windSpeed > 0 }
+  return wind
+}
+
+/** The hot target as this player sees it: the tutorial's lesson target in the tutorial, else the range's. */
+export function effectiveHot(): string {
+  return tutorial.active ? tutorialLesson.hot : range.hot
+}
+
+/** The wind a shot should fly in right now: the range's, or the tutorial's (calm except its wind lesson). */
 export function shotWind(): { x: number; z: number } {
-  if (tutorial.active || !wind.ready) return { x: 0, z: 0 }
-  return windVector(wind.dir, wind.speed)
+  const w = effectiveWind()
+  if (!w.ready) return { x: 0, z: 0 }
+  return windVector(w.dir, w.speed)
 }
 
 /** Seconds until the wind changes */
@@ -353,6 +372,24 @@ export function amIAdmin(): boolean {
   return isAdminWallet(myId()) || isAdminName(myName())
 }
 
+/** The dev panel's switches as the server last said (ui/DevPanel.tsx shows them) */
+export const dev = { extra: 0, hotHold: false, windHold: false }
+
+/** Admin only: make this target hot now ('' = back to the random rotation). hold: keep it there. */
+export function sendAdminHot(zone: string, hold: boolean): void {
+  void room.send('adminHot', { zone, hold })
+}
+
+/** Admin only: count this many pretend extra players in the space. */
+export function sendAdminPlayers(extra: number): void {
+  void room.send('adminPlayers', { extra: Math.max(0, Math.round(extra)) })
+}
+
+/** Admin only: set the wind (dir degrees, speed m/s; speed below 0 = random change). hold: keep it. */
+export function sendAdminWind(dir: number, speed: number, hold: boolean): void {
+  void room.send('adminWind', { dir, speed, hold })
+}
+
 /** Admin only: ask the server to wipe every player's progress and all the leaderboards. */
 export function sendAdminReset(): void {
   void room.send('adminReset', { confirm: RESET_CONFIRM })
@@ -374,9 +411,9 @@ export function afkMinute(): void {
 // Reading the range
 // ---------------------------------------------------------------------------
 
-/** Whether a zone is the hot target right now. Never during the tutorial, which doesn't show one. */
+/** Whether a zone is the hot target right now. In the tutorial, only its lesson target. */
 export function isHot(zone: string): boolean {
-  if (tutorial.active) return false
+  if (tutorial.active) return zone !== '' && zone === tutorialLesson.hot
   return range.hot !== '' && zone === range.hot && Date.now() < range.hotEndsAt + 1500
 }
 
@@ -388,6 +425,11 @@ export function hotSecondsLeft(): number {
 /** The biggest multiplier a round can roll right now. */
 export function currentCeiling(): number {
   return multiplierCeiling(range.players)
+}
+
+/** The lowest multiplier a round can roll right now (2x, then 5x at 5+ players, 10x at 10+, ...). */
+export function currentFloor(): number {
+  return multiplierFloor(range.players)
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +485,13 @@ export function setupLedgerClient(): void {
   room.onMessage('tutorialReward', (d) => {
     const v = { xp: d.xp, level: d.level, unlocked: parse<string[]>(d.unlocked, []) }
     for (const fn of tutorialRewardFns) fn(v)
+  })
+
+  room.onMessage('devState', (d) => {
+    const s = parse<{ extra?: number; hotHold?: boolean; windHold?: boolean }>(d.json, {})
+    dev.extra = s.extra ?? 0
+    dev.hotHold = !!s.hotHold
+    dev.windHold = !!s.windHold
   })
 
   room.onMessage('mySettings', (d) => {

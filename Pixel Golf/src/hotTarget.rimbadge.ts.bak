@@ -1,0 +1,186 @@
+import {
+  engine,
+  Entity,
+  Transform,
+  TextShape,
+  Font,
+  TextAlignMode,
+  MeshRenderer,
+  Material,
+  MaterialTransparencyMode,
+  Billboard,
+  BillboardMode
+} from '@dcl/sdk/ecs'
+import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
+import { effectiveHot, hotSecondsLeft, tutorial } from './ledger/client'
+import { HOT } from './ledger/rules'
+import { courseSurfaceAt } from './ballSim'
+
+// The hot target marker, in two parts:
+//   - the RIM: a glowing ring lying flat round the hot target's edge, pulsing brighter and
+//     dimmer, so the target itself looks lit up from anywhere on the range. It sits on the grass
+//     at the rim, so it never covers other targets, the flag or the ground.
+//   - the BADGE: a round "2X" (blue rim, pale face, like the coin) above the flag, always facing
+//     you and scaled by how far away it is, so it reads the same size on screen near or far. It
+//     gives a little pulse in the last few seconds before the hot target moves on.
+// The countdown itself is on the range card. The server picks the target and rotates it every
+// 30 seconds for everyone (ledger/server.ts); in the tutorial it's the lesson target on its last
+// shot (effectiveHot). Hidden while nothing is hot.
+//
+// Earlier markers are kept: the coin (src/hotTarget.coin.ts.bak, assets/hot/Multiplierv3.glb),
+// the ring (src/hotTarget.ring.ts.bak, assets/hot/Multiplier.glb) and the first 2X badge
+// (src/hotTarget.ts.bak).
+
+// --- The rim -------------------------------------------------------------------
+const RIM_TEXTURE = 'assets/hot/rim.png'
+/**
+ * Custom glow for some targets, by colour. Black is a long strip (20 x 150 m) seen almost edge-on
+ * from the bays, where a ring shrinks to a thin line: it gets the whole strip lit up instead, a
+ * soft fill with a bright band round its edge (drawn for a 20 x 150 strip, at RIM_SPAN).
+ */
+const RIM_TEXTURE_FOR: { [colour: string]: string } = { Black: 'assets/hot/rim-black.png' }
+/** The glow's colour (gold). Any colour works: it's tinted in code. */
+const RIM_COLOUR = Color3.create(1, 0.76, 0.1)
+/**
+ * The texture is a ring whose solid band sits at 81 to 90% of its half-width and fades out to
+ * the edge. RIM_SPAN sets how far past the target's edge the texture reaches (1.2 = 20% wider),
+ * which puts the solid band from 97% to 108% of the target's radius: right on its lip.
+ */
+const RIM_SPAN = 1.2
+/** Glow strength: pulses between these, once every RIM_PULSE_SECONDS */
+const RIM_GLOW_MIN = 1.5
+const RIM_GLOW_MAX = 5
+const RIM_PULSE_SECONDS = 1.2
+/** Just above the grass at the rim, so it never flickers into it (metres) */
+const RIM_LIFT = 0.06
+/** Ground more than this above the hole counts as a wall, not the rim (the cliff by Black) */
+const CLIFF_SKIP = 10
+
+// --- The badge -----------------------------------------------------------------
+const BADGE_TEXTURE = 'assets/hot/badge-disc.png'
+/** The badge's width as a share of its distance from your camera: the same size on screen */
+const BADGE_SCREEN = 0.07
+/** Never smaller than this up close (metres) */
+const BADGE_MIN = 2.5
+/** The flags stand 13.3 m tall from the scene floor; the badge's bottom sits this far above */
+const FLAG_TOP = 13.3
+const BADGE_CLEARANCE = 1
+/** "2X" letter height as a share of the badge's width, and its colour (#1388B8) */
+const BADGE_CAPS = 0.36
+const BADGE_TEXT = Color4.create(0.075, 0.533, 0.722, 1)
+/** In the last this-many seconds the badge pulses, to say the target is about to move */
+const WARN_SECONDS = 5
+/** Letters are about 0.072 units tall per font size unit */
+const PER_FONT_UNIT = 0.072
+
+const HIDDEN = Vector3.create(0, -100, 0)
+
+let rimTexture = RIM_TEXTURE
+
+function rimMaterial(rim: Entity, glow: number): void {
+  Material.setPbrMaterial(rim, {
+    texture: Material.Texture.Common({ src: rimTexture }),
+    albedoColor: Color4.create(RIM_COLOUR.r, RIM_COLOUR.g, RIM_COLOUR.b, 1),
+    emissiveColor: RIM_COLOUR,
+    emissiveTexture: Material.Texture.Common({ src: rimTexture }),
+    emissiveIntensity: glow,
+    transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
+    castShadows: false,
+    metallic: 0,
+    roughness: 1
+  })
+}
+
+export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | undefined): void {
+  // The rim: a flat plane with the ring texture, laid on the ground
+  const rim = engine.addEntity()
+  Transform.create(rim, { position: HIDDEN })
+  MeshRenderer.setPlane(rim)
+  rimMaterial(rim, RIM_GLOW_MIN)
+
+  // The badge: turns to face you; a disc with "2X" on it
+  const badge = engine.addEntity()
+  Transform.create(badge, { position: HIDDEN })
+  Billboard.create(badge, { billboardMode: BillboardMode.BM_ALL })
+  const disc = engine.addEntity()
+  // The disc sits just behind the writing (the far side from you is +z on a billboard)
+  Transform.create(disc, { parent: badge, position: Vector3.create(0, 0, 0.02) })
+  MeshRenderer.setPlane(disc)
+  Material.setBasicMaterial(disc, {
+    texture: Material.Texture.Common({ src: BADGE_TEXTURE }),
+    alphaTexture: Material.Texture.Common({ src: BADGE_TEXTURE }),
+    alphaTest: 0.5,
+    castShadows: false
+  })
+  const text = engine.addEntity()
+  Transform.create(text, { parent: badge })
+  TextShape.create(text, {
+    text: `${HOT.factor}X`,
+    fontSize: BADGE_CAPS / PER_FONT_UNIT,
+    font: Font.F_SANS_SERIF,
+    textColor: BADGE_TEXT,
+    textAlign: TextAlignMode.TAM_MIDDLE_CENTER,
+    textWrapping: false,
+    width: 1,
+    height: BADGE_CAPS * 3
+  })
+
+  let shownZone = ''
+  let badgeAt = HIDDEN
+  let clock = 0
+
+  engine.addSystem((dt) => {
+    const zone = effectiveHot()
+    if (zone !== shownZone) {
+      shownZone = zone
+      const ent = zone ? zoneEntity(zone) : undefined
+      const t = ent ? Transform.getOrNull(ent) : null
+      if (!t) {
+        badgeAt = HIDDEN
+        Transform.getMutable(rim).position = HIDDEN
+        Transform.getMutable(badge).position = HIDDEN
+        if (zone) console.log(`[hot] no target entity named ${zone}, the marker is hidden`)
+      } else {
+        const x = t.position.x
+        const z = t.position.z
+        const rx = Math.abs(t.scale.x) / 2
+        const rz = Math.abs(t.scale.z) / 2
+        // The rim's height: the highest real grass just outside the target's edge, round it
+        const hole = courseSurfaceAt(x, z) ?? t.position.y
+        let grass = hole
+        for (const f of [1, 1.1]) {
+          for (let i = 0; i < 48; i++) {
+            const a = (i / 48) * Math.PI * 2
+            const local = Vector3.rotate(Vector3.create(Math.sin(a) * rx * f, 0, Math.cos(a) * rz * f), t.rotation)
+            const h = courseSurfaceAt(x + local.x, z + local.z)
+            if (h !== null && h > grass && h <= hole + CLIFF_SKIP) grass = h
+          }
+        }
+        rimTexture = RIM_TEXTURE_FOR[zone.replace(/\d+$/, '')] ?? RIM_TEXTURE
+        // Flat on the ground, the target's own shape and turn (the long Black strip gets its own glow)
+        const rt = Transform.getMutable(rim)
+        rt.position = Vector3.create(x, grass + RIM_LIFT, z)
+        rt.rotation = Quaternion.multiply(t.rotation, Quaternion.fromEulerDegrees(90, 0, 0))
+        rt.scale = Vector3.create(rx * 2 * RIM_SPAN, rz * 2 * RIM_SPAN, 1)
+        badgeAt = Vector3.create(x, FLAG_TOP + BADGE_CLEARANCE, z)
+        console.log(`[hot] marker on ${zone}: rim at ${(grass + RIM_LIFT).toFixed(1)} m, badge above the flag`)
+      }
+    }
+    if (badgeAt === HIDDEN) return
+
+    // The rim's pulse
+    clock += dt
+    const wave = 0.5 + 0.5 * Math.sin((clock / RIM_PULSE_SECONDS) * Math.PI * 2)
+    rimMaterial(rim, RIM_GLOW_MIN + (RIM_GLOW_MAX - RIM_GLOW_MIN) * wave)
+
+    // The badge: the same size on screen however far away, a quick pulse near the end
+    const cam = Transform.getOrNull(engine.CameraEntity)
+    const dist = cam ? Vector3.distance(cam.position, badgeAt) : 100
+    let size = Math.max(BADGE_MIN, dist * BADGE_SCREEN)
+    const left = hotSecondsLeft()
+    if (!tutorial.active && left > 0 && left <= WARN_SECONDS) size *= 1 + 0.12 * Math.abs(Math.sin(clock * Math.PI * 2))
+    const bt = Transform.getMutable(badge)
+    bt.position = Vector3.create(badgeAt.x, badgeAt.y + size / 2, badgeAt.z)
+    bt.scale = Vector3.create(size, size, size)
+  })
+}

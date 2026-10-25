@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { openPixelGolfMenu } from './GameModeMenu'
 import { menuReopenBlocked } from '../menuGuard'
+import { requestShotStart } from '../game'
 import { ClubType } from '../club'
 import { getSelectedClubType, selectClub } from '../clubSelect'
 import { playUi } from '../sfx'
@@ -157,6 +158,8 @@ function teeOff({ state, props }: UiAction) {
   selectClub(state.selected)
   state.display = 'none'
   playUi('tee_off')
+  // Straight into the shot: no walking to the ball and pressing E
+  requestShotStart(0, true)
 }
 
 // @ui-action

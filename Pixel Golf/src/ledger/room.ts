@@ -286,7 +286,27 @@ export const MESSAGES = {
    * players with something other than the standard ball). Sent whenever one changes, and on
    * hello. Every screen shows each bay's ball in its player's ball.
    */
-  ballLooks: Schemas.Map({ json: Schemas.String })
+  ballLooks: Schemas.Map({ json: Schemas.String }),
+
+  // Dev panel (added 2026-10-22). Admin only: the server checks the wallet (ADMIN in rules.ts)
+
+  /**
+   * Scene -> server: make this target hot now ('' = back to the normal random rotation).
+   * hold: keep it hot until changed, instead of moving on after HOT.seconds.
+   */
+  adminHot: Schemas.Map({ zone: Schemas.String, hold: Schemas.Boolean }),
+
+  /** Scene -> server: count this many pretend extra players in the space (multiplier testing). */
+  adminPlayers: Schemas.Map({ extra: Schemas.Int }),
+
+  /**
+   * Scene -> server: set the wind (dir degrees as in 'wind', speed m/s). speed below 0 = a normal
+   * random change now and back to changing every WIND.seconds. hold: keep it until changed.
+   */
+  adminWind: Schemas.Map({ dir: Schemas.Float, speed: Schemas.Float, hold: Schemas.Boolean }),
+
+  /** Server -> everyone: the dev panel's switches, JSON { extra, hotHold, windHold }. Sent on change and on hello. */
+  devState: Schemas.Map({ json: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

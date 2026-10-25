@@ -515,6 +515,14 @@ export function updateClub(club: Club, dt: number, addressing: boolean, charge: 
     swingDeg = club.held === 'play' ? backswingAngle(charge) : 0
   }
 
+  // Only when the angle has changed: writing it every frame sent the club to the renderer every
+  // frame even while it hung still in your hand
+  if (lastPivotDeg.get(club.pivot) === swingDeg) return
   const pivot = Transform.getMutableOrNull(club.pivot)
-  if (pivot) pivot.rotation = Quaternion.fromEulerDegrees(swingDeg * CLUB.swingSign, 0, 0)
+  if (!pivot) return
+  pivot.rotation = Quaternion.fromEulerDegrees(swingDeg * CLUB.swingSign, 0, 0)
+  lastPivotDeg.set(club.pivot, swingDeg)
 }
+
+/** The swing angle last written to each club's pivot, so an unchanged one isn't written again */
+const lastPivotDeg = new Map<Entity, number>()

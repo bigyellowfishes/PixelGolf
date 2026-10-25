@@ -114,13 +114,24 @@ export function windVector(dir: number, speed: number): { x: number; z: number }
 export const MULTIPLIER = {
   /** Never lower than this, so a solo player always gets exactly 2x. */
   floor: 2,
-  /** Rolls at or above this are announced to the whole range. */
+  /**
+   * The guaranteed minimum steps up with the crowd: every `step` players lifts it to that many.
+   * 5 to 9 players: at least 5x. 10 to 14: at least 10x. And so on.
+   */
+  step: 5,
+  /** Rolls at or above this are announced to the whole range (only when above the minimum). */
   shoutAt: 5
 }
 
-/** The highest roll possible with this many players in the space. */
+/** The lowest roll possible with this many players in the space. Always a whole number. */
+export function multiplierFloor(players: number): number {
+  const crowd = Math.floor(Math.floor(players) / MULTIPLIER.step) * MULTIPLIER.step
+  return Math.max(MULTIPLIER.floor, crowd)
+}
+
+/** The highest roll possible with this many players in the space. Always a whole number. */
 export function multiplierCeiling(players: number): number {
-  return Math.max(MULTIPLIER.floor, Math.floor(players))
+  return Math.max(multiplierFloor(players), Math.floor(players))
 }
 
 // ---------------------------------------------------------------------------

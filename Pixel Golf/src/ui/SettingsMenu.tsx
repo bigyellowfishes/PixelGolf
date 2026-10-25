@@ -2,20 +2,24 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
-import { ballCamEnabled, orbitCamEnabled, toggleBallCam, toggleOrbitCam } from '../game'
+import { ballCamEnabled, orbitCamEnabled, promptsEnabled, toggleBallCam, toggleOrbitCam, togglePrompts } from '../game'
 import { playUi } from '../sfx'
 import { menuReopenBlocked } from '../menuGuard'
 import { amIAdmin, sendAdminReset } from '../ledger/client'
+import { toggleDevPanel, devPanel } from './DevPanel'
 import { forTouch } from '../mobile'
 
 // The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx).
-// Holds the Ball cam on/off switch (key 1 still toggles it too) and the Orbit camera switch.
+// Holds the Ball cam on/off switch (only here now: key 1 picks the wedge) and the Orbit camera switch.
 // Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
 
 export interface State {
   display: 'flex' | 'none'
   ballCamOn: boolean
   orbitCamOn: boolean
+  promptsOn: boolean
+  promptsLabel: string
+  promptsText: string
   ballCamLabel: string
   orbitCamLabel: string
   /** Show the admin row. Only decides what's drawn: the server checks the wallet. */
@@ -39,6 +43,9 @@ export const state: State = {
   display: 'none',
   ballCamOn: true,
   orbitCamOn: false,
+  promptsOn: true,
+  promptsLabel: 'On',
+  promptsText: '',
   ballCamLabel: 'On',
   orbitCamLabel: 'Off',
   isAdmin: false,
@@ -77,6 +84,12 @@ function switchBallCam({ state, props }: UiAction) {
 }
 
 // @ui-action
+function switchPrompts({ state, props }: UiAction) {
+  togglePrompts()
+  playUi('ui_click')
+}
+
+// @ui-action
 function switchOrbitCam({ state, props }: UiAction) {
   toggleOrbitCam()
   playUi('ui_click')
@@ -102,10 +115,13 @@ export function SettingsMenu(props: {}) {
   state.orbitCamOn = orbitCamEnabled
   state.ballCamLabel = ballCamEnabled ? 'On' : 'Off'
   state.orbitCamLabel = orbitCamEnabled ? 'On' : 'Off'
+  state.promptsOn = promptsEnabled
+  state.promptsLabel = promptsEnabled ? 'On' : 'Off'
+  state.promptsText = 'Instructions on screen, like how to set your power. The tutorial always shows them.'
   state.isAdmin = amIAdmin()
   state.resetArmed = Date.now() < resetArmedUntil
   state.resetLabel = state.resetArmed ? 'Sure?' : 'Reset'
-  state.ballCamText = forTouch('Follow the ball after each shot. Key 1 also switches it.')
+  state.ballCamText = 'Follow the ball after each shot.'
   state.orbitCamText = forTouch('While the ball cam follows a shot: drag or A / D to orbit, W / S to zoom.')
   state.resetText = forTouch(
     state.resetArmed
@@ -179,6 +195,29 @@ export function SettingsMenu(props: {}) {
     state.orbitCamOn
   )
 
+  const promptsSwitch = useInteraction(
+    {
+      base: {
+        uiTransform: {
+          width: 76,
+          height: 38,
+          flexDirection: 'row',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          padding: { left: 4, right: 4 },
+          borderRadius: 19
+        },
+        uiBackground: { color: { r: 0.765, g: 0.804, b: 0.835, a: 1 } },
+        onMouseDown: () => switchPrompts({ state, props })
+      },
+      active: {
+        uiTransform: { justifyContent: 'flex-end' },
+        uiBackground: { color: { r: 0.165, g: 0.525, b: 0.106, a: 1 } }
+      }
+    },
+    state.promptsOn
+  )
+
   const resetButton = useInteraction(
     {
       base: {
@@ -238,7 +277,7 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{
             width: 560,
-            height: state.isAdmin ? 450 : 330,
+            height: state.isAdmin ? 640 : 450,
             flexDirection: 'column',
             borderRadius: 28,
             borderWidth: 4,
@@ -381,6 +420,103 @@ export function SettingsMenu(props: {}) {
                 <UiEntity
                   uiTransform={{ width: 30, height: 30, borderRadius: 15 }}
                   uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+                />
+              </UiEntity>
+            </UiEntity>
+
+            {/* Prompts */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 106,
+                flexDirection: 'row',
+                alignItems: 'center',
+                margin: { top: 14 },
+                padding: { left: 20, right: 18 },
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: { r: 0.835, g: 0.863, b: 0.886, a: 1 }
+              }}
+              uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+            >
+              <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column' }}>
+                <Label
+                  value="Prompts"
+                  fontSize={20}
+                  color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
+                  textAlign="middle-left"
+                  uiTransform={{ width: '100%', height: 28 }}
+                />
+                <Label
+                  value={state.promptsText}
+                  fontSize={13}
+                  textWrap="wrap"
+                  color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
+                  textAlign="top-left"
+                  uiTransform={{ width: 330, height: 40, margin: { top: 4 } }}
+                />
+              </UiEntity>
+              <Label
+                value={state.promptsLabel}
+                fontSize={14}
+                color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
+                textAlign="middle-right"
+                uiTransform={{ width: 36, height: 38, margin: { right: 10 } }}
+              />
+              <UiEntity {...promptsSwitch}>
+                <UiEntity
+                  uiTransform={{ width: 30, height: 30, borderRadius: 15 }}
+                  uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+                />
+              </UiEntity>
+            </UiEntity>
+
+            {/* Admin: the dev panel (hot target, pretend players, wind). Only drawn for admins */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 58,
+                flexDirection: 'row',
+                alignItems: 'center',
+                margin: { top: 14 },
+                padding: { left: 20, right: 18 },
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: { r: 0.773, g: 0.192, b: 0.192, a: 1 },
+                display: state.isAdmin ? 'flex' : 'none'
+              }}
+              uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+            >
+              <Label
+                value="Dev panel (admin)"
+                fontSize={20}
+                color={{ r: 0.773, g: 0.192, b: 0.192, a: 1 }}
+                textAlign="middle-left"
+                uiTransform={{ flexGrow: 1, height: 28 }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 96,
+                  height: 38,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  borderRadius: 19,
+                  borderWidth: 2,
+                  borderColor: { r: 0.773, g: 0.192, b: 0.192, a: 1 }
+                }}
+                uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+                onMouseDown={() => {
+                  // Opens the panel and gets the settings out of the way
+                  if (!devPanel.open) toggleDevPanel()
+                  state.display = 'none'
+                }}
+              >
+                <Label
+                  value="Open"
+                  fontSize={15}
+                  color={{ r: 0.773, g: 0.192, b: 0.192, a: 1 }}
+                  textAlign="middle-center"
+                  uiTransform={{ width: 90, height: 30 }}
                 />
               </UiEntity>
             </UiEntity>

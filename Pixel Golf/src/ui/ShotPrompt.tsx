@@ -1,7 +1,7 @@
 /** @jsx ReactEcs.createElement */
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
-import { getPrompt, getRoundProgress } from '../game'
+import { getPrompt, getRoundProgress, promptsEnabled } from '../game'
 import { tutorial } from '../ledger/client'
 import { onPhone, forTouch } from '../mobile'
 
@@ -69,7 +69,8 @@ const PROMPT_MAX_W = 440
 const PROMPT_BOTTOM = 160
 
 export function ShotPrompt(props: {}) {
-  const text = forTouch(getPrompt())
+  // Prompts can be switched off in Settings; the tutorial's always show
+  const text = tutorial.active || promptsEnabled ? forTouch(getPrompt()) : ''
   state.text = text
   state.display = text ? 'flex' : 'none'
   state.isTutorial = tutorial.active

@@ -61,8 +61,9 @@ export const SHOP_NPCS: ShopNpc[] = [
     ],
     skinColor: { r: 0.6, g: 0.46, b: 0.36 },
     hairColor: { r: 0.1, g: 0.07, b: 0.05 },
-    aisle: 'club',
-    greeting: 'Alright! Looking for a new set of clubs?'
+    // Clubs are hidden for now (SHOW_CLUBS), so Pete sells balls too
+    aisle: 'ball',
+    greeting: 'Alright! Fancy a new ball?'
   }
 ]
 
@@ -95,6 +96,9 @@ const TURN_SPEED = 180
 /** Before a shopkeeper waves at you again after you've walked off */
 const WAVE_AGAIN_SECONDS = 30
 
+/** The Clubs tab. Off for now: club cosmetics have no models yet. true brings the tab back. */
+export const SHOW_CLUBS = false
+
 // --- what the shop shows (ui/ShopMenu.tsx reads this) ---------------------
 export const shop = {
   open: false,
@@ -115,7 +119,7 @@ function openShop(k: Keeper): void {
   if (!shop.open && menuReopenBlocked()) return
   if (!shop.open) playUi('ui_open')
   shop.open = true
-  shop.aisle = k.npc.aisle
+  shop.aisle = SHOW_CLUBS ? k.npc.aisle : 'ball'
   shop.keeper = k.npc.name
   shop.greeting = k.npc.greeting
   dismissed = false
@@ -199,7 +203,8 @@ function updateKeepers(dt: number): void {
   let nearest: Keeper | null = null
   let nearestDist = Infinity
   for (const k of keepers) {
-    const t = Transform.getMutable(k.entity)
+    // Read only: getMutable marks it changed, which sent both shopkeepers to the renderer every frame
+    const t = Transform.get(k.entity)
     const dx = me.position.x - t.position.x
     const dz = me.position.z - t.position.z
     const dist = Math.sqrt(dx * dx + dz * dz)
@@ -211,7 +216,7 @@ function updateKeepers(dt: number): void {
     const step = TURN_SPEED * dt
     if (Math.abs(d) > 0.5) {
       k.yaw += Math.abs(d) <= step ? d : Math.sign(d) * step
-      t.rotation = Quaternion.fromEulerDegrees(0, k.yaw, 0)
+      Transform.getMutable(k.entity).rotation = Quaternion.fromEulerDegrees(0, k.yaw, 0)
     }
 
     // A wave when you walk up, if you've been away a while

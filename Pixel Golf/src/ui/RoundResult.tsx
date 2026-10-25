@@ -131,8 +131,8 @@ export function showTutorialReward(r: { xp: number; level: number; unlocked: str
   state.rewardText = r.xp > 0 ? `+${fmt(r.xp)} XP` : ''
   state.statusText = forTouch(
     r.unlocked.length
-      ? `Unlocked: ${r.unlocked.join(', ')}. Walk up to a free bay to play.`
-      : 'Walk up to a free bay to start playing for real.'
+      ? `Unlocked: ${r.unlocked.join(', ')}. Walk up to a free bay to play. Press F there to open the menu, and 1, 2 or 3 to change club.`
+      : 'Walk up to a free bay to play for real. Press F there to open the menu, and 1, 2 or 3 to change club.'
   )
 }
 
@@ -141,7 +141,7 @@ function closeCard({ state, props }: UiAction) {
   state.display = 'none'
   // A finished round: back to the Pixel Golf menu to pick a club and go again
   if (state.title !== 'Tutorial complete!') {
-    openPixelGolfMenu()
+    openPixelGolfMenu(true)
     return
   }
   playUi('ui_close')
@@ -265,7 +265,7 @@ export function RoundResult(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        <Label value={state.statusText} fontSize={13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 36, margin: { top: 8 } }} />
+        <Label value={state.statusText} fontSize={13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 54, margin: { top: 8 } }} />
         <Label value={state.rewardText} fontSize={18} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 28, margin: { top: 4 } }} />
         <Label value={state.rankText} fontSize={14} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 22 }} />
 

@@ -14,13 +14,13 @@ import {
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
-import { Club, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
+import { Club, ClubType, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
 import { reportMyClub } from './clubSync'
 import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub, getClubScale } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY } from './ledger/client'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson } from './ledger/client'
 import { ShotPath, Vec3, launchVelocity } from './ballSim'
 
 // The club in the player's hand, shared by every ball like the arrows
@@ -156,6 +156,9 @@ const HEIGHT_ANIM_SECONDS = 0.975
 const TURN_ANIM_SECONDS = 0.975
 
 const PowerTimeMulti = 0.6
+// The power bar runs at this share of its speed while the wedge is in hand (half speed), so the
+// short game is easier to judge. Only the power stage: the curve meter keeps its speed.
+const WEDGE_POWER_SPEED = 0.5
 const BendTimeMulti = 0.3
 
 // Bend at full left/right, in degrees. Positive = right.
@@ -205,6 +208,61 @@ let shownGame: Game | null = null
 type RoundSnapshot = { shot: number; score: number; lastShotScore: number; lastZone: string; lastHot: boolean; log: BallResult[] }
 let roundHolder: Game | null = null
 let carried: RoundSnapshot | null = null
+
+// Shots start by themselves (no E to begin): after Tee off in the club picker, after each ball
+// of a round has been scored, and on walking into a bay with a round in progress. A request
+// waits until the player's bay is set and no menu is open, and is dropped if that takes too long.
+const AUTO_SHOT_DELAY_MS = 700
+const AUTO_SHOT_GIVE_UP_MS = 3000
+// Further than this from the bay's ball (metres) and a shot doesn't start by itself
+const AUTO_SHOT_RANGE = 10
+let autoShotAt = 0
+let autoShotUntil = 0
+
+/** Starts the player's next shot in their bay by itself, after delayMs. */
+export function requestShotStart(delayMs = 0, first = false): void {
+  autoShotAt = Date.now() + delayMs
+  autoShotUntil = autoShotAt + AUTO_SHOT_GIVE_UP_MS
+  if (first) firstShotNext = true
+}
+
+// The Tee Off screens and a shot in play. Clicking a screen while you're setting your power steps
+// out of the shot and opens the menu (to change club, say), except in the first second of the
+// first shot after Tee off or walking in, when that click was most likely meant for the game.
+// Once the power is set, through the swing and while the ball flies, the screens do nothing.
+const FIRST_SHOT_CLICK_GUARD_MS = 1000
+let firstShotNext = false
+let shotIsFirst = false
+let shotBeganAt = 0
+
+/** Whether a Tee Off screen click should do anything right now. */
+export function screenClickAllowed(): boolean {
+  if (activeGame === null) return true
+  if (activeGame.state.phase !== 'Swing_Height') return false
+  return !(shotIsFirst && Date.now() - shotBeganAt < FIRST_SHOT_CLICK_GUARD_MS)
+}
+
+/**
+ * Whether F can open the bay menu right now: any time you're not mid-shot, and while setting
+ * power or curve (the shot goes on hold and comes back to the power meter when the menu closes).
+ * Not once the curve is locked, through the swing or while the ball is out.
+ */
+export function menuKeyAllowed(): boolean {
+  if (activeGame === null) return true
+  return activeGame.state.phase === 'Swing_Height' || activeGame.state.phase === 'Swing_Turn'
+}
+
+/** Steps out of a shot that's still at the power or curve stage, so the menu can be used. */
+export function stepOutForMenu(): void {
+  if (activeGame && (activeGame.state.phase === 'Swing_Height' || activeGame.state.phase === 'Swing_Turn')) {
+    activeGame.leaveShot()
+    resumeAfterMenu = true
+  }
+}
+
+// A menu opened while setting power or curve puts the shot on hold; when every menu has closed
+// again the player goes straight back to the power meter (unless they walked off meanwhile)
+let resumeAfterMenu = false
 // Every ball's game, so the UI can work out which prompt to show
 const allGames: Game[] = []
 
@@ -251,11 +309,34 @@ export function resetTutorialSteps(): void {
 //   shot 1  POWER  (lined up on the orange target for them, and hit straight: no curve yet)
 //   shot 2  CURVE  (still lined up for them)
 //   shot 3  AIM    (they turn the camera themselves)
-//   shots 4 and 5  just play, with the everyday prompts
+//   shot 4  WIND   (a slight crosswind, TUTORIAL_WIND, on the flags and the range card too)
+//   shot 5  HOT TARGET (the orange target is a 2X hot target for this shot, with its marker)
 // A lesson is picked by how many shots of the round are already counted.
 const LESSON_POWER = 0
 const LESSON_CURVE = 1
 const LESSON_AIM = 2
+const LESSON_WIND = 3
+const LESSON_MULTI = 4
+/**
+ * The wind on the wind lesson: where it blows to (degrees, 0 = +z, 90 = +x) and how strong (m/s).
+ * Bay 19 hits towards the orange target at about 116 degrees, so 206 is straight across the shot,
+ * left to right. At 3 m/s (about 7 mph) it moves the ball 5 to 10 m: easy to see, and still on
+ * the orange target if they aim a little into it.
+ */
+const TUTORIAL_WIND = { dir: 206, speed: 3 }
+/** The lesson hot target on the last tutorial shot */
+const TUTORIAL_HOT = 'Orange'
+
+// The tutorial's wind and hot target follow the shot it's on (ledger/client.ts tutorialLesson)
+// The shot count goes up the moment the ball is hit, so while a ball is in the air or rolling
+// it's still the previous shot's lesson (its wind, and its hot target when it lands)
+function updateTutorialLesson(g: Game): void {
+  const struck = g.state.phase === 'rolling' || g.state.phase === 'watching'
+  const n = tutorial.active ? g.state.shot - (struck ? 1 : 0) : -1
+  tutorialLesson.windDir = TUTORIAL_WIND.dir
+  tutorialLesson.windSpeed = n === LESSON_WIND ? TUTORIAL_WIND.speed : 0
+  tutorialLesson.hot = n === LESSON_MULTI ? TUTORIAL_HOT : ''
+}
 // Where the power bar's target line sits on the first two shots. With the ball hit straight, this
 // much power lands on the orange target from bay 19.
 const TUTORIAL_POWER_TARGET = 93
@@ -279,12 +360,16 @@ function tutorialPrompt(g: Game): string {
       if (TUTORIAL_RETRY) return 'Missed! That one doesn\'t count. Press E to try again.'
       if (n === LESSON_POWER) return 'Welcome to Pixel Golf! Press E to start.'
       if (n === LESSON_AIM) return 'Now aim yourself: turn the camera towards a target, then press E.'
+      if (n === LESSON_WIND) return 'WIND! Watch the flags and aim into it. Press E.'
+      if (n === LESSON_MULTI) return 'Last shot! Orange is a 2X HOT TARGET. Press E.'
       if (last) return 'Last shot! Press E to take it.'
       return 'Nice! Press E to take your next shot.'
     case 'Swing_Height':
       if (n === LESSON_POWER) return 'This is your POWER. Press E when the bar reaches the line.'
       if (n === LESSON_CURVE) return 'Press E at the line to lock your power.'
-      if (n === LESSON_AIM) return 'The arrow shows your aim. Turn the camera to adjust, then press E for power.'
+      if (n === LESSON_AIM) return 'The indicator shows your aim. Turn the camera to adjust, then press E for power.'
+      if (n === LESSON_WIND) return 'Wind pushes the ball in the air. Press E.'
+      if (n === LESSON_MULTI) return 'Land on orange for 2X points. Press E.'
       return ''
     case 'Swing_Turn':
       if (n === LESSON_CURVE) return 'New: CURVE. The middle hits straight, either side bends the ball. Press E in the middle.'
@@ -323,6 +408,8 @@ export function getAllGames(): Game[] {
 
 // The instruction to show the player right now, or '' for none
 export function getPrompt(): string {
+  // Nothing over a menu or card
+  if (menuOpenCheck()) return ''
   // A shot of yours is in the air or rolling (the tutorial's too): E changes its speed
   if (activeGame && activeGame.canChangeSpeed()) {
     return camMode === 'ball' && orbitCamEnabled
@@ -335,6 +422,8 @@ export function getPrompt(): string {
     if (line) return line
   }
   if (activeGame) {
+    // Outside the tutorial, F steps out of a shot that hasn't been hit (shots start by themselves)
+    // (F still steps away outside the tutorial; it just isn't written on screen)
     if (activeGame.state.phase === 'Swing_Height') return 'Press E to set your power'
     if (activeGame.state.phase === 'Swing_Turn') return 'Press E to set your curve and hit'
     if (activeGame.state.phase === 'rolling' && camMode === 'ball' && orbitCamEnabled) return 'Drag or A / D to orbit    W / S to zoom'
@@ -346,23 +435,19 @@ export function getPrompt(): string {
         // The tutorial bay is closed after the tutorial, and every other bay is closed during it
         const locked = bayLockReason(g.bay)
         if (locked) return g.bay === TUTORIAL_BAY && tutorialBayNoticeHeld() ? '' : locked
-        // One player, one bay
+        // One player, one bay. A free bay is yours just by walking in (teeOffPanels.ts), so it
+        // needs no prompt.
         const takenBy = bayTakenBy(g.bay)
         if (takenBy) return `Bay ${g.bay} is in use by ${takenBy}`
-        let mBay = g.bay
-        if(mBay != 20)
-        {
-          return myBay() === 0
-            ? `Click Bay ${mBay}'s Tee Off screen to play here`
-            : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
-        } else {
-          return myBay() === 0
-            ? `Click the Solo Bay's Tee Off screen to play here`
-            : `Your bay is Bay ${myBay()}. Click this Tee Off screen to move here`
-        }
+        return ''
       }
       return g.state.shot >= g.roundBalls() ? 'Press E to start a new round' : 'Press E to take your shot'
     }
+  }
+  // Standing in your own bay between rounds: how to get the menu (the screens aren't clickable)
+  const mine = myBay()
+  if (mine && mine !== TUTORIAL_BAY && allGames.some((g) => g.bay === mine && g.state.phase === 'walking' && g.state.distanceToBall <= 4)) {
+    return 'Press F to open the menu    1, 2, 3 to change club'
   }
   return ''
 }
@@ -463,6 +548,11 @@ export class Game {
       this.freezePlayer(tutorialFrozen)
       selectClub('iron')
     }
+    // The tutorial's lesson wind and hot target follow the shot it's on
+    if (this.bay === TUTORIAL_BAY) updateTutorialLesson(this)
+    // Locked in the tutorial bay for the whole tutorial: if anything cleared the lock, put it back.
+    // Only Skip tutorial (cancelForTutorialSkip) or finishing it lets the player walk.
+    if (tutorialFrozen && this.bay === TUTORIAL_BAY) this.freezePlayer(true)
 
     if (this.inputLock > 0) this.inputLock -= dt
 
@@ -527,18 +617,26 @@ export class Game {
         break
 
       case 'Swing_Height':
-        this.freezePlayer(true)
+        if (this.holdForMenu()) break
+        // Free to walk while setting power: walking off the ball drops the shot (walkedAway).
+        // The tutorial keeps the player at the tee as before.
+        if (this.bay !== TUTORIAL_BAY) this.freezePlayer(false)
         if (tutorial.active) TUTORIAL_RETRY = false
         if (this.walkedAway()) break
         this.setArrow(ghostShot, true)
         this.UpdateArrowDir(ghostShot)
-        this.swingTime += dt
+        // The bar runs slower with the wedge (picked up between shots or with 1 mid-power, the
+        // bar carries on from where it is either way)
+        this.swingTime += getSelectedClubType() === 'wedge' ? dt * WEDGE_POWER_SPEED : dt
         this.charge = this.heightMeter()
         this.state.shotDistance = this.physics.predictRoll(this.charge)
         if (this.clicked()) this.lockHeight()
         break
 
       case 'Swing_Turn':
+        if (this.holdForMenu()) break
+        // Power is set: the player stays put from here to the hit
+        this.freezePlayer(true)
         if (this.walkedAway()) break
         this.swingTime += dt
         meters.curve = curveFromTurn(this.turnMeter())
@@ -583,6 +681,7 @@ export class Game {
   // and give the player back their movement and camera
   cancelForTutorialSkip(): void {
     if (club) cancelBackswing(club)
+    this.setArrow(ghostShot, false)
     this.physics.freeze()
     this.dropShot()
     this.physics.place(this.startPos.x, this.startPos.y, this.startPos.z)
@@ -616,7 +715,10 @@ export class Game {
   // --- swing stages --------------------------------------------------------
 
   // Stage 0: E pressed by the ball. Remember where the player faces, show height arrow.
-  private beginSwing(): void {
+  beginSwing(): void {
+    shotBeganAt = Date.now()
+    shotIsFirst = firstShotNext
+    firstShotNext = false
     // The last round is finished: this ball starts a fresh one
     if (this.state.shot >= this.roundBalls()) this.newRound()
 
@@ -676,7 +778,34 @@ export class Game {
   // The player walked off mid-shot: drop the shot and let them play again
   private walkedAway(): boolean {
     if (this.state.distanceToBall <= HIT_RANGE + 1) return false
+    this.cancelShot()
+    return true
+  }
+
+  // A menu (the bay menu, leaderboards, settings, the shop) opened mid-way through setting the
+  // shot: put it on hold, so E can't lock power or curve behind the menu. It starts again from the
+  // power meter when the menus close (resumeAfterMenu). Not the tutorial.
+  private holdForMenu(): boolean {
+    if (this.bay === TUTORIAL_BAY || !menuOpenCheck()) return false
+    this.leaveShot()
+    resumeAfterMenu = true
+    return true
+  }
+
+  // Out of the shot from outside (the menu is opening): drop it and free the player
+  leaveShot(): void {
+    autoShotAt = 0
+    this.cancelShot()
+    this.freezePlayer(false)
+  }
+
+  // Drop the shot being set up and go back to walking
+  private cancelShot(): void {
     showMeters(false, false)
+    // The aim arrow (and the meters' arrows) go with the shot
+    this.setArrow(ghostShot, false)
+    this.setArrow(ArwHeightEnt, false)
+    this.setArrow(ArwTurnEnt, false)
     releaseTutorialCam()
 
     if (club) cancelBackswing(club)
@@ -685,7 +814,6 @@ export class Game {
     this.charge = 0
     this.state.phase = 'walking'
     activeGame = null
-    return true
   }
 
   // Stage 1: E pressed. Keep the power, swap to the turn arrow.
@@ -1083,6 +1211,8 @@ export class Game {
     activeGame = null
     this.swingClock = -1
     this.rollLock = false
+    // Straight on to the next ball of the round (the last one shows the round card instead)
+    if (this.bay !== TUTORIAL_BAY && this.state.shot < this.roundBalls()) requestShotStart(AUTO_SHOT_DELAY_MS)
     if (!tutorial.active && tutorialFrozen) {
       tutorialFrozen = false
       this.freezePlayer(false)
@@ -1173,7 +1303,10 @@ export class Game {
   static UpdateRoundHome(): void {
     if (activeGame !== null) return
     const mine = allGames.find((g) => g.isMine() && g.bay !== TUTORIAL_BAY) ?? null
-    if (mine === roundHolder) return
+    if (mine === roundHolder) {
+      Game.TryAutoShot()
+      return
+    }
     if (roundHolder) {
       const s = roundHolder.takeRound()
       // A finished round (or one not started) has nothing to carry
@@ -1188,6 +1321,32 @@ export class Game {
       roundHolder = mine
       shownGame = mine
     }
+    Game.TryAutoShot()
+  }
+
+  // A requested shot starts once its delay is up, the round is on the player's bay ball and no
+  // menu is open (see requestShotStart)
+  private static TryAutoShot(): void {
+    // Menus closed after one put the shot on hold: back to the power meter
+    if (resumeAfterMenu && !menuOpenCheck()) {
+      resumeAfterMenu = false
+      if (autoShotAt === 0) requestShotStart(0, true)
+    }
+    if (autoShotAt === 0) return
+    const now = Date.now()
+    if (now > autoShotUntil) {
+      autoShotAt = 0
+      return
+    }
+    if (now < autoShotAt) return
+    const g = roundHolder
+    if (!g || activeGame !== null || menuOpenCheck() || g.state.phase !== 'walking') return
+    if (g.state.distanceToBall > AUTO_SHOT_RANGE) {
+      autoShotAt = 0
+      return
+    }
+    autoShotAt = 0
+    g.beginSwing()
   }
 
   // Clear the bay for a fresh round of ten
@@ -1288,6 +1447,9 @@ export class Game {
     if (state && activeGame !== this && !(tutorialFrozen && this.bay === TUTORIAL_BAY)) return
     if (state && InputModifier.has(engine.PlayerEntity)) return
     if (!state && !InputModifier.has(engine.PlayerEntity)) return
+    // During the tutorial the player stays locked in the bay between shots too. Skipping or
+    // finishing it clears tutorialFrozen first, then frees them.
+    if (!state && tutorialFrozen) return
     if(state)
     {
       // Lock movement only. disableAll also blocks emotes, which stopped the
@@ -1322,6 +1484,21 @@ export let ballCamEnabled = true
 export function toggleBallCam(): void {
   ballCamEnabled = !ballCamEnabled
   for (const fn of settingFns) fn('ballCam', ballCamEnabled)
+}
+
+// Whether the instruction prompts show (Press E to set your power, bay messages and so on).
+// Switched in the Settings panel. The tutorial always shows its prompts.
+export let promptsEnabled = true
+
+export function togglePrompts(): void {
+  setPromptsEnabled(!promptsEnabled)
+}
+
+/** Turns the prompts on or off and saves it, the same as the Settings switch. */
+export function setPromptsEnabled(on: boolean): void {
+  if (on === promptsEnabled) return
+  promptsEnabled = on
+  for (const fn of settingFns) fn('prompts', promptsEnabled)
 }
 
 // Whether the player can orbit and zoom the ball cam. Toggled in the Settings panel.
@@ -1364,6 +1541,7 @@ export function onSettingChanged(fn: (key: string, on: boolean) => void): void {
 // The switches saved on the ledger from last time. Sets them without saving them again.
 export function applySavedSettings(saved: Record<string, boolean>): void {
   if (typeof saved.ballCam === 'boolean') ballCamEnabled = saved.ballCam
+  if (typeof saved.prompts === 'boolean') promptsEnabled = saved.prompts
   if (typeof saved.orbitCam === 'boolean') {
     orbitCamEnabled = saved.orbitCam
     if (!orbitCamEnabled) resetOrbit()
@@ -1416,9 +1594,28 @@ export function getRoundProgress(): { ball: number; balls: number; score: number
   return { ball: g ? g.state.shot : 0, balls: g ? g.roundBalls() : ROUND_BALLS, score: g ? g.state.score : 0 }
 }
 
-// Key 1 toggles the ball cam. Runs once per frame from index.ts.
+// Keys 1, 2 and 3 pick the wedge, iron and driver (the same as the club rack and the club
+// picker). The ball cam is only switched in Settings now. Runs once per frame from index.ts.
+export const CLUB_KEYS: { key: InputAction; number: number; type: ClubType }[] = [
+  { key: InputAction.IA_ACTION_3, number: 1, type: 'wedge' },
+  { key: InputAction.IA_ACTION_4, number: 2, type: 'iron' },
+  { key: InputAction.IA_ACTION_5, number: 3, type: 'driver' }
+]
+
+/** Whether the club can be changed now: not in the tutorial, and not once the power is set. */
+export function clubChangeAllowed(): boolean {
+  if (tutorial.active || isShotInProgress()) return false
+  return activeGame === null || activeGame.state.phase === 'Swing_Height'
+}
+
 export function updateSettingsInput(): void {
-  if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) toggleBallCam()
+  for (const c of CLUB_KEYS) {
+    if (!inputSystem.isTriggered(c.key, PointerEventType.PET_DOWN)) continue
+    if (!clubChangeAllowed() || getSelectedClubType() === c.type) return
+    selectClub(c.type)
+    playUi('ui_select')
+    return
+  }
 }
 
 // ---------------------------------------------------------------------------

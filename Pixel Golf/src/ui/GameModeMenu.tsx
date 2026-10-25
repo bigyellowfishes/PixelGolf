@@ -32,8 +32,9 @@ export const state: State = {
 
 type UiAction = { state: State; props: Parameters<typeof GameModeMenu>[0]; value?: unknown }
 
-export function openPixelGolfMenu() {
-  if (state.display !== 'flex' && menuReopenBlocked()) return
+/** Opens the Pixel Golf menu. force: open it even within a second of another menu closing. */
+export function openPixelGolfMenu(force = false) {
+  if (!force && state.display !== 'flex' && menuReopenBlocked()) return
   state.display = 'flex'
   playUi('ui_open')
 }
@@ -466,19 +467,25 @@ export function GameModeMenu(props: {}) {
 
           {/* Preview and description */}
           <UiEntity uiTransform={{ flexGrow: 1, height: '100%', flexDirection: 'column', margin: { left: 28 } }}>
+            {/* The preview picture. Decentraland doesn't round a picture's corners, so the frame's
+                corners are kept tight and the picture sits the same small, even inset from every
+                edge, pinned on all four sides rather than sized by percent */}
             <UiEntity
               uiTransform={{
                 width: '100%',
                 height: 300,
-                padding: 6,
-                borderRadius: 28,
+                borderRadius: 14,
                 borderWidth: 3,
                 borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 }
               }}
               uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
             >
               <UiEntity
-                uiTransform={{ width: '100%', height: '100%', borderRadius: 22 }}
+                uiTransform={{
+                  positionType: 'absolute',
+                  position: { top: 5, right: 5, bottom: 5, left: 5 },
+                  borderRadius: 8
+                }}
                 uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/range-preview.jpg' } }}
               >
                 <UiEntity

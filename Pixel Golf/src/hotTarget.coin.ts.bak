@@ -1,0 +1,135 @@
+import { engine, Entity, Transform, GltfContainer, ColliderLayer, TextShape, Font, TextAlignMode } from '@dcl/sdk/ecs'
+import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
+import { effectiveHot, hotSecondsLeft, tutorial } from './ledger/client'
+import { HOT } from './ledger/rules'
+
+// The hot target marker: the Multiplier coin (assets/hot/Multiplierv3.glb), an upright disc with
+// an orange metal rim and a black face on each side, floating above whichever target is hot
+// right now, spinning round and bobbing. Each black face shows the multiplier ("2X") and the
+// seconds the target has left; in the tutorial's hot target lesson it says NOW instead.
+// The server picks the target and rotates it every 30 seconds for everyone (ledger/server.ts).
+// Hidden while nothing is hot.
+//
+// Earlier markers are kept: the Multiplier ring in src/hotTarget.ring.ts.bak (model
+// assets/hot/Multiplier.glb), the 2X badge in src/hotTarget.ts.bak.
+
+const MODEL = 'assets/hot/Multiplierv3.glb'
+// The coin in the model: radius 1, upright, its two faces looking along +x and -x. The black
+// faces are 0.758 across (radius) and sit 0.087 out from the middle; the rim 0.096.
+const FACE_RADIUS = 0.758
+/** How far out from the middle the writing sits: just proud of the rim, so it's never hidden */
+const TEXT_OUT = 0.1
+
+/** The coin's radius in metres: this share of the target's radius (its narrower side)... */
+const SIZE = 0.4
+/** ...kept between these (metres) */
+const SIZE_MIN = 2.5
+const SIZE_MAX = 6
+/** Fixed sizes (radius, metres) for targets the rule gets wrong: Yellow is near the bays */
+const SIZE_OVERRIDE: { [colour: string]: number } = { Yellow: 4.5 }
+
+// It floats above the target's flag: the flags (assets/Course/Flag.glb) stand 13.3 m tall from
+// the scene floor, and the bottom of the coin (at the bottom of its bob) sits this far above them
+const FLAG_TOP = 13.3
+const FLAG_CLEARANCE = 1.5
+/** Bob: metres up and down, and seconds per bob */
+const BOB_HEIGHT = 0.6
+const BOB_SECONDS = 2.4
+/** Spin, degrees a second. The sign sets the direction: flip it to spin the other way. */
+const SPIN_SPEED = -40
+const HIDDEN = Vector3.create(0, -100, 0)
+
+// The writing, in the coin's own units (radius 1). Letters are about 0.072 units tall per
+// font size unit; each text has a box big enough for it, or the explorer can clip it away.
+const BIG_CAPS = 0.55
+const BIG_Y = 0.12
+const TIMER_CAPS = 0.2
+const TIMER_Y = -0.42
+const PER_FONT_UNIT = 0.072
+const BIG_COLOUR = Color4.create(0.075, 0.533, 0.722, 1) // #1388B8, Pixel Golf blue
+const TIMER_COLOUR = Color4.Black()
+
+function faceText(parent: Entity, side: 1 | -1, y: number, caps: number, colour: Color4): Entity {
+  const e = engine.addEntity()
+  // Text reads from its -z side: turn it so that faces out of this side of the coin
+  Transform.create(e, {
+    parent,
+    position: Vector3.create(side * TEXT_OUT, y, 0),
+    rotation: Quaternion.fromEulerDegrees(0, side === 1 ? -90 : 90, 0)
+  })
+  TextShape.create(e, {
+    text: '',
+    fontSize: caps / PER_FONT_UNIT,
+    font: Font.F_SANS_SERIF,
+    textColor: colour,
+    textAlign: TextAlignMode.TAM_MIDDLE_CENTER,
+    textWrapping: false,
+    width: FACE_RADIUS * 2,
+    height: caps * 3
+  })
+  return e
+}
+
+export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | undefined): void {
+  const coin = engine.addEntity()
+  Transform.create(coin, { position: HIDDEN })
+  GltfContainer.create(coin, {
+    src: MODEL,
+    // Looks only: the ball passes straight through it
+    visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+    invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+  })
+  // The same writing on both black faces
+  const bigs = [faceText(coin, 1, BIG_Y, BIG_CAPS, BIG_COLOUR), faceText(coin, -1, BIG_Y, BIG_CAPS, BIG_COLOUR)]
+  const timers = [faceText(coin, 1, TIMER_Y, TIMER_CAPS, TIMER_COLOUR), faceText(coin, -1, TIMER_Y, TIMER_CAPS, TIMER_COLOUR)]
+  for (const b of bigs) TextShape.getMutable(b).text = `${HOT.factor}X`
+
+  let shownZone = ''
+  let shownTimer = ''
+  let base = HIDDEN
+  let scale = Vector3.One()
+  let clock = 0
+  let yaw = 0
+
+  engine.addSystem((dt) => {
+    const zone = effectiveHot()
+    if (zone !== shownZone) {
+      shownZone = zone
+      const ent = zone ? zoneEntity(zone) : undefined
+      const t = ent ? Transform.getOrNull(ent) : null
+      if (!t) {
+        base = HIDDEN
+        if (zone) console.log(`[hot] no target entity named ${zone}, the coin is hidden`)
+      } else {
+        const targetRadius = Math.min(Math.abs(t.scale.x), Math.abs(t.scale.z)) / 2
+        const r = SIZE_OVERRIDE[zone.replace(/\d+$/, '')] ?? Math.min(SIZE_MAX, Math.max(SIZE_MIN, targetRadius * SIZE))
+        // One scale for all three: the coin is never stretched or squashed
+        scale = Vector3.create(r, r, r)
+        base = Vector3.create(t.position.x, FLAG_TOP + FLAG_CLEARANCE + r, t.position.z)
+        console.log(`[hot] coin on ${zone} at ${base.x.toFixed(1)}, ${base.y.toFixed(1)}, ${base.z.toFixed(1)}, ${(2 * r).toFixed(1)} m across`)
+      }
+    }
+
+    // Nothing hot: put away once, not every frame
+    if (base === HIDDEN) {
+      if (Transform.get(coin).position.y !== HIDDEN.y) Transform.getMutable(coin).position = HIDDEN
+      return
+    }
+
+    // The countdown (NOW on the tutorial's lesson target, which has none)
+    const left = hotSecondsLeft()
+    const timer = tutorial.active ? 'NOW' : `0:${left < 10 ? '0' : ''}${left}`
+    if (timer !== shownTimer) {
+      shownTimer = timer
+      for (const tm of timers) TextShape.getMutable(tm).text = timer
+    }
+
+    clock += dt
+    yaw = (((yaw + SPIN_SPEED * dt) % 360) + 360) % 360
+    const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
+    const tr = Transform.getMutable(coin)
+    tr.position = Vector3.create(base.x, base.y + BOB_HEIGHT + bob, base.z)
+    tr.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
+    tr.scale = scale
+  })
+}

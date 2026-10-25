@@ -250,27 +250,9 @@ function setupLedger(): void {
 // The on-screen buttons a phone gets
 // ---------------------------------------------------------------------------
 
-const ICON_DIR = 'assets/scene/ui/icons'
-const icon = (file: string) => ({
-  tex: { $case: 'texture' as const, texture: { src: `${ICON_DIR}/${file}` } }
-})
-
-// What the client draws down the right-hand side on a phone
-function applyTouchControls(): void {
-  TouchScreenControls.createOrReplace(engine.RootEntity, {
-    hideJoystick: false,
-    hideCrosshair: true,
-    // `hide` is spelled out on every row. The docs show it as optional and the
-    // generated type has it required, so an entry without it does not compile.
-    touchInputs: [
-      { inputAction: InputAction.IA_PRIMARY, hide: false, icon: icon('swing.png') },
-      { inputAction: InputAction.IA_SECONDARY, hide: false, icon: icon('close.png') },
-      { inputAction: InputAction.IA_ACTION_3, hide: true },
-      { inputAction: InputAction.IA_ACTION_4, hide: true },
-      { inputAction: InputAction.IA_ACTION_6, hide: false, icon: icon('club.png') }
-    ]
-  })
-}
+// The phone's on-screen buttons are set in mobile.ts (setupMobileControls). They used to be
+// written here as well, every frame, which overrode mobile.ts (the buttons never hid behind
+// menus). The old version is in index.ts.bak.
 
 // ---------------------------------------------------------------------------
 // Each frame: finish any local simulation, then play shots back by time
@@ -534,10 +516,6 @@ export function main() {
   SpawnCamera()
   setupUi()
   setupLedger()
-
-  engine.addSystem(() => {
-    applyTouchControls()
-  })
 
   engine.addSystem(physicsSystem)
 

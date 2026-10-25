@@ -2,7 +2,7 @@ import { engine } from '@dcl/sdk/ecs'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { Vector3 } from '@dcl/sdk/math'
 
-import { Game, onRoundFinished, resetTutorialSteps, holdTutorialBayNotice } from './game'
+import { Game, onRoundFinished, resetTutorialSteps, holdTutorialBayNotice, setPromptsEnabled } from './game'
 import { profile, onProfile, tutorial, sendTutorialDone, TUTORIAL_BALLS } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 import { showTutorialComplete } from './ui/RoundResult'
@@ -78,7 +78,7 @@ function skip(bay19: Game): void {
   sendTutorialDone()
   bay19.newRound()
   holdTutorialBayNotice()
-  showToast('Tutorial skipped. Click any Tee Off screen to pick a bay and play.', 6)
+  showToast('Tutorial skipped. Walk up to a free bay and press F to open the menu. 1, 2 or 3 changes club.', 6)
 }
 
 function begin(bay19: Game): void {
@@ -104,6 +104,9 @@ function finish(bay19: Game, score: number): void {
   tutorial.active = false
   profile.tutorialDone = true
   sendTutorialDone()
+  // They've been shown how to play: the prompts go off from here (saved like the Settings
+  // switch, so it stays off next visit). Settings > Prompts turns them back on.
+  setPromptsEnabled(false)
   holdTutorialBayNotice()
   showTutorialComplete(score)
 

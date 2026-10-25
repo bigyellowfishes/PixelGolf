@@ -1,0 +1,219 @@
+import {
+  engine,
+  Entity,
+  Transform,
+  TextShape,
+  Billboard,
+  BillboardMode,
+  Font,
+  TextAlignMode,
+  MeshRenderer,
+  Material
+} from '@dcl/sdk/ecs'
+import { Color4, Vector3 } from '@dcl/sdk/math'
+import { hotSecondsLeft, tutorial, effectiveHot } from './ledger/client'
+import { HOT } from './ledger/rules'
+import { hotLook, faded, HOT_NAVY_TEXT, HOT_GREY_RIM } from './hotLooks'
+
+// The hot target marker, floating over whichever target is hot right now. Built like the range
+// card's hot box (ui/RangeHud.tsx) so the two read as one thing:
+//   - a rounded badge in the target's own colour with a white rim, "HOT TARGET" small and
+//     "2X" big on it
+//   - under it, a white pill with the seconds left in navy, like the menus' buttons
+// The server picks the target and rotates it every 30 seconds for everyone (ledger/server.ts).
+// It hides until the server has said, and during the tutorial, which has its own SHOOT HERE
+// marker instead (tutorialVisuals.ts).
+//
+// The cards are flat planes with rounded-corner textures (assets/hot/badge.png and pill.png,
+// plain white so they can be tinted any colour), turned to face you with the text.
+
+// Size of the marker (the badge's height, roughly) as a share of the target's width, and its
+// limits in metres
+const MARKER_SIZE = 0.35
+const MARKER_MIN = 2
+const MARKER_MAX = 9
+/**
+ * Fixed marker sizes (metres) for targets the rule above gets wrong. The yellow targets are
+ * 30 m wide, so they hit MARKER_MAX, but they're much nearer the bays than the other big ones
+ * and looked far too big. 6.5 makes them about the same size on screen as the reds.
+ */
+const SIZE_OVERRIDE: { [colour: string]: number } = { Yellow: 6.5 }
+// The marker floats above the target's flag: the flags (assets/Course/Flag.glb) stand 13.3 m
+// tall from the ground (the same figure the tutorial's SHOOT HERE uses), and the bottom of the
+// timer pill sits this far above their tops, clear of the bob. Raise it for more room, lower it
+// to bring the marker closer to the target.
+const FLAG_TOP = 13.3
+const FLAG_CLEARANCE = 2
+// Gentle bob, in metres and seconds per bob
+const BOB_HEIGHT = 0.4
+const BOB_SECONDS = 2.4
+
+// Layout, in multiples of the marker size (H). The textures are drawn at these proportions.
+const BADGE_W = 2.2
+const BADGE_H = 1.25
+const PILL_W = 1.2
+const PILL_H = 0.45
+/** Rim thickness around the badge and the pill */
+const RIM = 0.07
+/** Gap between the badge and the pill */
+const GAP = 0.1
+/** Cap heights of the words */
+const LABEL_CAPS = 0.13
+const BIG_CAPS = 0.55
+const TIMER_CAPS = 0.22
+/** Letters are about 0.072 m tall per font size unit */
+const PER_FONT_UNIT = 0.072
+/**
+ * The cards sit just behind the words (the far side from you, which is +z on a billboard), and
+ * each rim just behind its card, in multiples of H so they don't flicker at a distance.
+ */
+const CARD_DEPTH = 0.02
+const RIM_DEPTH = 0.04
+
+const BADGE_TEX = 'assets/hot/badge.png'
+const PILL_TEX = 'assets/hot/pill.png'
+const HIDDEN = Vector3.create(0, -100, 0)
+
+function card(parent: Entity, src: string): Entity {
+  const e = engine.addEntity()
+  Transform.create(e, { parent })
+  MeshRenderer.setPlane(e)
+  Material.setBasicMaterial(e, {
+    texture: Material.Texture.Common({ src }),
+    alphaTexture: Material.Texture.Common({ src }),
+    alphaTest: 0.5,
+    castShadows: false,
+    diffuseColor: Color4.White()
+  })
+  return e
+}
+
+function words(parent: Entity, align: TextAlignMode): Entity {
+  const e = engine.addEntity()
+  Transform.create(e, { parent })
+  TextShape.create(e, {
+    text: '',
+    fontSize: 10,
+    font: Font.F_SANS_SERIF,
+    textColor: Color4.White(),
+    textAlign: align,
+    textWrapping: false
+  })
+  return e
+}
+
+function tint(e: Entity, src: string, c: { r: number; g: number; b: number; a: number }): void {
+  Material.setBasicMaterial(e, {
+    texture: Material.Texture.Common({ src }),
+    alphaTexture: Material.Texture.Common({ src }),
+    alphaTest: 0.5,
+    castShadows: false,
+    diffuseColor: Color4.create(c.r, c.g, c.b, 1)
+  })
+}
+
+function sizeBox(e: Entity, width: number, height: number): void {
+  const t = TextShape.getMutable(e)
+  t.width = width
+  t.height = height
+}
+
+function place(e: Entity, x: number, y: number, z: number, w = 1, h = 1): void {
+  const t = Transform.getMutable(e)
+  t.position = Vector3.create(x, y, z)
+  t.scale = Vector3.create(w, h, 1)
+}
+
+export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | undefined): void {
+  // Everything hangs off one entity that turns to face you
+  const marker = engine.addEntity()
+  Transform.create(marker, { position: HIDDEN })
+  Billboard.create(marker, { billboardMode: BillboardMode.BM_Y })
+
+  const badgeRim = card(marker, BADGE_TEX)
+  const badge = card(marker, BADGE_TEX)
+  const pillRim = card(marker, PILL_TEX)
+  const pill = card(marker, PILL_TEX)
+  const label = words(marker, TextAlignMode.TAM_MIDDLE_CENTER)
+  const big = words(marker, TextAlignMode.TAM_MIDDLE_CENTER)
+  const timer = words(marker, TextAlignMode.TAM_MIDDLE_CENTER)
+  TextShape.getMutable(label).text = 'HOT TARGET'
+  TextShape.getMutable(big).text = `${HOT.factor}X`
+  TextShape.getMutable(timer).textColor = Color4.create(HOT_NAVY_TEXT.r, HOT_NAVY_TEXT.g, HOT_NAVY_TEXT.b, 1)
+  tint(pill, PILL_TEX, { r: 1, g: 1, b: 1, a: 1 })
+  tint(pillRim, PILL_TEX, HOT_GREY_RIM)
+
+  let shownZone = ''
+  let shownText = ''
+  let base = HIDDEN
+  let clock = 0
+
+  // Lays the marker out for a size (H, metres)
+  function layout(H: number): void {
+    const pillY = -(BADGE_H / 2 + GAP + PILL_H / 2) * H
+    place(badgeRim, 0, 0, RIM_DEPTH * H, (BADGE_W + RIM * 2) * H, (BADGE_H + RIM * 2) * H)
+    place(badge, 0, 0, CARD_DEPTH * H, BADGE_W * H, BADGE_H * H)
+    place(pillRim, 0, pillY, RIM_DEPTH * H, (PILL_W + RIM * 2) * H, (PILL_H + RIM * 2) * H)
+    place(pill, 0, pillY, CARD_DEPTH * H, PILL_W * H, PILL_H * H)
+    place(label, 0, 0.36 * H, 0)
+    place(big, 0, -0.1 * H, 0)
+    place(timer, 0, pillY, 0)
+    TextShape.getMutable(label).fontSize = (LABEL_CAPS * H) / PER_FONT_UNIT
+    TextShape.getMutable(big).fontSize = (BIG_CAPS * H) / PER_FONT_UNIT
+    TextShape.getMutable(timer).fontSize = (TIMER_CAPS * H) / PER_FONT_UNIT
+    // Each text gets a box big enough for its letters. Left to the default, the box is smaller
+    // than the 2X on the bigger targets and the explorer clipped the 2X away entirely.
+    sizeBox(label, BADGE_W * H, LABEL_CAPS * H * 3)
+    sizeBox(big, BADGE_W * H, BIG_CAPS * H * 3)
+    sizeBox(timer, PILL_W * H, TIMER_CAPS * H * 3)
+  }
+
+  // Colours it for a target: the badge in the target's colour with a white rim (grey for White)
+  function colour(zone: string): void {
+    const look = hotLook(zone)
+    tint(badge, BADGE_TEX, look.fill)
+    tint(badgeRim, BADGE_TEX, zone.replace(/\d+$/, '') === 'White' ? HOT_GREY_RIM : { r: 1, g: 1, b: 1, a: 1 })
+    const text = Color4.create(look.text.r, look.text.g, look.text.b, 1)
+    const soft = faded(look.text)
+    TextShape.getMutable(big).textColor = text
+    TextShape.getMutable(label).textColor = Color4.create(soft.r, soft.g, soft.b, soft.a)
+  }
+
+  engine.addSystem((dt) => {
+    clock += dt
+    // The range's hot target, or the tutorial's lesson one (shot 5, on the orange target)
+    const zone = effectiveHot()
+    if (zone !== shownZone) {
+      shownZone = zone
+      const ent = zone ? zoneEntity(zone) : undefined
+      const t = ent ? Transform.getOrNull(ent) : null
+      if (!t) {
+        base = HIDDEN
+      } else {
+        const width = Math.max(Math.abs(t.scale.x), Math.abs(t.scale.z))
+        const H = SIZE_OVERRIDE[zone.replace(/\d+$/, '')] ?? Math.min(MARKER_MAX, Math.max(MARKER_MIN, width * MARKER_SIZE))
+        layout(H)
+        colour(zone)
+        // From the badge's middle down to the bottom of the pill's rim
+        const below = (BADGE_H / 2 + GAP + PILL_H + RIM) * H
+        base = Vector3.create(t.position.x, FLAG_TOP + FLAG_CLEARANCE + BOB_HEIGHT + below, t.position.z)
+      }
+    }
+
+    const left = hotSecondsLeft()
+    // The tutorial's lesson target has no countdown: it's hot for that one shot
+    const text = !shownZone ? '' : tutorial.active ? 'NOW' : left > 0 ? `0:${left < 10 ? '0' : ''}${left}` : ''
+    if (text !== shownText) {
+      shownText = text
+      TextShape.getMutable(timer).text = text
+    }
+
+    // Hidden: put away once, not every frame
+    if (!text) {
+      if (Transform.get(marker).position.y !== HIDDEN.y) Transform.getMutable(marker).position = HIDDEN
+      return
+    }
+    const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
+    Transform.getMutable(marker).position = Vector3.create(base.x, base.y + bob, base.z)
+  })
+}
