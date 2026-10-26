@@ -235,7 +235,7 @@ export function levelProgress(xp: number): { level: number; into: number; need: 
 // Cosmetics
 // ---------------------------------------------------------------------------
 
-export type CosmeticKind = 'ball' | 'club'
+export type CosmeticKind = 'ballVis' | 'ballProp' | 'club'
 
 export type Cosmetic = {
   id: string
@@ -256,24 +256,94 @@ export type Cosmetic = {
  * straight a ball flies. Placeholder names and prices until the art exists.
  */
 export const CATALOGUE: Cosmetic[] = [
-  { id: 'ball-classic', kind: 'ball', name: 'Classic Ball', level: 1, price: 0, model: 'assets/Models/Golf_Ball/Golf_Ball_Single.glb' },
-  // Coloured balls (2026-10-19): free for everyone for now
-  { id: 'ball-red', kind: 'ball', name: 'Red Ball', level: 1, price: 0, model: 'assets/Balls/red_golf_ball.glb' },
-  { id: 'ball-orange', kind: 'ball', name: 'Orange Ball', level: 1, price: 0, model: 'assets/Balls/orange_golf_ball.glb' },
-  { id: 'ball-yellow', kind: 'ball', name: 'Yellow Ball', level: 1, price: 0, model: 'assets/Balls/yellow_golf_ball.glb' },
-  { id: 'ball-green', kind: 'ball', name: 'Green Ball', level: 1, price: 0, model: 'assets/Balls/green_golf_ball.glb' },
-  { id: 'ball-blue', kind: 'ball', name: 'Blue Ball', level: 1, price: 0, model: 'assets/Balls/blue_golf_ball.glb' },
-  { id: 'ball-black', kind: 'ball', name: 'Black Ball', level: 1, price: 0, model: 'assets/Balls/black_golf_ball.glb' },
-  { id: 'ball-sunshine', kind: 'ball', name: 'Sunshine Ball', level: 3, price: 150, shelved: true },
-  { id: 'ball-pixel', kind: 'ball', name: 'Pixel Ball', level: 6, price: 400, shelved: true },
-  { id: 'ball-comet', kind: 'ball', name: 'Comet Trail Ball', level: 10, price: 900, shelved: true },
+  { id: 'ball-classic', kind: 'ballVis', name: 'Classic Ball',  level: 1, price: 0, model: 'assets/Balls/Ball_Classic.glb' },
+  { id: 'ball-red',     kind: 'ballVis', name: 'Red Ball',      level: 1, price: 0, model: 'assets/Balls/Ball_Red.glb' },
+  { id: 'ball-orange',  kind: 'ballVis', name: 'Orange Ball',   level: 1, price: 0, model: 'assets/Balls/Ball_Orange.glb' },
+  { id: 'ball-yellow',  kind: 'ballVis', name: 'Yellow Ball',   level: 1, price: 0, model: 'assets/Balls/Ball_Yellow.glb' },
+  { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Green.glb' },
+  { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 1, price: 0, model: 'assets/Balls/Ball_Blue.glb' },
+  { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Black.glb' },
+  { id: 'prop-classic', kind: 'ballProp', name: 'Classic Ball', level: 1, price: 0},
+  { id: 'prop-Styro', kind: 'ballProp', name: 'Styrofoam Ball', level: 1, price: 0},
+  { id: 'prop-bouncy', kind: 'ballProp', name: 'Bouncy Ball', level: 1, price: 0},
+  { id: 'prop-antigrav', kind: 'ballProp', name: 'Low Gravity', level: 1, price: 0},
+  { id: 'prop-bowling', kind: 'ballProp', name: 'Bowling Ball', level: 1, price: 0},
+  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang Ball', level: 1, price: 0},
+  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon Ball', level: 1, price: 0},
+  { id: 'prop-egg', kind: 'ballProp', name: 'Egg Ball', level: 1, price: 0},
   { id: 'club-classic', kind: 'club', name: 'Classic Clubs', level: 1, price: 0 },
-  { id: 'club-arcade', kind: 'club', name: 'Arcade Clubs', level: 4, price: 250 },
-  { id: 'club-canyon', kind: 'club', name: 'Canyon Clubs', level: 8, price: 600 },
-  { id: 'club-gold', kind: 'club', name: 'Gold Clubs', level: 12, price: 1200 }
 ]
 
-export const DEFAULT_EQUIPPED: Record<CosmeticKind, string> = { ball: 'ball-classic', club: 'club-classic' }
+// ---------------------------------------------------------------------------
+// Ball properties (the 'ballProp' cosmetics): how the ball flies
+// ---------------------------------------------------------------------------
+
+/**
+ * How a ball behaves in flight. ballSim.ts reads this, the server picks it from the shooter's
+ * equipped ballProp, and a recorded shot is played back the same everywhere, so nothing here
+ * goes over the wire. 'prop-classic' is the baseline: it matches the sim's old fixed numbers.
+ */
+export type BallProfile = {
+  /** x the wind's push while the ball is in the air */
+  windMul: number
+  /** x gravity (9.82 m/s2) for the whole flight */
+  gravityMul: number
+  /** How much of its speed the ball keeps on a bounce off the course */
+  restitution: number
+  /** Linear damping: air drag and rolling resistance in one (the sim has no ground friction) */
+  damping: number
+  /** x the launch speed */
+  speedMul: number
+  /** x the launch's upward part (the chip that lifts every shot). 0 keeps it on the ground. */
+  liftMul: number
+  /** Longest a shot can run, seconds */
+  maxSeconds: number
+  /** Glide: gravity is cut to gravityMul (of the normal) for the first `seconds` in the air */
+  glide?: { seconds: number; gravityMul: number }
+  /**
+   * Boomerang: launched backwards at `back` x the normal horizontal speed, then pulled forwards
+   * while in the air so it turns round and comes down going forwards at `forward` x that speed.
+   */
+  boomerang?: { back: number; forward: number }
+  /** Wobble: a sideways kick of up to this many m/s on every real bounce (the egg) */
+  wobble?: number
+}
+
+const BASE_PROFILE: BallProfile = {
+  windMul: 1,
+  gravityMul: 1,
+  restitution: 0.2,
+  damping: 0.35,
+  speedMul: 1,
+  liftMul: 1,
+  maxSeconds: 10
+}
+
+/** Keyed by the 'prop-...' ids in CATALOGUE. Tune freely: nothing is stored. */
+export const BALL_PROFILES: Record<string, BallProfile> = {
+  'prop-classic': BASE_PROFILE,
+  // Light and draggy: the wind shoves it four times as hard
+  'prop-Styro': { ...BASE_PROFILE, windMul: 4 },
+  // Keeps most of its speed on a bounce and rolls little
+  'prop-bouncy': { ...BASE_PROFILE, restitution: 0.8, damping: 0.25, maxSeconds: 15 },
+  // Floats: a third of gravity, so a long way up and a long way down
+  'prop-antigrav': { ...BASE_PROFILE, gravityMul: 0.35, maxSeconds: 20 },
+  // No lob: stays on the ground, slower off the club, and barely slows once it's rolling
+  'prop-bowling': { ...BASE_PROFILE, speedMul: 0.6, liftMul: 0, damping: 0.15, maxSeconds: 20 },
+  // Goes backwards first, then comes round and lands in front (the pull stops once it's going forwards at `forward`)
+  'prop-boomerang': { ...BASE_PROFILE, boomerang: { back: 0.5, forward: 0.9 }, maxSeconds: 12 },
+  // Flaps along near the top of its flight for a couple of seconds, then drops
+  'prop-pigeon': { ...BASE_PROFILE, glide: { seconds: 2.5, gravityMul: 0.1 }, maxSeconds: 12 },
+  // Wobbles off line on every bounce and doesn't roll far
+  'prop-egg': { ...BASE_PROFILE, restitution: 0.15, damping: 0.35, wobble: 3 }
+}
+
+/** The profile for an equipped ballProp id. Anything unknown (or nothing) is the classic ball. */
+export function ballProfile(id?: string): BallProfile {
+  return (id && BALL_PROFILES[id]) || BALL_PROFILES['prop-classic']
+}
+
+export const DEFAULT_EQUIPPED: Record<CosmeticKind, string> = { ballVis: 'ball-classic', ballProp: 'prop-classic', club: 'club-classic' }
 
 export function itemById(id: string): Cosmetic | undefined {
   return CATALOGUE.find((i) => i.id === id)

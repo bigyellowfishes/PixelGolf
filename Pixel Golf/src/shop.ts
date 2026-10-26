@@ -45,7 +45,7 @@ export const SHOP_NPCS: ShopNpc[] = [
     ],
     skinColor: { r: 0.8, g: 0.6, b: 0.46 },
     hairColor: { r: 0.36, g: 0.19, b: 0.06 },
-    aisle: 'ball',
+    aisle: 'ballVis',
     greeting: 'Welcome to the pro shop! Fancy a new ball?'
   },
   {
@@ -62,7 +62,7 @@ export const SHOP_NPCS: ShopNpc[] = [
     skinColor: { r: 0.6, g: 0.46, b: 0.36 },
     hairColor: { r: 0.1, g: 0.07, b: 0.05 },
     // Clubs are hidden for now (SHOW_CLUBS), so Pete sells balls too
-    aisle: 'ball',
+    aisle: 'ballProp',
     greeting: 'Alright! Fancy a new ball?'
   }
 ]
@@ -97,7 +97,7 @@ const TURN_SPEED = 180
 const WAVE_AGAIN_SECONDS = 30
 
 /** The Clubs tab. Off for now: club cosmetics have no models yet. true brings the tab back. */
-export const SHOW_CLUBS = false
+export const ONLYSHOWBALLS = false
 
 // --- what the shop shows (ui/ShopMenu.tsx reads this) ---------------------
 export const shop = {
@@ -119,7 +119,7 @@ function openShop(k: Keeper): void {
   if (!shop.open && menuReopenBlocked()) return
   if (!shop.open) playUi('ui_open')
   shop.open = true
-  shop.aisle = SHOW_CLUBS ? k.npc.aisle : 'ball'
+  shop.aisle = !ONLYSHOWBALLS ? k.npc.aisle : 'ballVis'
   shop.keeper = k.npc.name
   shop.greeting = k.npc.greeting
   dismissed = false
