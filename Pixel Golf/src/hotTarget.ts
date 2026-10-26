@@ -113,6 +113,9 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
       if (!t) {
         showing = false
         Transform.getMutable(rim).position = HIDDEN
+        // The sky ring goes too: it used to stay over the last hot target (in the tutorial, from
+        // the first shot, before its 2X lesson)
+        Transform.getMutable(Ring).position = HIDDEN
         if (zone) console.log(`[hot] no target entity named ${zone}, the marker is hidden`)
       } else {
         //

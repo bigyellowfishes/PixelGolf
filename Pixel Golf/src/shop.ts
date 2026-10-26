@@ -147,7 +147,9 @@ type Keeper = {
 const keepers: Keeper[] = []
 
 /** The shopkeepers' avatar ids, so the privacy areas (tutorialVisuals.ts) never hide them */
-export const SHOP_NPC_IDS = SHOP_NPCS.map((_, i) => `pixel-golf-shop-${i}`)
+// A nametag shows the last 4 characters of the id after the name, in grey. Ending the id with 4
+// spaces hides that suffix (the ids stay different from each other before the spaces).
+export const SHOP_NPC_IDS = SHOP_NPCS.map((_, i) => `pixel-golf-shop-${i}    `)
 
 function spawnKeeper(npc: ShopNpc, index: number): void {
   const homeYaw = npc.facing

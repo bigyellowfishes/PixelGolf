@@ -85,19 +85,22 @@ export function setupWindFlags(): void {
 // For the range card: the wind as you see it from where you're looking
 // ---------------------------------------------------------------------------
 
-const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖']
+// The arrow is a picture, one per direction (up, then clockwise in 45 degree steps). The diagonal
+// arrow characters aren't in the font, so the explorer drew them as emoji.
+const ARROW_IMAGE = 'assets/images/menus/wind-arrow-'
 
 /**
  * The wind relative to the camera: an arrow (up = blowing away from you, the way you're
  * looking), its strength in mph, and a word or two for what it'll do to a shot hit that way.
  */
 export function windReadout(): { arrow: string; mph: string; words: string; calm: boolean } {
+  // arrow: the picture to show (assets/images/menus/wind-arrow-0.png to -7.png), '' when calm
   const wind = effectiveWind()
   if (!wind.ready || wind.speed < CALM) return { arrow: '', mph: 'Calm', words: '', calm: true }
   const cam = Transform.getOrNull(engine.CameraEntity)
   const camYaw = cam ? Quaternion.toEulerAngles(cam.rotation).y : 0
   const rel = ((wind.dir - camYaw) % 360 + 360) % 360
-  const arrow = ARROWS[Math.round(rel / 45) % 8]
+  const arrow = `${ARROW_IMAGE}${Math.round(rel / 45) % 8}.png`
   const r = (rel * Math.PI) / 180
   const along = Math.cos(r) // + blowing the way you're looking
   const cross = Math.sin(r) // + blowing to your right

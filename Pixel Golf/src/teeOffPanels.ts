@@ -19,7 +19,7 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu, state as pixelGolfMenu } from './ui/GameModeMenu'
 import { state as clubMenu } from './ui/ClubSelectMenu'
 import { isShotInProgress, GameState, getAllGames, playerBusy, roundInProgress, requestShotStart, stepOutForMenu, menuKeyAllowed, tutorialReplayOffered } from './game'
-import { replayTutorial } from './tutorial'
+import { openReplayPrompt, state as replayPrompt } from './ui/ReplayTutorialPrompt'
 import { onMenuKey } from './menuGuard'
 import { ROUND_BALLS } from './ledger/rules'
 import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
@@ -356,10 +356,9 @@ function onPuttingArea(dt: number): boolean {
  */
 function openBayMenuByKey(): void {
   if (tutorial.active || !menuKeyAllowed()) return
-  // At the tutorial bay's ball, once done: F plays the tutorial again (practice, tutorial.ts)
-  if (tutorialReplayOffered()) {
-    const why = replayTutorial()
-    if (why) showToast(why, 4)
+  // On the tutorial bay, once done: F asks again whether to redo the tutorial
+  if (bayHere === TUTORIAL_BAY) {
+    if (tutorialReplayOffered()) openReplayPrompt()
     return
   }
   // Mid-shot the walk-in check is paused, so the bay is the one you're playing
@@ -429,7 +428,14 @@ export function setupAutoTeeOff(menuOpen: () => boolean): void {
     if (near !== lastBay) {
       // Left the last bay (or walked into a new one): this one gets its turn
       lastBay = near
+      // Left the tutorial bay with its question still up: it goes
+      if (near !== TUTORIAL_BAY && replayPrompt.display === 'flex') replayPrompt.display = 'none'
       if (near === 0 || menuOpen()) return
+      // Walked onto the tutorial bay after doing the tutorial: would they like to redo it?
+      if (near === TUTORIAL_BAY && !tutorial.active) {
+        if (tutorialReplayOffered()) openReplayPrompt()
+        return
+      }
       // Walked back into your own bay after stepping out of it: the menu opens again
       if (near === myBay()) {
         if (near !== TUTORIAL_BAY && !tutorial.active) openPixelGolfMenu(true)

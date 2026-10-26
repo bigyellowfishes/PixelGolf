@@ -134,7 +134,9 @@ export function RangeHud(props: {}) {
   state.toastDisplay = SHOW_CALLOUTS && Date.now() < toastUntil ? 'flex' : 'none'
   const compact = PHONE_COMPACT && onPhone()
   state.perfDisplay = PERF_READOUT && !compact ? 'flex' : 'none'
-  state.multiplierDisplay = compact ? 'none' : 'flex'
+  // The round multiplier doesn't apply to the tutorial round (it isn't sent to the ledger), so
+  // it stays hidden until the tutorial's over. Its 2X hot target lesson uses the hot box instead.
+  state.multiplierDisplay = compact || tutorial.active ? 'none' : 'flex'
   state.pointsLabelDisplay = compact ? 'none' : 'flex'
   scale = onPhone() ? PHONE_SCALE : 1
   const cardWidth = z(CARD_WIDTH)
@@ -263,7 +265,11 @@ export function RangeHud(props: {}) {
             />
           </UiEntity>
           <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-            <Label font="sans-serif" fontSrc={FONT_BOLD} value={wind.arrow} fontSize={z(20)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(22), height: z(24), display: wind.calm ? 'none' : 'flex' }} />
+            {/* The arrow is a picture (wind.ts): the diagonal arrow characters showed as emoji */}
+            <UiEntity
+              uiTransform={{ width: z(20), height: z(20), margin: { right: z(2) }, display: wind.calm ? 'none' : 'flex' }}
+              uiBackground={{ textureMode: 'stretch', texture: { src: wind.arrow || 'assets/images/menus/wind-arrow-0.png' } }}
+            />
             <Label font="sans-serif" fontSrc={FONT_REGULAR} value={wind.mph} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(50), height: z(24) }} />
           </UiEntity>
         </UiEntity>

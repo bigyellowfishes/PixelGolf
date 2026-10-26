@@ -20,6 +20,8 @@ import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupBayBarriers } from './bayBarriers'
+import { setupPlaza } from './plaza'
+import { setupLeaderboardScreens } from './leaderboardScreens'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop, closeShop } from './shop'
 import { setupMenuGuard } from './menuGuard'
@@ -61,6 +63,7 @@ import { state as gameModeMenu } from './ui/GameModeMenu'
 import { state as clubMenu } from './ui/ClubSelectMenu'
 import { state as boardsMenu } from './ui/LeaderboardMenu'
 import { state as settingsMenu } from './ui/SettingsMenu'
+import { state as replayPrompt } from './ui/ReplayTutorialPrompt'
 import { setupMobileControls } from './mobile'
 import { setupClubSync } from './clubSync'
 import { showToast } from './ui/RangeHud'
@@ -550,6 +553,7 @@ export function main() {
     boardsMenu.display === 'flex' ||
     settingsMenu.display === 'flex' ||
     roundCard.display === 'flex' ||
+    replayPrompt.display === 'flex' ||
     shop.open
   setupMobileControls(anyMenuOpen)
   // No shot starts while a menu is open (so the bay menu can't sit over a swing)
@@ -558,6 +562,10 @@ export function main() {
   setupAutoTeeOff(anyMenuOpen)
   // Other players can't walk into a bay someone holds (not the tutorial or solo bay)
   setupBayBarriers()
+  // The plaza: the turning golf cart, the top three on the podium, and seats to sit on
+  setupPlaza()
+  // The leaderboards on the plaza's screens
+  setupLeaderboardScreens()
   // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
   setupMenuGuard(anyMenuOpen, () => {
     if (anyMenuOpen()) playUi('ui_close')
@@ -566,6 +574,7 @@ export function main() {
     boardsMenu.display = 'none'
     settingsMenu.display = 'none'
     roundCard.display = 'none'
+    replayPrompt.display = 'none'
     if (shop.open) closeShop()
   })
 

@@ -12,6 +12,7 @@ import { ShopMenu } from './ShopMenu'
 import { SkipTutorial } from './SkipTutorial'
 import { SpeedToggle } from './SpeedToggle'
 import { DevPanel, devPanel } from './DevPanel'
+import { ReplayTutorialPrompt, state as replayPrompt } from './ReplayTutorialPrompt'
 import { shop } from '../shop'
 import { tutorial } from '../ledger/client'
 import { meters, shotSpeedShown } from '../game'
@@ -39,6 +40,7 @@ export function setupUi() {
       </ScreenInsetArea>
       <ScreenInsetArea>{shop.open ? <ShopMenu /> : null}</ScreenInsetArea>
       <ScreenInsetArea>{tutorial.active ? <SkipTutorial /> : null}</ScreenInsetArea>
+      <ScreenInsetArea>{replayPrompt.display === 'flex' ? <ReplayTutorialPrompt /> : null}</ScreenInsetArea>
       <ScreenInsetArea>{shotSpeedShown() ? <SpeedToggle /> : null}</ScreenInsetArea>
       {/* Admin only, opened from Settings. Not a menu: the game carries on with it open */}
       <ScreenInsetArea>{devPanel.open ? <DevPanel /> : null}</ScreenInsetArea>
