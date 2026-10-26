@@ -170,11 +170,13 @@ function setupTurntable(): void {
     }
     return false
   }
+  // The cart's collision is one box round the whole cabin. It only stops people walking through:
+  // left on for clicks too, it caught them before they reached the seat and the steering wheel.
   const setCartCollision = (on: boolean) => {
     if (!cart || !GltfContainer.has(cart)) return
-    const g = GltfContainer.getMutable(cart)
-    g.invisibleMeshesCollisionMask = on ? undefined : ColliderLayer.CL_NONE
+    GltfContainer.getMutable(cart).invisibleMeshesCollisionMask = on ? ColliderLayer.CL_PHYSICS : ColliderLayer.CL_NONE
   }
+  setCartCollision(true)
 
   pointerEventsSystem.onPointerDown(
     {

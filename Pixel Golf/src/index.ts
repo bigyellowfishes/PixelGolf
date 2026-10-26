@@ -429,7 +429,8 @@ function ballModel(id: string): string {
 }
 
 function myBallModel(): string {
-  return ballModel(profile.equipped.ball ?? '')
+  // The ball's look is 'ballVis' now (Joel's ball properties split it from 'ballProp')
+  return ballModel(profile.equipped.ballVis ?? '')
 }
 
 function showEquippedBall() {

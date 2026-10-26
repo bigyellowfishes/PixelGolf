@@ -265,6 +265,9 @@ async function load(address: string): Promise<Wallet> {
   if (raced) return raced
   const wallet: Wallet = stored ? { ...empty(), ...stored } : empty()
   if (!wallet.equipped) wallet.equipped = { ...DEFAULT_EQUIPPED }
+  // A ball equipped before the look and the properties were split was saved as 'ball': it's the look
+  const oldBall = (wallet.equipped as Record<string, string>).ball
+  if (oldBall && !wallet.equipped.ballVis) wallet.equipped.ballVis = oldBall
   // Where they stand before anything changes, so their first level-up isn't swallowed
   if (wallet.level < 0) wallet.level = levelFor(wallet.xp)
   cache.set(address, wallet)

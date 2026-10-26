@@ -103,7 +103,7 @@ export const ONLYSHOWBALLS = false
 export const shop = {
   open: false,
   /** The tab showing */
-  aisle: 'ball' as CosmeticKind,
+  aisle: 'ballVis' as CosmeticKind,
   /** The shopkeeper who opened it, and what they said */
   keeper: '',
   greeting: '',
