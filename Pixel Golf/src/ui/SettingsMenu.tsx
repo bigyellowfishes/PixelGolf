@@ -9,9 +9,11 @@ import { amIAdmin, sendAdminReset } from '../ledger/client'
 import { toggleDevPanel, devPanel } from './DevPanel'
 import { forTouch } from '../mobile'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
+import { audio, VOLUME_STEPS, toggleMusic, setMusicVolume, toggleVoice, setVoiceVolume } from '../audio'
 
 // The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx).
 // Holds the Ball cam on/off switch (only here now: key 1 picks the wedge) and the Orbit camera switch.
+// Then Music and Commentary, each with an on/off switch and a volume bar (audio.ts).
 // Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
 
 export interface State {
@@ -108,6 +110,84 @@ function pressResetLedger({ state, props }: UiAction) {
   sendAdminReset()
   state.display = 'none'
   playUi('ui_close')
+}
+
+const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
+const GREY = { r: 0.337, g: 0.388, b: 0.435, a: 1 }
+const BLUE = { r: 0.075, g: 0.533, b: 0.722, a: 1 }
+const GREEN = { r: 0.165, g: 0.525, b: 0.106, a: 1 }
+const OFF = { r: 0.765, g: 0.804, b: 0.835, a: 1 }
+const PALE_BLUE = { r: 0.62, g: 0.78, b: 0.85, a: 1 }
+const WHITE = { r: 1, g: 1, b: 1, a: 1 }
+const EDGE = { r: 0.835, g: 0.863, b: 0.886, a: 1 }
+
+/**
+ * A sound row: name and volume on the left, a bar of steps to tap (the slider), and the on/off
+ * switch. Tapping a step sets the volume and switches the sound on.
+ */
+function soundRow(key: string, title: string, on: boolean, step: number, onToggle: () => void, onStep: (n: number) => void) {
+  const steps: number[] = []
+  for (let i = 1; i <= VOLUME_STEPS; i++) steps.push(i)
+  return (
+    <UiEntity
+      key={key}
+      uiTransform={{
+        width: '100%',
+        height: 88,
+        flexDirection: 'row',
+        alignItems: 'center',
+        margin: { top: 14 },
+        padding: { left: 20, right: 18 },
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: EDGE
+      }}
+      uiBackground={{ color: WHITE }}
+    >
+      <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column' }}>
+        <UiEntity uiTransform={{ width: '100%', height: 28, flexDirection: 'row', alignItems: 'center' }}>
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={title} fontSize={20} color={NAVY} textAlign="middle-left" uiTransform={{ width: 150, height: 28 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={on ? `${step * 10}%` : 'Muted'} fontSize={14} color={GREY} textAlign="middle-left" uiTransform={{ width: 80, height: 28 }} />
+        </UiEntity>
+        <UiEntity uiTransform={{ height: 32, flexDirection: 'row', alignItems: 'center', margin: { top: 4 } }}>
+          {steps.map((i) => (
+            <UiEntity
+              key={`${key}-${i}`}
+              uiTransform={{ width: 30, height: 32, justifyContent: 'center', alignItems: 'flex-end', padding: { bottom: 6 }, margin: { right: 2 } }}
+              onMouseDown={() => {
+                onStep(i)
+                playUi('ui_click')
+              }}
+            >
+              <UiEntity
+                uiTransform={{ width: 26, height: 10 + i, borderRadius: 4 }}
+                uiBackground={{ color: i <= step ? (on ? BLUE : PALE_BLUE) : OFF }}
+              />
+            </UiEntity>
+          ))}
+        </UiEntity>
+      </UiEntity>
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={on ? 'On' : 'Off'} fontSize={14} color={GREY} textAlign="middle-right" uiTransform={{ width: 36, height: 38, margin: { right: 10 } }} />
+      <UiEntity
+        uiTransform={{
+          width: 76,
+          height: 38,
+          flexDirection: 'row',
+          justifyContent: on ? 'flex-end' : 'flex-start',
+          alignItems: 'center',
+          padding: { left: 4, right: 4 },
+          borderRadius: 19
+        }}
+        uiBackground={{ color: on ? GREEN : OFF }}
+        onMouseDown={() => {
+          onToggle()
+          playUi('ui_click')
+        }}
+      >
+        <UiEntity uiTransform={{ width: 30, height: 30, borderRadius: 15 }} uiBackground={{ color: WHITE }} />
+      </UiEntity>
+    </UiEntity>
+  )
 }
 
 export function SettingsMenu(props: {}) {
@@ -278,7 +358,7 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{
             width: 560,
-            height: state.isAdmin ? 640 : 450,
+            height: state.isAdmin ? 774 : 600,
             flexDirection: 'column',
             borderRadius: 28,
             borderWidth: 4,
@@ -336,7 +416,7 @@ export function SettingsMenu(props: {}) {
             <UiEntity
               uiTransform={{
                 width: '100%',
-                height: 106,
+                height: 88,
                 flexDirection: 'row',
                 alignItems: 'center',
                 padding: { left: 20, right: 18 },
@@ -382,7 +462,7 @@ export function SettingsMenu(props: {}) {
             <UiEntity
               uiTransform={{
                 width: '100%',
-                height: 106,
+                height: 88,
                 flexDirection: 'row',
                 alignItems: 'center',
                 margin: { top: 14 },
@@ -429,7 +509,7 @@ export function SettingsMenu(props: {}) {
             <UiEntity
               uiTransform={{
                 width: '100%',
-                height: 106,
+                height: 88,
                 flexDirection: 'row',
                 alignItems: 'center',
                 margin: { top: 14 },
@@ -471,6 +551,10 @@ export function SettingsMenu(props: {}) {
                 />
               </UiEntity>
             </UiEntity>
+
+            {/* Sound */}
+            {soundRow('music', 'Music', audio.musicOn, audio.musicVol, toggleMusic, setMusicVolume)}
+            {soundRow('voice', 'Commentary', audio.voiceOn, audio.voiceVol, toggleVoice, setVoiceVolume)}
 
             {/* Admin: the dev panel (hot target, pretend players, wind). Only drawn for admins */}
             <UiEntity
@@ -526,7 +610,7 @@ export function SettingsMenu(props: {}) {
             <UiEntity
               uiTransform={{
                 width: '100%',
-                height: 106,
+                height: 88,
                 flexDirection: 'row',
                 alignItems: 'center',
                 margin: { top: 14 },

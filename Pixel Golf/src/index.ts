@@ -19,13 +19,13 @@ import { Game, Physics, forgetCarriedRound, updateSettingsInput, applySavedSetti
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
-import { setupBayBarriers } from './bayBarriers'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop, closeShop } from './shop'
 import { setupMenuGuard } from './menuGuard'
 import { setupWindFlags } from './wind'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
+import { setupMusic, applySavedAudio, onAudioSettingChanged } from './audio'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
 import { runLedger } from './ledger/server'
@@ -220,6 +220,9 @@ function setupLedger(): void {
   // Camera settings follow the player between visits and devices
   onSavedSettings(applySavedSettings)
   onSettingChanged(saveSetting)
+  // Music and commentary volume (audio.ts), saved the same way
+  onSavedSettings(applySavedAudio)
+  onAudioSettingChanged(saveSetting)
 
   // The round card: the score straight away, the multiplier and rewards when the server answers
   // Not for the tutorial's practice round, which isn't sent to the ledger (tutorial.ts says well done instead)
@@ -517,6 +520,8 @@ export function main() {
   SpawnCamera()
   setupUi()
   setupLedger()
+  // Background music, at the player's saved volume once the ledger sends it
+  setupMusic()
 
   engine.addSystem(physicsSystem)
 
@@ -550,8 +555,6 @@ export function main() {
   setMenuOpenCheck(anyMenuOpen)
   // Phones: walking up to a free bay's ball joins it and opens the Pixel Golf menu
   setupAutoTeeOff(anyMenuOpen)
-  // Other players can't walk into a bay someone holds (not the tutorial or solo bay)
-  setupBayBarriers()
   // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
   setupMenuGuard(anyMenuOpen, () => {
     if (anyMenuOpen()) playUi('ui_close')

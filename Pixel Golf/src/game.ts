@@ -19,6 +19,7 @@ import { reportMyClub } from './clubSync'
 import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub, getClubScale } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
+import { sayLine } from './voice'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
 import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson } from './ledger/client'
 import { ShotPath, Vec3, launchVelocity } from './ballSim'
@@ -924,6 +925,8 @@ export class Game {
     // Driver lowest, wedge highest; harder swings are louder
     const clubPitch = { driver: 0.92, iron: 1.04, wedge: 1.16 }[getSelectedClubType()]
     playAt('club_hit', this.physics.position(), 0.55 + this.storedPower * 0.45, clubPitch)
+    // Now and then the commentator chips in while the ball's in the air (not in the tutorial)
+    if (!tutorial.active) sayLine('flight')
     // The ball leaves as soon as its path is here (normally already, see prepareShot)
     this.startPendingShot()
     this.state.shot++
@@ -1171,6 +1174,7 @@ export class Game {
     // comes back and the player takes that shot again from the same tutorial step
     if (tutorial.active && this.bay === TUTORIAL_BAY && result.points <= 0) {
       playResultSound(result.zone, result.points, false)
+      sayLine('miss', true)
       this.state.shot = Math.max(0, this.state.shot - 1)
       this.state.lastShotScore = 0
       this.state.lastZone = 'Missed'
@@ -1192,6 +1196,7 @@ export class Game {
     this.state.lastHot = hot
     this.state.score += points
     playResultSound(result.zone, points, hot)
+    sayResult(result.zone, points, hot)
 
     // Ten balls make a round. The ledger is sent base points and which balls were
     // hot, and does the doubling itself. The tutorial's short round isn't sent: the server
@@ -1675,6 +1680,15 @@ function playResultSound(zone: string, points: number, hot = false): void {
   else if (colour === 'Blue' || colour === 'White' || colour === 'Black') playUi('score_great')
   else if (colour === 'Green' || colour === 'Orange') playUi('score_good')
   else playUi('score_small')
+}
+
+// The commentator's line for where a shot finished (voice.ts): a big line for the hot target
+// and the hardest targets, a good one for any other target, and a miss line otherwise
+function sayResult(zone: string, points: number, hot: boolean): void {
+  const colour = zone.replace(/\d+$/, '')
+  if (points <= 0 || colour === 'Bunker') sayLine('miss', tutorial.active)
+  else if (hot || colour === 'White' || colour === 'Black') sayLine('big')
+  else sayLine('great')
 }
 
 // Rotate a vector by a quaternion
