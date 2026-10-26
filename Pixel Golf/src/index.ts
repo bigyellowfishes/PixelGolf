@@ -19,6 +19,7 @@ import { Game, Physics, forgetCarriedRound, updateSettingsInput, applySavedSetti
 import { getLaunchPower } from './clubSelect'
 import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
+import { setupBayBarriers } from './bayBarriers'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop, closeShop } from './shop'
 import { setupMenuGuard } from './menuGuard'
@@ -549,6 +550,8 @@ export function main() {
   setMenuOpenCheck(anyMenuOpen)
   // Phones: walking up to a free bay's ball joins it and opens the Pixel Golf menu
   setupAutoTeeOff(anyMenuOpen)
+  // Other players can't walk into a bay someone holds (not the tutorial or solo bay)
+  setupBayBarriers()
   // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
   setupMenuGuard(anyMenuOpen, () => {
     if (anyMenuOpen()) playUi('ui_close')
