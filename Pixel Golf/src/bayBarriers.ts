@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, MeshCollider, MeshRenderer, Material, ColliderLayer } from '@dcl/sdk/ecs'
+import { engine, Entity, Transform, MeshCollider, MeshRenderer, Material, GltfContainer, ColliderLayer } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { getPlayer } from '@dcl/sdk/players'
 import { getAllGames } from './game'
@@ -25,7 +25,9 @@ import { BALL_RADIUS } from './ballSim'
 
 // --- Tuning ----------------------------------------------------------------------------------
 /** Set true to see the boxes while lining them up with the pads, then set it back to false. */
-const DEBUG_SHOW_BARRIERS = true
+const DEBUG_SHOW_BARRIERS = false
+
+const MODEL = 'assets/Models/BayRing/BayRing.glb'
 /**
  * The box in the bay's own space, in metres, centred on its tee. width is across the bay
  * (neighbouring bays are ~9 m apart), depth is along the range, height is how tall a wall.
@@ -76,10 +78,23 @@ function spawn(bay: number): void {
     rotation,
     scale: Vector3.create(BARRIER.width, BARRIER.height + BARRIER_BELOW_FLOOR, BARRIER.depth)
   })
+  const eVis = engine.addEntity()
+  Transform.create(eVis, {
+    parent: e,
+    position: Vector3.create(0, 0, 0),
+    rotation,
+    scale: Vector3.create(0.1, 0.1, 0.1)
+  })
+  GltfContainer.create(eVis, {
+      src: MODEL,
+      // Looks only: the ball passes straight through it
+      visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+      invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+    })
   // Players only: the ball, raycasts and pointer clicks pass straight through
-  MeshCollider.setBox(e, ColliderLayer.CL_PLAYER)
+  MeshCollider.setCylinder(e, ColliderLayer.CL_PLAYER)
   if (DEBUG_SHOW_BARRIERS) {
-    MeshRenderer.setBox(e)
+    MeshRenderer.setCylinder(e)
     Material.setPbrMaterial(e, { albedoColor: Color4.create(1, 0.2, 0.2, 0.35) })
   }
   barriers.set(bay, e)
@@ -102,7 +117,7 @@ function sync(): void {
     if (!isBarrierBay(g.bay)) continue
     const want = heldByAnother(g.bay, me)
     const have = barriers.has(g.bay)
-    if ((want && !have)) spawn(g.bay)
+    if ((want || DEBUG_SHOW_BARRIERS) && !have) spawn(g.bay)
     else if (!want && have) remove(g.bay)
   }
 }
