@@ -25,6 +25,7 @@ import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIA
 import { onPhone } from './mobile'
 import { showToast } from './ui/RangeHud'
 import { playUi } from './sfx'
+import { FONT_BOLD } from './fonts'
 
 // The Tee Off panels: clicking one opens the Pixel Golf menu, and its screen shows
 // that bay's score in the same style as the menu.
@@ -519,6 +520,7 @@ function addText(parent: Entity, slot: { x: number; y: number; cap: number }, co
     text,
     fontSize: fontSizeFor(slot.cap),
     font: Font.F_SANS_SERIF,
+    fontSrc: FONT_BOLD,
     textColor: color,
     textAlign: TextAlignMode.TAM_MIDDLE_CENTER,
     textWrapping: false

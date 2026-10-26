@@ -17,6 +17,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { Game } from './game'
 import { tutorial, solo, leaveSoloBay, tutorialLesson } from './ledger/client'
 import { SHOP_NPC_IDS } from './shop'
+import { FONT_BOLD } from './fonts'
 
 /**
  * What the tutorial looks like, as opposed to how it runs (tutorial.ts).
@@ -164,6 +165,7 @@ export function setupTutorialVisuals(
     text: '',
     fontSize: 30,
     font: Font.F_SANS_SERIF,
+    fontSrc: FONT_BOLD,
     textColor: MARKER_COLOUR,
     outlineColor: MARKER_OUTLINE,
     outlineWidth: 0.2,

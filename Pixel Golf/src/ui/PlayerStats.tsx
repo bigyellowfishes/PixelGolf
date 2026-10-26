@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { profile, boards, stats } from '../ledger/client'
 import { CATALOGUE, Period } from '../ledger/rules'
 import { HOT_LOOKS } from '../hotLooks'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The Player Stats page, shown in the right of the Pixel Golf menu when Player Stats is picked
 // (GameModeMenu.tsx). Three bands:
@@ -68,9 +69,9 @@ function tile(key: string, width: number, height: number, label: string, value: 
       }}
       uiBackground={{ color: highlight ? PALE_BLUE : WHITE }}
     >
-      <Label value={label} fontSize={10} color={BLUE} textAlign="middle-left" uiTransform={{ width: width - 20, height: 14 }} />
-      <Label value={value} fontSize={highlight ? 20 : 15} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 20, height: highlight ? 26 : 21 }} />
-      <Label value={note} fontSize={10} color={GREY} textAlign="middle-left" uiTransform={{ width: width - 20, height: note ? 14 : 0, display: note ? 'flex' : 'none' }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={label} fontSize={10} color={BLUE} textAlign="middle-left" uiTransform={{ width: width - 20, height: 14 }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={value} fontSize={highlight ? 20 : 15} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 20, height: highlight ? 26 : 21 }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={note} fontSize={10} color={GREY} textAlign="middle-left" uiTransform={{ width: width - 20, height: note ? 14 : 0, display: note ? 'flex' : 'none' }} />
     </UiEntity>
   )
 }
@@ -152,13 +153,13 @@ export function PlayerStats(props: {}) {
         uiBackground={{ color: WHITE }}
       >
         <UiEntity uiTransform={{ width: 108, flexDirection: 'column' }}>
-          <Label value="LEADERBOARDS" fontSize={10} color={BLUE} textAlign="middle-left" uiTransform={{ width: 108, height: 14 }} />
-          <Label value="True / Multiplier" fontSize={11} color={GREY} textAlign="middle-left" uiTransform={{ width: 108, height: 16 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value="LEADERBOARDS" fontSize={10} color={BLUE} textAlign="middle-left" uiTransform={{ width: 108, height: 14 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value="True / Multiplier" fontSize={11} color={GREY} textAlign="middle-left" uiTransform={{ width: 108, height: 16 }} />
         </UiEntity>
         {PERIOD_NAMES.map(([p, name]) => (
           <UiEntity key={`rank-${p}`} uiTransform={{ width: (WIDTH - 28 - 108) / 4, flexDirection: 'column', alignItems: 'center' }}>
-            <Label value={name} fontSize={11} color={GREY} textAlign="middle-center" uiTransform={{ width: 120, height: 15 }} />
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={name} fontSize={11} color={GREY} textAlign="middle-center" uiTransform={{ width: 120, height: 15 }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR}
               value={boards.ready ? `${rank(boards.mine[p].true)}  /  ${rank(boards.mine[p].multi)}` : dash}
               fontSize={16}
               color={NAVY}
@@ -184,8 +185,8 @@ export function PlayerStats(props: {}) {
         uiBackground={{ color: { r: 0.98, g: 0.984, b: 0.988, a: 1 } }}
       >
         <UiEntity uiTransform={{ width: '100%', height: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Label value="YOUR GAME" fontSize={12} color={BLUE} textAlign="middle-left" uiTransform={{ width: 200, height: 18 }} />
-          <Label value={ok ? sinceText : 'Loading your stats...'} fontSize={11} color={GREY} textAlign="middle-right" uiTransform={{ width: 300, height: 18 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value="YOUR GAME" fontSize={12} color={BLUE} textAlign="middle-left" uiTransform={{ width: 200, height: 18 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={ok ? sinceText : 'Loading your stats...'} fontSize={11} color={GREY} textAlign="middle-right" uiTransform={{ width: 300, height: 18 }} />
         </UiEntity>
 
         {/* Hits on each target, in its own colour */}
@@ -207,8 +208,8 @@ export function PlayerStats(props: {}) {
                 }}
                 uiBackground={{ color: look.fill }}
               >
-                <Label value={ok ? fmt(stats.hits[c] ?? 0) : dash} fontSize={17} color={look.text} textAlign="middle-center" uiTransform={{ width: chipW - 4, height: 22 }} />
-                <Label value={c.toUpperCase()} fontSize={9} color={look.text} textAlign="middle-center" uiTransform={{ width: chipW - 4, height: 12 }} />
+                <Label font="sans-serif" fontSrc={FONT_BOLD} value={ok ? fmt(stats.hits[c] ?? 0) : dash} fontSize={17} color={look.text} textAlign="middle-center" uiTransform={{ width: chipW - 4, height: 22 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={c.toUpperCase()} fontSize={9} color={look.text} textAlign="middle-center" uiTransform={{ width: chipW - 4, height: 12 }} />
               </UiEntity>
             )
           })}

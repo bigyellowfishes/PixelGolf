@@ -9,6 +9,7 @@ import { roundInProgress, abandonRound } from '../game'
 import { forTouch } from '../mobile'
 import { menuReopenBlocked } from '../menuGuard'
 import { PlayerStats } from './PlayerStats'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // Pixel Golf game mode menu. Hidden until the player clicks a Tee Off panel
 // (see src/teeOffPanels.ts), which calls openPixelGolfMenu().
@@ -227,7 +228,7 @@ export function GameModeMenu(props: {}) {
             }}
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_BOLD}
               value={state.view === 'stats' ? 'Player Stats' : 'Choose a Mode'}
               fontSize={20}
               color={{ r: 1, g: 1, b: 1, a: 1 }}
@@ -295,7 +296,7 @@ export function GameModeMenu(props: {}) {
                     uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-flag.png' } }}
                   />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Pixel Golf"
                   fontSize={26}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -306,10 +307,9 @@ export function GameModeMenu(props: {}) {
                   uiTransform={{ width: 52, height: 24, justifyContent: 'center', alignItems: 'center', borderRadius: 7 }}
                   uiBackground={{ color: { r: 0.137, g: 0.478, b: 0.094, a: 1 } }}
                 >
-                  <Label
+                  <Label font="sans-serif" fontSrc={FONT_BOLD}
                     value="NEW"
                     fontSize={12}
-                    font="monospace"
                     color={{ r: 1, g: 1, b: 1, a: 1 }}
                     textAlign="middle-center"
                     uiTransform={{ width: 52, height: 24 }}
@@ -339,7 +339,7 @@ export function GameModeMenu(props: {}) {
                   <UiEntity uiTransform={{ width: 7, height: 24 }} uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }} />
                   <UiEntity uiTransform={{ width: 7, height: 17 }} uiBackground={{ color: { r: 0.161, g: 0.694, b: 0.898, a: 1 } }} />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Player Stats"
                   fontSize={22}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -367,7 +367,7 @@ export function GameModeMenu(props: {}) {
                   uiTransform={{ width: 20, height: 20 }}
                   uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-lock.png' } }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Coming soon"
                   fontSize={19}
                   color={{ r: 0.431, g: 0.482, b: 0.533, a: 1 }}
@@ -393,7 +393,7 @@ export function GameModeMenu(props: {}) {
                   uiTransform={{ width: 20, height: 20 }}
                   uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-lock.png' } }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Coming soon"
                   fontSize={19}
                   color={{ r: 0.431, g: 0.482, b: 0.533, a: 1 }}
@@ -430,17 +430,16 @@ export function GameModeMenu(props: {}) {
                 }}
                 uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
               >
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="LV"
                   fontSize={10}
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-center"
                   uiTransform={{ width: 40, height: 14 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value={`${state.level}`}
                   fontSize={24}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-center"
                   uiTransform={{ width: 50, height: 28 }}
@@ -448,17 +447,16 @@ export function GameModeMenu(props: {}) {
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 14 } }}>
                 <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Label
+                  <Label font="sans-serif" fontSrc={FONT_BOLD}
                     value={state.playerName}
                     fontSize={18}
                     color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                     textAlign="middle-left"
                     uiTransform={{ width: 150, height: 24 }}
                   />
-                  <Label
+                  <Label font="sans-serif" fontSrc={FONT_REGULAR}
                     value={`${state.xp} / ${state.xpNext} XP`}
                     fontSize={13}
-                    font="monospace"
                     color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
                     textAlign="middle-right"
                     uiTransform={{ width: 110, height: 24 }}
@@ -473,7 +471,7 @@ export function GameModeMenu(props: {}) {
                     uiBackground={{ color: { r: 0.161, g: 0.694, b: 0.898, a: 1 } }}
                   />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Level up to unlock new clubs and balls"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -524,7 +522,7 @@ export function GameModeMenu(props: {}) {
                   }}
                   uiBackground={{ color: { r: 1, g: 1, b: 1, a: 0.94 } }}
                 >
-                  <Label
+                  <Label font="sans-serif" fontSrc={FONT_REGULAR}
                     value="Driving Range"
                     fontSize={14}
                     color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -547,14 +545,14 @@ export function GameModeMenu(props: {}) {
               }}
               uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
             >
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_BOLD}
                 value="Pixel Golf"
                 fontSize={21}
                 color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                 textAlign="middle-left"
                 uiTransform={{ width: '100%', height: 28 }}
               />
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value="Step into the bay and land your shot on the target greens. The closer to the pin, the bigger the points. Level up to unlock new clubs and balls."
                 fontSize={14}
                 textWrap="wrap"
@@ -585,14 +583,14 @@ export function GameModeMenu(props: {}) {
           {/* Your round in progress, if any, and Abandon round */}
           <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', display: round ? 'flex' : 'none' }}>
             <UiEntity uiTransform={{ width: 190, flexDirection: 'column' }}>
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_BOLD}
                 value="ROUND IN PROGRESS"
                 fontSize={12}
                 color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }}
                 textAlign="middle-left"
                 uiTransform={{ width: 190, height: 16 }}
               />
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value={round ? `Ball ${round.ball}/${round.balls}  ·  ${fmt(round.score)} pts` : ''}
                 fontSize={16}
                 color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -601,7 +599,7 @@ export function GameModeMenu(props: {}) {
               />
             </UiEntity>
             <UiEntity {...abandonButton}>
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value={abandonArmed ? forTouch('Click to confirm') : 'Abandon round'}
                 fontSize={15}
                 color={abandonArmed ? { r: 1, g: 1, b: 1, a: 1 } : { r: 0.851, g: 0.341, b: 0.239, a: 1 }}
@@ -614,7 +612,7 @@ export function GameModeMenu(props: {}) {
           <UiEntity uiTransform={{ width: 1, height: 1, display: round ? 'none' : 'flex' }} />
 
           <UiEntity {...chooseClubButton}>
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_BOLD}
               value="Choose Club"
               fontSize={22}
               color={{ r: 1, g: 1, b: 1, a: 1 }}

@@ -3,6 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { SHOT_SPEEDS, shotSpeed, setShotSpeed, shotSpeedShown } from '../game'
 import { onPhone } from '../mobile'
+import { FONT_REGULAR } from '../fonts'
 
 // Pixel Golf colours, as used across the menus
 const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
@@ -47,7 +48,7 @@ export function SpeedToggle(props: {}) {
         }}
         uiBackground={{ color: PALE }}
       >
-        <Label
+        <Label font="sans-serif" fontSrc={FONT_REGULAR}
           value={phone ? 'SPEED' : 'SPEED (E)'}
           fontSize={13}
           color={GREY}
@@ -69,7 +70,7 @@ export function SpeedToggle(props: {}) {
             uiBackground={{ color: s === shotSpeed ? BLUE : { r: 1, g: 1, b: 1, a: 0 } }}
             onMouseDown={() => setShotSpeed(s)}
           >
-            <Label value={`${s}x`} fontSize={15} color={s === shotSpeed ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: 42, height: 28 }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={`${s}x`} fontSize={15} color={s === shotSpeed ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: 42, height: 28 }} />
           </UiEntity>
         ))}
       </UiEntity>

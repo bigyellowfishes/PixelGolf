@@ -7,6 +7,7 @@ import { profile, buyCosmetic, equipCosmetic } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { onPhone } from '../mobile'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The pro shop. Opens by itself when you walk up to a shopkeeper and closes when you walk off
 // (src/shop.ts). Lists the catalogue in ledger/rules.ts, one tab per kind: buy with Pixel Points,
@@ -79,7 +80,7 @@ function tab(label: string, kind: CosmeticKind, width: number) {
   )
   return (
     <UiEntity {...t}>
-      <Label value={label} fontSize={14} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width, height: 30 }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={label} fontSize={14} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width, height: 30 }} />
     </UiEntity>
   )
 }
@@ -149,22 +150,22 @@ export function ShopMenu(props: {}) {
       >
         {/* Header: title, your points, close */}
         <UiEntity uiTransform={{ width: '100%', height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Label value="Pro Shop" fontSize={22} color={NAVY} textAlign="middle-left" uiTransform={{ width: 140, height: 36 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value="Pro Shop" fontSize={22} color={NAVY} textAlign="middle-left" uiTransform={{ width: 140, height: 36 }} />
           <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
             <UiEntity
               uiTransform={{ height: 30, padding: { left: 12, right: 12 }, margin: { right: 10 }, justifyContent: 'center', alignItems: 'center', borderRadius: 15 }}
               uiBackground={{ color: PALE_BLUE }}
             >
-              <Label value={profile.ready ? `${fmt(profile.points)} PP` : '- PP'} fontSize={15} color={BLUE} textAlign="middle-center" uiTransform={{ height: 26 }} />
+              <Label font="sans-serif" fontSrc={FONT_REGULAR} value={profile.ready ? `${fmt(profile.points)} PP` : '- PP'} fontSize={15} color={BLUE} textAlign="middle-center" uiTransform={{ height: 26 }} />
             </UiEntity>
             <UiEntity {...closeButton}>
-              <Label value="X" fontSize={16} color={NAVY} textAlign="middle-center" uiTransform={{ width: 30, height: 30 }} />
+              <Label font="sans-serif" fontSrc={FONT_BOLD} value="X" fontSize={16} color={NAVY} textAlign="middle-center" uiTransform={{ width: 30, height: 30 }} />
             </UiEntity>
           </UiEntity>
         </UiEntity>
 
         {/* What the shopkeeper said */}
-        <Label
+        <Label font="sans-serif" fontSrc={FONT_REGULAR}
           value={`${shop.keeper}: ${shop.greeting}`}
           fontSize={13}
           color={GREY}
@@ -200,8 +201,8 @@ export function ShopMenu(props: {}) {
               uiBackground={{ color: WHITE }}
             >
               <UiEntity uiTransform={{ flexDirection: 'column' }}>
-                <Label value={item.name} fontSize={16} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 180, height: 22 }} />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={item.name} fontSize={16} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 180, height: 22 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={item.price > 0 ? `Unlocks at level ${item.level}` : item.level > 1 ? `Free at level ${item.level}` : 'Free'}
                   fontSize={11}
                   color={GREY}
@@ -223,7 +224,7 @@ export function ShopMenu(props: {}) {
                 uiBackground={{ color: a.fill }}
                 onMouseDown={a.onClick}
               >
-                <Label value={a.label} fontSize={14} color={a.text} textAlign="middle-center" uiTransform={{ width: 104, height: 28 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={a.label} fontSize={14} color={a.text} textAlign="middle-center" uiTransform={{ width: 104, height: 28 }} />
               </UiEntity>
             </UiEntity>
           )
@@ -243,10 +244,10 @@ export function ShopMenu(props: {}) {
           }}
           uiBackground={{ color: ORANGE }}
         >
-          <Label value={notice} fontSize={13} color={WHITE} textWrap="wrap" textAlign="middle-center" uiTransform={{ width: width - 52, minHeight: 22 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={notice} fontSize={13} color={WHITE} textWrap="wrap" textAlign="middle-center" uiTransform={{ width: width - 52, minHeight: 22 }} />
         </UiEntity>
 
-        <Label
+        <Label font="sans-serif" fontSrc={FONT_REGULAR}
           value="Looks only: nothing here changes how your ball flies."
           fontSize={11}
           color={GREY}

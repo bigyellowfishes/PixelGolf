@@ -3,6 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { meters } from '../game'
 import { onPhone } from '../mobile'
+import { FONT_BOLD } from '../fonts'
 
 export interface State {}
 export const state: State = {}
@@ -84,7 +85,7 @@ function LockedTag(props: { locked: boolean }) {
         }}
         uiBackground={{ color: BLUE }}
       >
-        <Label value="LOCKED" fontSize={11} color={WHITE} textAlign="middle-center" uiTransform={{ width: 60, height: 18 }} />
+        <Label font="sans-serif" fontSrc={FONT_BOLD} value="LOCKED" fontSize={11} color={WHITE} textAlign="middle-center" uiTransform={{ width: 60, height: 18 }} />
       </UiEntity>
     </UiEntity>
   )
@@ -103,7 +104,7 @@ function PowerRow() {
         display: meters.showPower ? 'flex' : 'none'
       }}
     >
-      <Label value="POWER" fontSize={13} color={NAVY} textAlign="middle-left" uiTransform={{ width: LABEL_W, height: 22 }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value="POWER" fontSize={13} color={NAVY} textAlign="middle-left" uiTransform={{ width: LABEL_W, height: 22 }} />
       <UiEntity uiTransform={{ width: TRACK_W, height: TRACK_H, padding: 3 }} uiBackground={{ color: TRACK }}>
         <UiEntity uiTransform={{ width: `${pct}%`, height: '100%' }} uiBackground={{ color: locked ? BLUE : LIVE }} />
         {/* The tutorial's target: press E when the fill reaches this line */}
@@ -136,7 +137,7 @@ function CurveRow() {
         display: meters.showCurve ? 'flex' : 'none'
       }}
     >
-      <Label value="CURVE" fontSize={13} color={NAVY} textAlign="middle-left" uiTransform={{ width: LABEL_W, height: 22 }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value="CURVE" fontSize={13} color={NAVY} textAlign="middle-left" uiTransform={{ width: LABEL_W, height: 22 }} />
       <UiEntity uiTransform={{ width: TRACK_W, height: TRACK_H, padding: 3 }} uiBackground={{ color: TRACK }}>
         {/* Straight ahead */}
         <UiEntity

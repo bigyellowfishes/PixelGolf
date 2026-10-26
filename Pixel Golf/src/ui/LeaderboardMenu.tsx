@@ -7,6 +7,7 @@ import { boards } from '../ledger/client'
 import { Period, secondsToReset } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { menuReopenBlocked } from '../menuGuard'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The leaderboards: today, this week, this month and all time, each with a True
 // Score board (skill only) and a Multiplier board. Opened from the range card.
@@ -119,7 +120,7 @@ function tab(label: string, active: boolean, onClick: () => void, width: number)
   )
   return (
     <UiEntity {...t}>
-      <Label
+      <Label font="sans-serif" fontSrc={FONT_REGULAR}
         value={label}
         fontSize={14}
         color={active ? { r: 1, g: 1, b: 1, a: 1 } : { r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -212,7 +213,7 @@ export function LeaderboardMenu(props: {}) {
             uiTransform={{ width: 240, height: 44, alignItems: 'center', padding: { left: 26 }, borderRadius: { topLeft: 24, bottomRight: 22 } }}
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
-            <Label value="Leaderboards" fontSize={19} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: 200, height: 30 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="Leaderboards" fontSize={19} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-left" uiTransform={{ width: 200, height: 30 }} />
           </UiEntity>
           <UiEntity uiTransform={{ height: 62, alignItems: 'center' }}>
             <UiEntity {...closeButton}>
@@ -254,7 +255,7 @@ export function LeaderboardMenu(props: {}) {
             }}
             uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
           >
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_REGULAR}
               value="No rounds posted yet. Be the first."
               fontSize={15}
               color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -267,17 +268,17 @@ export function LeaderboardMenu(props: {}) {
                 uiTransform={{ width: '100%', height: 36, flexDirection: 'row', alignItems: 'center', padding: { left: 8, right: 8 }, borderRadius: 10 }}
                 uiBackground={{ color: r.mine ? { r: 0.839, g: 0.949, b: 0.988, a: 1 } : { r: 1, g: 1, b: 1, a: 0 } }}
               >
-                <Label value={r.rank} fontSize={15} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: 40, height: 30 }} />
-                <Label value={r.name} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 330, height: 30 }} />
-                <Label value={r.value} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ flexGrow: 1, height: 30 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={r.rank} fontSize={15} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: 40, height: 30 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={r.name} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 330, height: 30 }} />
+                <Label font="sans-serif" fontSrc={FONT_REGULAR} value={r.value} fontSize={15} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ flexGrow: 1, height: 30 }} />
               </UiEntity>
             ))}
           </UiEntity>
 
           {/* You, and the countdown */}
           <UiEntity uiTransform={{ width: '100%', height: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: 10 } }}>
-            <Label value={state.youText} fontSize={14} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 380, height: 26 }} />
-            <Label value={state.resetText} fontSize={13} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 180, height: 26 }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.youText} fontSize={14} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: 380, height: 26 }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.resetText} fontSize={13} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 180, height: 26 }} />
           </UiEntity>
         </UiEntity>
       </UiEntity>

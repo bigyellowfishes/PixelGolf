@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { getPrompt, getRoundProgress, promptsEnabled } from '../game'
 import { tutorial } from '../ledger/client'
 import { onPhone, forTouch } from '../mobile'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The instruction card: what to press next, and the tutorial's coaching.
 // Styled like the rest of the menus (SettingsMenu, the range card): a pale card with a white
@@ -164,9 +165,9 @@ export function ShotPrompt(props: {}) {
             }}
             uiBackground={{ color: BLUE }}
           >
-            <Label value={state.tabText} fontSize={13} color={WHITE} textAlign="middle-center" uiTransform={{ width: 110, height: 24 }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.tabText} fontSize={13} color={WHITE} textAlign="middle-center" uiTransform={{ width: 110, height: 24 }} />
           </UiEntity>
-          <Label value={state.shotText} fontSize={13} color={GREY} textAlign="middle-right" uiTransform={{ width: 110, height: 26 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.shotText} fontSize={13} color={GREY} textAlign="middle-right" uiTransform={{ width: 110, height: 26 }} />
         </UiEntity>
 
         {/* The line, with the E key beside it when it asks for it */}
@@ -193,9 +194,9 @@ export function ShotPrompt(props: {}) {
             }}
             uiBackground={{ color: BLUE }}
           >
-            <Label value="E" fontSize={20} color={WHITE} textAlign="middle-center" uiTransform={{ width: 36, height: 36 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="E" fontSize={20} color={WHITE} textAlign="middle-center" uiTransform={{ width: 36, height: 36 }} />
           </UiEntity>
-          <Label
+          <Label font="sans-serif" fontSrc={FONT_REGULAR}
             value={state.text}
             fontSize={fontSize}
             textWrap="wrap"

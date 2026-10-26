@@ -11,6 +11,7 @@ import { windReadout } from '../wind'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
 import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
 // Set to false before release.
@@ -225,16 +226,16 @@ export function RangeHud(props: {}) {
           uiBackground={{ color: hot.fill }}
         >
           <UiEntity uiTransform={{ width: z(112), height: z(38), flexDirection: 'column' }}>
-            <Label value="HOT TARGET  2X" fontSize={z(11)} color={faded(hot.text)} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
-            <Label value={state.hotName} fontSize={z(18)} color={hot.text} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="HOT TARGET  2X" fontSize={z(11)} color={faded(hot.text)} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.hotName} fontSize={z(18)} color={hot.text} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
           </UiEntity>
-          <Label value={state.hotTime} fontSize={z(20)} color={hot.text} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.hotTime} fontSize={z(20)} color={hot.text} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />
         </UiEntity>
 
         {/* Round */}
         <UiEntity uiTransform={{ width: '100%', height: z(28), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Label value={state.ballText} fontSize={z(15)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(26) }} />
-          <Label value={state.roundScore} fontSize={z(18)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(100), height: z(26) }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.ballText} fontSize={z(15)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(26) }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.roundScore} fontSize={z(18)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(100), height: z(26) }} />
         </UiEntity>
 
         {/* Wind: the arrow is as you're looking (up = blowing away from you) */}
@@ -252,8 +253,8 @@ export function RangeHud(props: {}) {
           uiBackground={{ color: { r: 0.886, g: 0.957, b: 0.882, a: 1 } }}
         >
           <UiEntity uiTransform={{ width: z(130), flexDirection: 'column' }}>
-            <Label value="WIND" fontSize={z(11)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(130), height: z(14) }} />
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="WIND" fontSize={z(11)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(130), height: z(14) }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR}
               value={wind.words}
               fontSize={z(12)}
               color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -262,8 +263,8 @@ export function RangeHud(props: {}) {
             />
           </UiEntity>
           <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-            <Label value={wind.arrow} fontSize={z(20)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(22), height: z(24), display: wind.calm ? 'none' : 'flex' }} />
-            <Label value={wind.mph} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(50), height: z(24) }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={wind.arrow} fontSize={z(20)} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(22), height: z(24), display: wind.calm ? 'none' : 'flex' }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={wind.mph} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(50), height: z(24) }} />
           </UiEntity>
         </UiEntity>
 
@@ -283,10 +284,10 @@ export function RangeHud(props: {}) {
           uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
         >
           <UiEntity uiTransform={{ width: z(100), height: z(32), flexDirection: 'column' }}>
-            <Label value="MULTIPLIER" fontSize={z(11)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(14) }} />
-            <Label value={state.playersText} fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(18) }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="MULTIPLIER" fontSize={z(11)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(14) }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.playersText} fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(100), height: z(18) }} />
           </UiEntity>
-          <Label value={state.multiplierText} fontSize={z(17)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(80), height: z(26) }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.multiplierText} fontSize={z(17)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(80), height: z(26) }} />
         </UiEntity>
 
         {/* Level and Pixel Points */}
@@ -295,18 +296,18 @@ export function RangeHud(props: {}) {
             uiTransform={{ width: z(64), height: z(26), justifyContent: 'center', alignItems: 'center', borderRadius: z(13) }}
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
-            <Label value={state.levelText} fontSize={z(13)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(64), height: z(26) }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.levelText} fontSize={z(13)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(64), height: z(26) }} />
           </UiEntity>
           <UiEntity uiTransform={{ width: z(136), height: z(26), flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <Label value="Pixel Points" fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(76), height: z(26), display: state.pointsLabelDisplay }} />
-            <Label value={state.pointsText} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(60), height: z(26) }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Pixel Points" fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(76), height: z(26), display: state.pointsLabelDisplay }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.pointsText} fontSize={z(16)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(60), height: z(26) }} />
           </UiEntity>
         </UiEntity>
 
         {/* Leaderboards, and the Settings cog beside it */}
         <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', alignItems: 'center', margin: { top: z(10) } }}>
           <UiEntity {...boardsButton}>
-            <Label value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
           </UiEntity>
           <UiEntity {...settingsButton}>
             <UiEntity
@@ -318,7 +319,7 @@ export function RangeHud(props: {}) {
       </UiEntity>
 
       {/* Frame rate readout (PERF_READOUT) */}
-      <Label
+      <Label font="sans-serif" fontSrc={FONT_REGULAR}
         value={state.perfText}
         fontSize={12}
         color={{ r: 1, g: 1, b: 1, a: 1 }}
@@ -340,7 +341,7 @@ export function RangeHud(props: {}) {
         }}
         uiBackground={{ color: { r: 0.165, g: 0.525, b: 0.106, a: 0.95 } }}
       >
-        <Label value={state.toastText} fontSize={14} textWrap="wrap" color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 216, minHeight: 24 }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.toastText} fontSize={14} textWrap="wrap" color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 216, minHeight: 24 }} />
       </UiEntity>
     </UiEntity>
   )

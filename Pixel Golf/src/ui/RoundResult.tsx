@@ -6,6 +6,7 @@ import { boards } from '../ledger/client'
 import { playUi } from '../sfx'
 import { forTouch } from '../mobile'
 import { openPixelGolfMenu } from './GameModeMenu'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The card that opens when the tenth ball lands. It shows your True Score
 // straight away, then fills in the multiplier roll, XP and Pixel Points when the
@@ -207,7 +208,7 @@ export function RoundResult(props: {}) {
           uiTransform={{ width: '100%', height: 58, justifyContent: 'center', alignItems: 'center' }}
           uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
         >
-          <Label value={state.title} fontSize={22} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 400, height: 34 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.title} fontSize={22} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 400, height: 34 }} />
         </UiEntity>
 
         {/* Personal best */}
@@ -215,7 +216,7 @@ export function RoundResult(props: {}) {
           uiTransform={{ height: 30, padding: { left: 16, right: 16 }, margin: { top: 14 }, borderRadius: 15, alignItems: 'center', display: state.bestDisplay }}
           uiBackground={{ color: { r: 1, g: 0.549, b: 0.102, a: 1 } }}
         >
-          <Label value="New personal best!" fontSize={14} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 180, height: 26 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value="New personal best!" fontSize={14} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 180, height: 26 }} />
         </UiEntity>
 
         {/* Level reached (tutorial) */}
@@ -230,13 +231,13 @@ export function RoundResult(props: {}) {
           }}
           uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
         >
-          <Label value={state.levelText} fontSize={22} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 140, height: 34 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.levelText} fontSize={22} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 140, height: 34 }} />
         </UiEntity>
 
         {/* True Score */}
-        <Label value={state.scoreLabel} fontSize={13} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 300, height: 20, margin: { top: 14 } }} />
-        <Label value={state.trueScore} fontSize={56} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 70 }} />
-        <Label value={state.hotText} fontSize={14} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 20 }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.scoreLabel} fontSize={13} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 300, height: 20, margin: { top: 14 } }} />
+        <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.trueScore} fontSize={56} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 70 }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.hotText} fontSize={14} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 20 }} />
 
         {/* Multiplier */}
         <UiEntity
@@ -256,22 +257,22 @@ export function RoundResult(props: {}) {
           uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
         >
           <UiEntity uiTransform={{ flexDirection: 'column' }}>
-            <Label value="MULTIPLIER ROLL" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: 160, height: 18 }} />
-            <Label value={state.rollText} fontSize={30} color={{ r: 1, g: 0.549, b: 0.102, a: 1 }} textAlign="middle-left" uiTransform={{ width: 160, height: 40 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="MULTIPLIER ROLL" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: 160, height: 18 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.rollText} fontSize={30} color={{ r: 1, g: 0.549, b: 0.102, a: 1 }} textAlign="middle-left" uiTransform={{ width: 160, height: 40 }} />
           </UiEntity>
           <UiEntity uiTransform={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-            <Label value="MULTIPLIER SCORE" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 220, height: 18 }} />
-            <Label value={state.multiScore} fontSize={26} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 220, height: 40 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="MULTIPLIER SCORE" fontSize={12} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: 220, height: 18 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.multiScore} fontSize={26} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-right" uiTransform={{ width: 220, height: 40 }} />
           </UiEntity>
         </UiEntity>
 
-        <Label value={state.statusText} fontSize={13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 54, margin: { top: 8 } }} />
-        <Label value={state.rewardText} fontSize={18} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 28, margin: { top: 4 } }} />
-        <Label value={state.rankText} fontSize={14} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 22 }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.statusText} fontSize={13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 54, margin: { top: 8 } }} />
+        <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.rewardText} fontSize={18} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 28, margin: { top: 4 } }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.rankText} fontSize={14} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 22 }} />
 
         <UiEntity uiTransform={{ margin: { top: 14 } }}>
           <UiEntity {...closeButton}>
-            <Label value={state.buttonText} fontSize={18} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 180, height: 40 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.buttonText} fontSize={18} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: 180, height: 40 }} />
           </UiEntity>
         </UiEntity>
       </UiEntity>

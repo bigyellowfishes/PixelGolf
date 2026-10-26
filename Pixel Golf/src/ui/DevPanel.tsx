@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { range, wind, dev, amIAdmin, sendAdminHot, sendAdminPlayers, sendAdminWind, hotSecondsLeft, currentFloor, currentCeiling } from '../ledger/client'
 import { HOT } from '../ledger/rules'
 import { playUi } from '../sfx'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // The dev panel: admin only (ADMIN in ledger/rules.ts), opened from the Dev panel row in
 // Settings. Everything it changes is done by the server, which checks the wallet first, and
@@ -67,7 +68,7 @@ function button(key: string, label: string, width: number, on: boolean, onPress:
         onPress()
       }}
     >
-      <Label value={label} fontSize={13} color={on ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: width - 6, height: 28 }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={label} fontSize={13} color={on ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: width - 6, height: 28 }} />
     </UiEntity>
   )
 }
@@ -75,8 +76,8 @@ function button(key: string, label: string, width: number, on: boolean, onPress:
 function heading(text: string, detail: string) {
   return (
     <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: 10, bottom: 6 } }}>
-      <Label value={text} fontSize={12} color={BLUE} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 16 }} />
-      <Label value={detail} fontSize={14} color={NAVY} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 20 }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={text} fontSize={12} color={BLUE} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 16 }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={detail} fontSize={14} color={NAVY} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 20 }} />
     </UiEntity>
   )
 }
@@ -121,16 +122,16 @@ export function DevPanel(props: {}) {
     >
       {/* Title */}
       <UiEntity uiTransform={{ width: '100%', height: 36, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Label value="Dev panel (admin)" fontSize={18} color={RED} textAlign="middle-left" uiTransform={{ width: 220, height: 30 }} />
+        <Label font="sans-serif" fontSrc={FONT_BOLD} value="Dev panel (admin)" fontSize={18} color={RED} textAlign="middle-left" uiTransform={{ width: 220, height: 30 }} />
         <UiEntity
           uiTransform={{ width: 34, height: 34, justifyContent: 'center', alignItems: 'center', borderRadius: 17, borderWidth: 2, borderColor: RIM }}
           uiBackground={{ color: WHITE }}
           onMouseDown={() => toggleDevPanel()}
         >
-          <Label value="X" fontSize={15} color={NAVY} textAlign="middle-center" uiTransform={{ width: 28, height: 28 }} />
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value="X" fontSize={15} color={NAVY} textAlign="middle-center" uiTransform={{ width: 28, height: 28 }} />
         </UiEntity>
       </UiEntity>
-      <Label value="Changes apply to everyone in the space." fontSize={11} color={GREY} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 16 }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Changes apply to everyone in the space." fontSize={11} color={GREY} textAlign="middle-left" uiTransform={{ width: WIDTH - 32, height: 16 }} />
 
       {/* Hot target */}
       {heading('HOT TARGET', hotText)}

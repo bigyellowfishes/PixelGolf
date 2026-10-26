@@ -6,6 +6,7 @@ import { tutorial } from '../ledger/client'
 import { skipTutorial } from '../tutorial'
 import { onPhone, forTouch } from '../mobile'
 import { playUi } from '../sfx'
+import { FONT_BOLD } from '../fonts'
 
 // Pixel Golf colours, as used across the menus (the Leaderboards and Settings buttons)
 const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
@@ -89,7 +90,7 @@ export function SkipTutorial(props: {}) {
       }}
     >
       <UiEntity {...button}>
-        <Label
+        <Label font="sans-serif" fontSrc={FONT_BOLD}
           value={text}
           fontSize={phone ? 17 : 15}
           color={armed ? WHITE : NAVY}

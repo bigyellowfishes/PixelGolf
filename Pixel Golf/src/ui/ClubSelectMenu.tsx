@@ -8,6 +8,7 @@ import { requestShotStart } from '../game'
 import { ClubType } from '../club'
 import { getSelectedClubType, selectClub } from '../clubSelect'
 import { playUi } from '../sfx'
+import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // Pixel Golf club select. Opened from the game mode menu's Choose Club button.
 // Tee Off hands the chosen club to selectClub(), the same call the club rack uses.
@@ -377,7 +378,7 @@ export function ClubSelectMenu(props: {}) {
             }}
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_BOLD}
               value="Choose a Club"
               fontSize={20}
               color={{ r: 1, g: 1, b: 1, a: 1 }}
@@ -413,23 +414,22 @@ export function ClubSelectMenu(props: {}) {
                 }}
                 uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
               >
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="LV"
                   fontSize={10}
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-right"
                   uiTransform={{ width: 18, height: 24 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={`${state.level}`}
                   fontSize={15}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: 26, height: 24, margin: { left: 3 } }}
                 />
               </UiEntity>
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value={state.playerName}
                 fontSize={14}
                 color={{ r: 0.227, g: 0.275, b: 0.322, a: 1 }}
@@ -515,10 +515,9 @@ export function ClubSelectMenu(props: {}) {
                   }}
                   uiBackground={{ textureMode: 'stretch', texture: { src: state.clubImage } }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value={state.clubCode}
                   fontSize={40}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="bottom-left"
                   uiTransform={{
@@ -528,10 +527,9 @@ export function ClubSelectMenu(props: {}) {
                     position: { bottom: 12, left: 16 }
                   }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={state.clubPosition}
                   fontSize={14}
-                  font="monospace"
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="bottom-right"
                   uiTransform={{
@@ -559,7 +557,7 @@ export function ClubSelectMenu(props: {}) {
               uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
             >
               <UiEntity uiTransform={{ width: '100%', height: 48, flexDirection: 'row', alignItems: 'center' }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value={state.clubName}
                   fontSize={36}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -570,7 +568,7 @@ export function ClubSelectMenu(props: {}) {
                   uiTransform={{ height: 30, padding: { left: 12, right: 12 }, margin: { left: 14 }, borderRadius: 15 }}
                   uiBackground={{ color: { r: 0.902, g: 0.965, b: 0.992, a: 1 } }}
                 >
-                  <Label
+                  <Label font="sans-serif" fontSrc={FONT_REGULAR}
                     value={state.clubTag}
                     fontSize={14}
                     color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
@@ -579,7 +577,7 @@ export function ClubSelectMenu(props: {}) {
                   />
                 </UiEntity>
               </UiEntity>
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value={state.clubDesc}
                 fontSize={15}
                 textWrap="wrap"
@@ -590,7 +588,7 @@ export function ClubSelectMenu(props: {}) {
 
               {/* Distance */}
               <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', alignItems: 'center', margin: { top: 14 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Distance"
                   fontSize={15}
                   color={{ r: 0.227, g: 0.275, b: 0.322, a: 1 }}
@@ -606,10 +604,9 @@ export function ClubSelectMenu(props: {}) {
                     uiBackground={{ color: { r: 0.122, g: 0.651, b: 0.855, a: 1 } }}
                   />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={state.distanceValue}
                   fontSize={15}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-right"
                   uiTransform={{ width: 64, height: 24 }}
@@ -618,7 +615,7 @@ export function ClubSelectMenu(props: {}) {
 
               {/* Accuracy */}
               <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', alignItems: 'center', margin: { top: 12 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Accuracy"
                   fontSize={15}
                   color={{ r: 0.227, g: 0.275, b: 0.322, a: 1 }}
@@ -634,10 +631,9 @@ export function ClubSelectMenu(props: {}) {
                     uiBackground={{ color: { r: 0.247, g: 0.651, b: 0.165, a: 1 } }}
                   />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={state.accuracyValue}
                   fontSize={15}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-right"
                   uiTransform={{ width: 64, height: 24 }}
@@ -646,7 +642,7 @@ export function ClubSelectMenu(props: {}) {
 
               {/* Launch height */}
               <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', alignItems: 'center', margin: { top: 12 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Launch height"
                   fontSize={15}
                   color={{ r: 0.227, g: 0.275, b: 0.322, a: 1 }}
@@ -662,10 +658,9 @@ export function ClubSelectMenu(props: {}) {
                     uiBackground={{ color: { r: 0.941, g: 0.643, b: 0.11, a: 1 } }}
                   />
                 </UiEntity>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value={state.heightValue}
                   fontSize={15}
-                  font="monospace"
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-right"
                   uiTransform={{ width: 64, height: 24 }}
@@ -697,22 +692,21 @@ export function ClubSelectMenu(props: {}) {
                 />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 16 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="DR"
                   fontSize={14}
-                  font="monospace"
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 18 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Driver"
                   fontSize={24}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 32 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Long game"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -741,22 +735,21 @@ export function ClubSelectMenu(props: {}) {
                 />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 16 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="5I"
                   fontSize={14}
-                  font="monospace"
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 18 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="5 Iron"
                   fontSize={24}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 32 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Mid range"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -785,22 +778,21 @@ export function ClubSelectMenu(props: {}) {
                 />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 16 } }}>
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="WG"
                   fontSize={14}
-                  font="monospace"
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 18 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_BOLD}
                   value="Wedge"
                   fontSize={24}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 32 }}
                 />
-                <Label
+                <Label font="sans-serif" fontSrc={FONT_REGULAR}
                   value="Short game"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
@@ -845,7 +837,7 @@ export function ClubSelectMenu(props: {}) {
                 uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-back.png' } }}
               />
             </UiEntity>
-            <Label
+            <Label font="sans-serif" fontSrc={FONT_BOLD}
               value="Modes"
               fontSize={17}
               color={{ r: 0.227, g: 0.275, b: 0.322, a: 1 }}
@@ -870,7 +862,7 @@ export function ClubSelectMenu(props: {}) {
                 uiTransform={{ width: 28, height: 28 }}
                 uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/ball-classic.png' } }}
               />
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_REGULAR}
                 value="Ball: Classic"
                 fontSize={16}
                 color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
@@ -879,7 +871,7 @@ export function ClubSelectMenu(props: {}) {
               />
             </UiEntity>
             <UiEntity {...teeOffButton}>
-              <Label
+              <Label font="sans-serif" fontSrc={FONT_BOLD}
                 value="Tee Off"
                 fontSize={22}
                 color={{ r: 1, g: 1, b: 1, a: 1 }}

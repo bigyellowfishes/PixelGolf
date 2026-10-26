@@ -4,6 +4,7 @@ import { UiEntity } from '@dcl/sdk/react-ecs'
 import {curScore, curRound} from '../game'
 import { Color4 } from '@dcl/sdk/math'
 import { onPhone } from '../mobile'
+import { FONT_BOLD } from '../fonts'
 
 export interface State {}
 export const state: State = {}
@@ -44,6 +45,8 @@ export function Score(props: {}) {
           uiText={{
             value: `Score: ${curScore}`,
             fontSize: 14,
+            font: 'sans-serif',
+            fontSrc: FONT_BOLD,
             textAlign: 'middle-center', // 'top-left', 'middle-center', 'bottom-right', etc.
             color: Color4.White(),
           }}
@@ -57,6 +60,8 @@ export function Score(props: {}) {
           uiText={{
             value: `Shot: ${curRound}`,
             fontSize: 14,
+            font: 'sans-serif',
+            fontSrc: FONT_BOLD,
             textAlign: 'middle-center', // 'top-left', 'middle-center', 'bottom-right', etc.
             color: Color4.White(),
           }}
