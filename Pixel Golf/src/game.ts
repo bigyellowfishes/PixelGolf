@@ -925,8 +925,6 @@ export class Game {
     // Driver lowest, wedge highest; harder swings are louder
     const clubPitch = { driver: 0.92, iron: 1.04, wedge: 1.16 }[getSelectedClubType()]
     playAt('club_hit', this.physics.position(), 0.55 + this.storedPower * 0.45, clubPitch)
-    // Now and then the commentator chips in while the ball's in the air (not in the tutorial)
-    if (!tutorial.active) sayLine('flight')
     // The ball leaves as soon as its path is here (normally already, see prepareShot)
     this.startPendingShot()
     this.state.shot++

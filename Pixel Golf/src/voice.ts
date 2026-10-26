@@ -8,17 +8,16 @@ import { voiceLevel } from './audio'
 //   great   any target hit
 //   big     the hot target, or one of the hardest targets (White, Black)
 //   miss    no target, a bunker, or off the range
-//   flight  just after the strike, now and then, while the ball is in the air
 
-export type VoiceMoment = 'great' | 'big' | 'miss' | 'flight'
+export type VoiceMoment = 'great' | 'big' | 'miss'
 
 const VO_DIR = 'assets/sounds/vo/'
 
 const LINES: Record<VoiceMoment, string[]> = {
   great: ['great_1', 'great_2', 'whatashot_1', 'whatashot_2', 'whatashot_3'],
   big: ['unbelievable', 'betyoucouldnt', 'whatashot_1', 'whatashot_3'],
-  miss: ['miss_1', 'miss_2', 'miss_3', 'taunt_1', 'taunt_2'],
-  flight: ['getinthehole']
+  // getinthehole says "Maybe try getting it in the hole", so it's a miss taunt
+  miss: ['miss_1', 'miss_2', 'miss_3', 'taunt_1', 'taunt_2', 'getinthehole']
 }
 
 /** In the tutorial, a miss only gets "That's a miss", never a taunt */
@@ -28,16 +27,14 @@ const KIND_MISS = ['miss_1', 'miss_2', 'miss_3']
 const CHANCE: Record<VoiceMoment, number> = {
   great: 1,
   big: 1,
-  miss: 1,
-  flight: 0.25
+  miss: 1
 }
 
 /** Seconds after the moment before the line starts, so it follows the score jingle or the strike */
 const DELAY: Record<VoiceMoment, number> = {
   great: 0.35,
   big: 0.35,
-  miss: 0.3,
-  flight: 0.5
+  miss: 0.3
 }
 
 const VOLUME = 0.85

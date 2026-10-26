@@ -43,6 +43,13 @@ const WARN_GLOW_MAX = 8
 const RIM_LIFT = 0.06
 /** Ground more than this above the hole counts as a wall, not the rim (the cliff by Black) */
 const CLIFF_SKIP = 10
+/**
+ * Targets whose glow sits on the lower ground round their edge (the lowest quarter), not the
+ * highest. Black's strip is fairway (4.5 m) with its ends running up the banks to about 8 m: at
+ * the highest point the glow floated nearly 4 m over the holes like a lid. Low, it lies on the
+ * fairway along the strip's sides and its ends tuck into the banks.
+ */
+const RIM_LOW: { [colour: string]: boolean } = { Black: true }
 
 // Variables For the Light Ring
 const ZONE_OVERRIDE = 'Black'
@@ -121,13 +128,19 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
         // The rim's height: the highest real grass just outside the target's edge, round it
         const hole = courseSurfaceAt(x, z) ?? t.position.y
         let grass = hole
+        const heights: number[] = []
         for (const f of [1, 1.1]) {
           for (let i = 0; i < 48; i++) {
             const a = (i / 48) * Math.PI * 2
             const local = Vector3.rotate(Vector3.create(Math.sin(a) * rx * f, 0, Math.cos(a) * rz * f), t.rotation)
             const h = courseSurfaceAt(x + local.x, z + local.z)
+            if (h !== null && h <= hole + CLIFF_SKIP) heights.push(h)
             if (h !== null && h > grass && h <= hole + CLIFF_SKIP) grass = h
           }
+        }
+        if (RIM_LOW[zone.replace(/\d+$/, '')] && heights.length) {
+          heights.sort((p, q) => p - q)
+          grass = Math.max(hole, heights[Math.floor(heights.length / 4)])
         }
         rimTexture = RIM_TEXTURE_FOR[zone.replace(/\d+$/, '')] ?? RIM_TEXTURE
         // Flat on the ground, the target's own shape and turn (the long Black strip gets its own glow)
