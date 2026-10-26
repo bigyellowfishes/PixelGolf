@@ -10,14 +10,9 @@ import { courseSurfaceAt } from './ballSim'
 // The countdown itself is on the range card. The server picks the target and rotates it every
 // 30 seconds for everyone (ledger/server.ts); in the tutorial it's the lesson target on its last
 // shot (effectiveHot). Hidden while nothing is hot.
-//
-// Earlier markers are kept: the ring with the floating 2X badge (src/hotTarget.rimbadge.ts.bak),
-// the coin (src/hotTarget.coin.ts.bak, assets/hot/Multiplierv3.glb), the Multiplier band
-// (src/hotTarget.ring.ts.bak, assets/hot/Multiplier.glb) and the first 2X badge (src/hotTarget.ts.bak).
-
 const RIM_TEXTURE = 'assets/hot/rim.png'
 
-//
+// Model For Vegas Style Sky Light 
 const MODEL = 'assets/Models/Ring/Ring.glb'
 
 
@@ -49,8 +44,8 @@ const RIM_LIFT = 0.06
 /** Ground more than this above the hole counts as a wall, not the rim (the cliff by Black) */
 const CLIFF_SKIP = 10
 
-//
-const ZONE_OVERRIDE = null
+// Variables For the Light Ring
+const ZONE_OVERRIDE = 'Black'
 const SIZE = 0.05
 const SIZE_MIN = 0.5
 const SIZE_MAX = 1.5
@@ -103,7 +98,7 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
   let scale = Vector3.One()
 
   engine.addSystem((dt) => {
-    const zone = effectiveHot()
+    const zone = ZONE_OVERRIDE ? ZONE_OVERRIDE : effectiveHot()
     if (zone !== shownZone) {
       shownZone = zone
       const ent = zone ? zoneEntity(zone) : undefined
@@ -141,7 +136,7 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
         rt.rotation = Quaternion.multiply(t.rotation, Quaternion.fromEulerDegrees(90, 0, 0))
         rt.scale = Vector3.create(rx * 2 * RIM_SPAN, rz * 2 * RIM_SPAN, 1)
         showing = true
-        console.log(`[hot] rim on ${zone} at ${(grass + RIM_LIFT).toFixed(1)} m`)
+        //console.log(`[hot] rim on ${zone} at ${(grass + RIM_LIFT).toFixed(1)} m`)
       }
     }
     if (!showing) return
