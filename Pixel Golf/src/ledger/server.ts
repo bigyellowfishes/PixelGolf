@@ -35,7 +35,7 @@ import {
   tidyName
 } from './leaders'
 import { bumpEpoch, currentEpoch, epochKey, epochReady } from './epoch'
-import { encodePath, sanitiseLaunch, simulateShot, outOfRange, warmUpBallSim, Vec3 } from '../ballSim'
+import { encodePath, sanitiseLaunch, simulateShot, outOfRange, warmUpBallSim, pathEnd, Vec3 } from '../ballSim'
 
 /**
  * The Pixel Golf ledger. Runs only on the Multiplayer Server (see main() in
@@ -109,6 +109,86 @@ type Wallet = {
   owned: string[]
   equipped: Record<string, string>
   settings: Record<string, boolean>
+  /** The Player Stats page (added 2026-10-26). Counted from then on: older rounds aren't in it. */
+  stats?: Stats
+}
+
+/**
+ * A player's running stats for the Player Stats page in the Pixel Golf menu. Worked out here from
+ * what the server already checks, never sent in by the player's screen:
+ *   - from each posted round: balls, target hits by colour, misses, bunkers, hot hits, best
+ *     single shot, total score (for the average), perfect rounds, the multiplier rolls
+ *   - from each shot the server simulates (the shared bays, not the tutorial or the solo bay,
+ *     which play on the player's own screen): the longest shot and how often each club is used
+ *   - from hello: the daily login streak
+ *   - from the 20 second 'here' heartbeat: time on the range
+ *   - from the AFK practice payouts: AFK minutes
+ */
+type Stats = {
+  /** Epoch seconds these stats started counting */
+  since: number
+  rounds: number
+  balls: number
+  misses: number
+  bunkers: number
+  /** Target hits by colour: Red, Yellow, Green, Orange, Blue, White, Black */
+  hits: Record<string, number>
+  hotHits: number
+  /** Best single ball's points (with the hot target doubling) and where it landed */
+  bestShot: number
+  bestShotZone: string
+  /** True Score of every round counted, for the average */
+  totalScore: number
+  /** Rounds with all ten balls on a target */
+  perfect: number
+  biggestRoll: number
+  /** Multiplier rolls of 5x or more */
+  bigRolls: number
+  /** Longest shot, tee to where the ball stopped (metres), and the club */
+  longest: number
+  longestClub: string
+  /** Shots by club */
+  clubs: Record<string, number>
+  /** Daily login streak (days in a row), the best one, and the UTC day number last seen */
+  streak: number
+  bestStreak: number
+  lastDay: number
+  playSeconds: number
+  afkMinutes: number
+}
+
+const emptyStats = (): Stats => ({
+  since: Math.floor(Date.now() / 1000),
+  rounds: 0,
+  balls: 0,
+  misses: 0,
+  bunkers: 0,
+  hits: {},
+  hotHits: 0,
+  bestShot: 0,
+  bestShotZone: '',
+  totalScore: 0,
+  perfect: 0,
+  biggestRoll: 0,
+  bigRolls: 0,
+  longest: 0,
+  longestClub: '',
+  clubs: {},
+  streak: 0,
+  bestStreak: 0,
+  lastDay: 0,
+  playSeconds: 0,
+  afkMinutes: 0
+})
+
+/** A wallet's stats, created (or filled out with any newer fields) the first time they're needed */
+function statsOf(wallet: Wallet): Stats {
+  wallet.stats = { ...emptyStats(), ...(wallet.stats ?? {}) }
+  return wallet.stats
+}
+
+function sendStats(address: string, wallet: Wallet): void {
+  void room.send('myStats', { json: JSON.stringify(statsOf(wallet)) }, { to: [address] })
 }
 
 /** Wallet records. Bumped from 'pg' on 2026-10-12 to give everyone a fresh ledger for tutorial testing. */
@@ -606,7 +686,20 @@ export function runLedger(): void {
       void room.send('awarded', { xp: XP.dailyLogin, points: POINTS.dailyLogin, reason: 'Daily login bonus' }, { to: [address] })
     }
 
+    // The daily login streak: days in a row they've been here (UTC days)
+    if (canEarn(address)) {
+      const s = statsOf(wallet)
+      const day = Math.floor(now() / 86400)
+      if (s.lastDay !== day) {
+        s.streak = s.lastDay === day - 1 ? s.streak + 1 : 1
+        s.bestStreak = Math.max(s.bestStreak, s.streak)
+        s.lastDay = day
+        touch(address, wallet)
+      }
+    }
+
     sendLedger(address, wallet)
+    sendStats(address, wallet)
     sendRange(address)
     sendWind(address)
     sendDevState(address)
@@ -731,6 +824,24 @@ export function runLedger(): void {
     const path = simulateShot(start, launch, undefined, windVector(Math.round(windDir * 10) / 10, Math.round(windSpeed * 10) / 10))
     const payload = encodePath(path)
     void room.send('shotPath', { bay, id, u: address, data: payload })
+
+    // Player stats: the club used, and the longest shot (tee to where it stopped, on the range)
+    if (canEarn(address)) {
+      const club = clubs.get(address)?.type ?? 'iron'
+      const end = pathEnd(path)
+      const far = Math.round(Math.hypot(end.x - start.x, end.z - start.z))
+      void load(address).then((wallet) => {
+        const s = statsOf(wallet)
+        s.clubs[club] = (s.clubs[club] ?? 0) + 1
+        const longer = !outOfRange(end.x, end.y, end.z) && far > s.longest
+        if (longer) {
+          s.longest = far
+          s.longestClub = club
+        }
+        touch(address, wallet)
+        if (longer) sendStats(address, wallet)
+      })
+    }
     simCount++
     simMs += Date.now() - at
     if (simCount % 25 === 1) {
@@ -856,9 +967,22 @@ export function runLedger(): void {
     }
   })
 
-  room.onMessage('here', (_data, context) => {
+  // Time on the range for Player Stats: the time between heartbeats (every 20 seconds), as long
+  // as they came close enough together to mean the player stayed
+  const lastHere = new Map<string, number>()
+  room.onMessage('here', async (_data, context) => {
     const address = context?.from
-    if (address) seen.set(address, now())
+    if (!address) return
+    const t = now()
+    seen.set(address, t)
+    const before = lastHere.get(address)
+    lastHere.set(address, t)
+    if (before === undefined || !canEarn(address)) return
+    const gap = t - before
+    if (gap <= 0 || gap > 60) return
+    const wallet = await load(address)
+    statsOf(wallet).playSeconds += gap
+    dirty.add(address)
   })
 
   room.onMessage('round', async (data, context) => {
@@ -901,6 +1025,31 @@ export function runLedger(): void {
     }
     if (multiScore > wallet.bestMulti) wallet.bestMulti = multiScore
 
+    // Player stats from the ten balls
+    const s = statsOf(wallet)
+    s.rounds++
+    s.totalScore += Math.max(0, trueScore)
+    let onTarget = 0
+    for (const b of balls) {
+      s.balls++
+      const colour = b.z.replace(/\d+$/, '')
+      if (b.z === '') s.misses++
+      else if (colour === 'Bunker') s.bunkers++
+      else {
+        s.hits[colour] = (s.hits[colour] ?? 0) + 1
+        onTarget++
+      }
+      if (b.h) s.hotHits++
+      const value = b.h ? b.p * HOT.factor : b.p
+      if (value > s.bestShot) {
+        s.bestShot = value
+        s.bestShotZone = colour
+      }
+    }
+    if (onTarget === balls.length) s.perfect++
+    s.biggestRoll = Math.max(s.biggestRoll, r)
+    if (r >= MULTIPLIER.shoutAt) s.bigRolls++
+
     giveXp(wallet, xp)
     pay(wallet, points)
     wallet.rounds++
@@ -918,6 +1067,7 @@ export function runLedger(): void {
       void room.send('rolled', { name: wallet.name || tidyName('', address), roll: r, score: multiScore })
     }
     sendLedger(address, wallet)
+    sendStats(address, wallet)
     sendRanks(address)
     console.log(`[ledger] round ${address}: ${trueScore} x${r} (${here} here), +${xp} XP, +${points} PP`)
   })
@@ -930,6 +1080,7 @@ export function runLedger(): void {
     const t = now()
     if (t - wallet.lastAfk < LEDGER.afkMinSeconds) return
     wallet.lastAfk = t
+    statsOf(wallet).afkMinutes++
     giveXp(wallet, XP.afkPerMinute)
     touch(address, wallet)
     sendLedger(address, wallet)

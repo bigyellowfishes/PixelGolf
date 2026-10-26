@@ -8,6 +8,7 @@ import { playUi } from '../sfx'
 import { roundInProgress, abandonRound } from '../game'
 import { forTouch } from '../mobile'
 import { menuReopenBlocked } from '../menuGuard'
+import { PlayerStats } from './PlayerStats'
 
 // Pixel Golf game mode menu. Hidden until the player clicks a Tee Off panel
 // (see src/teeOffPanels.ts), which calls openPixelGolfMenu().
@@ -19,6 +20,8 @@ export interface State {
   xp: number
   xpNext: number
   xpWidth: `${number}%`
+  /** What the right of the menu shows: the Pixel Golf mode, or the Player Stats page */
+  view: 'golf' | 'stats'
 }
 
 export const state: State = {
@@ -27,7 +30,8 @@ export const state: State = {
   level: 1,
   xp: 0,
   xpNext: 100,
-  xpWidth: '0%'
+  xpWidth: '0%',
+  view: 'golf'
 }
 
 type UiAction = { state: State; props: Parameters<typeof GameModeMenu>[0]; value?: unknown }
@@ -35,6 +39,8 @@ type UiAction = { state: State; props: Parameters<typeof GameModeMenu>[0]; value
 /** Opens the Pixel Golf menu. force: open it even within a second of another menu closing. */
 export function openPixelGolfMenu(force = false) {
   if (!force && state.display !== 'flex' && menuReopenBlocked()) return
+  // Always opens on Pixel Golf, ready to play
+  if (state.display !== 'flex') state.view = 'golf'
   state.display = 'flex'
   playUi('ui_open')
 }
@@ -78,6 +84,13 @@ function fmt(n: number): string {
     out += s[i]
   }
   return (n < 0 ? '-' : '') + out
+}
+
+// @ui-action
+function showView(view: 'golf' | 'stats') {
+  if (state.view === view) return
+  state.view = view
+  playUi('ui_select')
 }
 
 // @ui-action
@@ -215,7 +228,7 @@ export function GameModeMenu(props: {}) {
             uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
           >
             <Label
-              value="Choose a Mode"
+              value={state.view === 'stats' ? 'Player Stats' : 'Choose a Mode'}
               fontSize={20}
               color={{ r: 1, g: 1, b: 1, a: 1 }}
               textAlign="middle-left"
@@ -268,9 +281,10 @@ export function GameModeMenu(props: {}) {
                   padding: { left: 16, right: 18 },
                   borderRadius: 22,
                   borderWidth: 3,
-                  borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 }
+                  borderColor: state.view === 'golf' ? { r: 0.161, g: 0.694, b: 0.898, a: 1 } : { r: 0.835, g: 0.863, b: 0.886, a: 1 }
                 }}
-                uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
+                uiBackground={{ color: state.view === 'golf' ? { r: 0.839, g: 0.949, b: 0.988, a: 1 } : { r: 1, g: 1, b: 1, a: 1 } }}
+                onMouseDown={() => showView('golf')}
               >
                 <UiEntity
                   uiTransform={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 12 }}
@@ -303,7 +317,7 @@ export function GameModeMenu(props: {}) {
                 </UiEntity>
               </UiEntity>
 
-              {/* Locked slots */}
+              {/* Player Stats: your stats page, in place of the preview */}
               <UiEntity
                 uiTransform={{
                   width: '100%',
@@ -311,25 +325,30 @@ export function GameModeMenu(props: {}) {
                   flexDirection: 'row',
                   alignItems: 'center',
                   margin: { top: 12 },
-                  padding: { left: 22 },
+                  padding: { left: 18 },
                   borderRadius: 20,
-                  borderWidth: 2,
-                  borderColor: { r: 0.765, g: 0.804, b: 0.835, a: 1 }
+                  borderWidth: state.view === 'stats' ? 3 : 2,
+                  borderColor: state.view === 'stats' ? { r: 0.161, g: 0.694, b: 0.898, a: 1 } : { r: 0.835, g: 0.863, b: 0.886, a: 1 }
                 }}
-                uiBackground={{ color: { r: 0.933, g: 0.945, b: 0.957, a: 1 } }}
+                uiBackground={{ color: state.view === 'stats' ? { r: 0.839, g: 0.949, b: 0.988, a: 1 } : { r: 1, g: 1, b: 1, a: 1 } }}
+                onMouseDown={() => showView('stats')}
               >
-                <UiEntity
-                  uiTransform={{ width: 20, height: 20 }}
-                  uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-lock.png' } }}
-                />
+                {/* A little bar chart */}
+                <UiEntity uiTransform={{ width: 28, height: 26, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                  <UiEntity uiTransform={{ width: 7, height: 12 }} uiBackground={{ color: { r: 0.161, g: 0.694, b: 0.898, a: 1 } }} />
+                  <UiEntity uiTransform={{ width: 7, height: 24 }} uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }} />
+                  <UiEntity uiTransform={{ width: 7, height: 17 }} uiBackground={{ color: { r: 0.161, g: 0.694, b: 0.898, a: 1 } }} />
+                </UiEntity>
                 <Label
-                  value="Coming soon"
-                  fontSize={19}
-                  color={{ r: 0.431, g: 0.482, b: 0.533, a: 1 }}
+                  value="Player Stats"
+                  fontSize={22}
+                  color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
-                  uiTransform={{ width: 220, height: 30, margin: { left: 12 } }}
+                  uiTransform={{ width: 240, height: 30, margin: { left: 14 } }}
                 />
               </UiEntity>
+
+              {/* Locked slots */}
               <UiEntity
                 uiTransform={{
                   width: '100%',
@@ -465,7 +484,12 @@ export function GameModeMenu(props: {}) {
             </UiEntity>
           </UiEntity>
 
-          {/* Preview and description */}
+          {/* Preview and description, or the Player Stats page */}
+          {state.view === 'stats' ? (
+            <UiEntity uiTransform={{ flexGrow: 1, height: '100%', margin: { left: 28 } }}>
+              <PlayerStats />
+            </UiEntity>
+          ) : (
           <UiEntity uiTransform={{ flexGrow: 1, height: '100%', flexDirection: 'column', margin: { left: 28 } }}>
             {/* The preview picture. Decentraland doesn't round a picture's corners, so the frame's
                 corners are kept tight and the picture sits the same small, even inset from every
@@ -540,6 +564,7 @@ export function GameModeMenu(props: {}) {
               />
             </UiEntity>
           </UiEntity>
+          )}
         </UiEntity>
 
         {/* Footer */}

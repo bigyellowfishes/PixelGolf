@@ -120,6 +120,35 @@ export const boards: { ready: boolean; tables: Record<Period, Board>; mine: Reco
   }
 }
 
+/**
+ * Your running stats for the Player Stats page (ui/PlayerStats.tsx), as the server last sent them
+ * (Stats in ledger/server.ts). ready is false until it has.
+ */
+export const stats = {
+  ready: false,
+  since: 0,
+  rounds: 0,
+  balls: 0,
+  misses: 0,
+  bunkers: 0,
+  hits: {} as Record<string, number>,
+  hotHits: 0,
+  bestShot: 0,
+  bestShotZone: '',
+  totalScore: 0,
+  perfect: 0,
+  biggestRoll: 0,
+  bigRolls: 0,
+  longest: 0,
+  longestClub: '',
+  clubs: {} as Record<string, number>,
+  streak: 0,
+  bestStreak: 0,
+  lastDay: 0,
+  playSeconds: 0,
+  afkMinutes: 0
+}
+
 /** Which ball each player has equipped (wallet, lower case -> ball id), by the server's list. */
 export const ballLooks: Record<string, string> = {}
 
@@ -485,6 +514,11 @@ export function setupLedgerClient(): void {
   room.onMessage('tutorialReward', (d) => {
     const v = { xp: d.xp, level: d.level, unlocked: parse<string[]>(d.unlocked, []) }
     for (const fn of tutorialRewardFns) fn(v)
+  })
+
+  room.onMessage('myStats', (d) => {
+    const s = parse<Partial<typeof stats>>(d.json, {})
+    Object.assign(stats, s, { ready: true, hits: s.hits ?? {}, clubs: s.clubs ?? {} })
   })
 
   room.onMessage('devState', (d) => {

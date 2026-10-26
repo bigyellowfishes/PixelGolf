@@ -306,7 +306,15 @@ export const MESSAGES = {
   adminWind: Schemas.Map({ dir: Schemas.Float, speed: Schemas.Float, hold: Schemas.Boolean }),
 
   /** Server -> everyone: the dev panel's switches, JSON { extra, hotHold, windHold }. Sent on change and on hello. */
-  devState: Schemas.Map({ json: Schemas.String })
+  devState: Schemas.Map({ json: Schemas.String }),
+
+  // Player stats (added 2026-10-26)
+
+  /**
+   * Server -> one player: their running stats for the Player Stats page, JSON (Stats in
+   * server.ts). Sent on hello, after each round, and when a shot sets a new longest.
+   */
+  myStats: Schemas.Map({ json: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

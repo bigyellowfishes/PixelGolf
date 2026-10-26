@@ -4692,14 +4692,8 @@
             "categories": [],
             "author": "SDK",
             "email": "",
-            "tags": [
-              ""
-            ],
+            "tags": [],
             "layout": {
-              "base": {
-                "x": 0,
-                "y": 0
-              },
               "parcels": [
                 {
                   "x": -5,
@@ -10477,7 +10471,11 @@
                   "x": 32,
                   "y": 32
                 }
-              ]
+              ],
+              "base": {
+                "x": 0,
+                "y": 0
+              }
             },
             "silenceVoiceChat": false,
             "disablePortableExperiences": false,
@@ -10494,8 +10492,11 @@
                     ]
                   },
                   "y": {
-                    "$case": "single",
-                    "value": 35
+                    "$case": "range",
+                    "value": [
+                      35,
+                      35
+                    ]
                   },
                   "z": {
                     "$case": "range",
