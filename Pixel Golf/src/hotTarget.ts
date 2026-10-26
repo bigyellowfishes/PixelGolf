@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, MeshRenderer, Material, MaterialTransparencyMode } from '@dcl/sdk/ecs'
+import { engine, Entity, GltfContainer, ColliderLayer, Transform, MeshRenderer, Material, MaterialTransparencyMode } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { effectiveHot, hotSecondsLeft, tutorial } from './ledger/client'
 import { courseSurfaceAt } from './ballSim'
@@ -16,6 +16,8 @@ import { courseSurfaceAt } from './ballSim'
 // (src/hotTarget.ring.ts.bak, assets/hot/Multiplier.glb) and the first 2X badge (src/hotTarget.ts.bak).
 
 const RIM_TEXTURE = 'assets/hot/rim.png'
+
+const MODEL = 'assets/Models/Ring/Ring.glb'
 /**
  * Custom glow for some targets, by colour. Black is a long strip (20 x 150 m) seen almost edge-on
  * from the bays, where a ring shrinks to a thin line: it gets the whole strip lit up instead, a
@@ -44,6 +46,16 @@ const RIM_LIFT = 0.06
 /** Ground more than this above the hole counts as a wall, not the rim (the cliff by Black) */
 const CLIFF_SKIP = 10
 
+//
+const ZONE_OVERRIDE = null
+const SIZE = 0.05
+const SIZE_MIN = 0.5
+const SIZE_MAX = 1.5
+const FLAG_TOP = 13
+const FLAG_CLEARANCE = -5
+const BOB_HEIGHT = 0.5
+const BOB_SECONDS = 5
+const SPIN_SPEED = 10
 const HIDDEN = Vector3.create(0, -100, 0)
 
 let rimTexture = RIM_TEXTURE
@@ -69,12 +81,25 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
   MeshRenderer.setPlane(rim)
   rimMaterial(rim, RIM_GLOW_MIN)
 
+  //
+  const Ring = engine.addEntity()
+  Transform.create(Ring, { position: HIDDEN })
+  GltfContainer.create(Ring, {
+    src: MODEL,
+    // Looks only: the ball passes straight through it
+    visibleMeshesCollisionMask: ColliderLayer.CL_NONE,
+    invisibleMeshesCollisionMask: ColliderLayer.CL_NONE
+  })
+
   let shownZone = ''
   let showing = false
   let clock = 0
+  let yaw = 0
+  let base = HIDDEN
+  let scale = Vector3.One()
 
   engine.addSystem((dt) => {
-    const zone = effectiveHot()
+    const zone = ZONE_OVERRIDE ? ZONE_OVERRIDE : effectiveHot()
     if (zone !== shownZone) {
       shownZone = zone
       const ent = zone ? zoneEntity(zone) : undefined
@@ -84,10 +109,16 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
         Transform.getMutable(rim).position = HIDDEN
         if (zone) console.log(`[hot] no target entity named ${zone}, the marker is hidden`)
       } else {
+        //
         const x = t.position.x
         const z = t.position.z
         const rx = Math.abs(t.scale.x) / 2
         const rz = Math.abs(t.scale.z) / 2
+        //
+        const targetRadius = Math.min(Math.abs(t.scale.x), Math.abs(t.scale.z)) / 2
+        const r = Math.min(SIZE_MAX, Math.max(SIZE_MIN, targetRadius * SIZE))
+        scale = Vector3.create(r, r, r)
+        base = Vector3.create(t.position.x, FLAG_TOP + FLAG_CLEARANCE + r, t.position.z)
         // The rim's height: the highest real grass just outside the target's edge, round it
         const hole = courseSurfaceAt(x, z) ?? t.position.y
         let grass = hole
@@ -121,5 +152,14 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
     const high = warn ? WARN_GLOW_MAX : RIM_GLOW_MAX
     const wave = 0.5 + 0.5 * Math.sin((clock / period) * Math.PI * 2)
     rimMaterial(rim, low + (high - low) * wave)
+
+    //
+    yaw = (((yaw + SPIN_SPEED * dt) % 360) + 360) % 360
+    const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
+    const tr = Transform.getMutable(Ring)
+    tr.position = Vector3.create(base.x, base.y + BOB_HEIGHT + bob, base.z)
+    tr.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
+    const XZScale = (0.2 * bob) + 0.8
+    tr.scale = Vector3.create(scale.x * XZScale, scale.y, scale.z * XZScale)
   })
 }

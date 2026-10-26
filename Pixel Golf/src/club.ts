@@ -156,7 +156,7 @@ export type ClubType = 'wedge' | 'iron' | 'driver'
  *                overshoots it at impact, nudge this (e.g. shorter wedge -> a bit above 1).
  */
 export const CLUB_TYPES: Record<ClubType, { label: string; model: string; launchPower: number; scaleMul: number, gSizeMin: number, gSizeMax: number  }> = {
-  wedge:  { label: 'Wedge',   model: 'assets/Models/Golf_Wedge/Golf_Wedge.glb',   launchPower: 75,  scaleMul: 1, gSizeMin: 25 , gSizeMax: 77  },
+  wedge:  { label: 'Wedge',   model: 'assets/Models/Golf_Wedge/Golf_Wedge.glb',   launchPower: 75,  scaleMul: 1, gSizeMin: 32 , gSizeMax: 77  },
   iron:   { label: 'Iron',    model: 'assets/Models/Golf_Iron/Golf_Iron.glb',     launchPower: 125, scaleMul: 1, gSizeMin: 70 , gSizeMax: 130 },
   driver: { label: 'Driver',  model: 'assets/Models/Golf_Driver/Golf_Driver.glb', launchPower: 175, scaleMul: 1, gSizeMin: 110, gSizeMax: 195 }
 }
