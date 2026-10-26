@@ -104,7 +104,8 @@ export function PlayerStats(props: {}) {
       favouriteUses = stats.clubs[club]
     }
   }
-  const balls = CATALOGUE.filter((i) => i.kind === 'ball' && !i.shelved)
+  // Ball looks (Joel's ball properties made the ball's look 'ballVis' and its physics 'ballProp')
+  const balls = CATALOGUE.filter((i) => i.kind === 'ballVis' && !i.shelved)
   const ownedBalls = balls.filter((i) => i.id === 'ball-classic' || profile.owned.indexOf(i.id) >= 0).length
   const since = stats.since > 0 ? new Date(stats.since * 1000) : null
   const sinceText = since ? `Counted since ${since.getUTCDate()} ${MONTHS[since.getUTCMonth()]}` : ''
