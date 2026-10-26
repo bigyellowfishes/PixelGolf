@@ -18,7 +18,8 @@ import {
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { openPixelGolfMenu, state as pixelGolfMenu } from './ui/GameModeMenu'
 import { state as clubMenu } from './ui/ClubSelectMenu'
-import { isShotInProgress, GameState, getAllGames, playerBusy, roundInProgress, requestShotStart, stepOutForMenu, menuKeyAllowed } from './game'
+import { isShotInProgress, GameState, getAllGames, playerBusy, roundInProgress, requestShotStart, stepOutForMenu, menuKeyAllowed, tutorialReplayOffered } from './game'
+import { replayTutorial } from './tutorial'
 import { onMenuKey } from './menuGuard'
 import { ROUND_BALLS } from './ledger/rules'
 import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
@@ -355,6 +356,12 @@ function onPuttingArea(dt: number): boolean {
  */
 function openBayMenuByKey(): void {
   if (tutorial.active || !menuKeyAllowed()) return
+  // At the tutorial bay's ball, once done: F plays the tutorial again (practice, tutorial.ts)
+  if (tutorialReplayOffered()) {
+    const why = replayTutorial()
+    if (why) showToast(why, 4)
+    return
+  }
   // Mid-shot the walk-in check is paused, so the bay is the one you're playing
   const bay = playerBusy() ? myBay() : bayHere
   if (!bay || bay === TUTORIAL_BAY) return

@@ -21,7 +21,7 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
 import { sayLine } from './voice'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson } from './ledger/client'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson, profile } from './ledger/client'
 import { ShotPath, Vec3, launchVelocity } from './ballSim'
 
 // The club in the player's hand, shared by every ball like the arrows
@@ -301,6 +301,18 @@ function tutorialBayNoticeHeld(): boolean {
   return false
 }
 
+/**
+ * Whether to offer a replay of the tutorial: the player has done it, isn't in it, and is standing
+ * at the tutorial bay's ball (not straight after finishing, while its notice is held). The prompt
+ * says "Press F to replay the tutorial" and F starts it (teeOffPanels.ts, tutorial.ts).
+ */
+export function tutorialReplayOffered(): boolean {
+  if (tutorial.active || !profile.ready || !profile.tutorialDone || activeGame) return false
+  const g = allGames.find((x) => x.bay === TUTORIAL_BAY)
+  if (!g || g.state.phase !== 'walking' || g.state.distanceToBall > HIT_RANGE) return false
+  return !tutorialBayNoticeHeld()
+}
+
 // Back to the start of the tutorial, so it can run again in the same visit (after an admin ledger reset)
 export function resetTutorialSteps(): void {
   TUTORIAL_RETRY = false
@@ -435,6 +447,8 @@ export function getPrompt(): string {
       if (!g.isMine()) {
         // The tutorial bay is closed after the tutorial, and every other bay is closed during it
         const locked = bayLockReason(g.bay)
+        // The tutorial bay, once done: it can be played again as practice
+        if (g.bay === TUTORIAL_BAY && tutorialReplayOffered()) return 'Press F to replay the tutorial'
         if (locked) return g.bay === TUTORIAL_BAY && tutorialBayNoticeHeld() ? '' : locked
         // One player, one bay. A free bay is yours just by walking in (teeOffPanels.ts), so it
         // needs no prompt.

@@ -52,7 +52,7 @@ const CLIFF_SKIP = 10
 const RIM_LOW: { [colour: string]: boolean } = { Black: true }
 
 // Variables For the Light Ring
-const ZONE_OVERRIDE = 'Black'
+const ZONE_OVERRIDE = null
 const SIZE = 0.05
 const SIZE_MIN = 0.5
 const SIZE_MAX = 1.5

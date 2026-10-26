@@ -2,8 +2,8 @@ import { engine } from '@dcl/sdk/ecs'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { Vector3 } from '@dcl/sdk/math'
 
-import { Game, onRoundFinished, resetTutorialSteps, holdTutorialBayNotice, setPromptsEnabled } from './game'
-import { profile, onProfile, tutorial, sendTutorialDone, TUTORIAL_BALLS } from './ledger/client'
+import { Game, onRoundFinished, resetTutorialSteps, holdTutorialBayNotice, setPromptsEnabled, isShotInProgress } from './game'
+import { profile, onProfile, tutorial, sendTutorialDone, leaveBay, TUTORIAL_BALLS } from './ledger/client'
 import { showToast } from './ui/RangeHud'
 import { showTutorialComplete } from './ui/RoundResult'
 
@@ -21,6 +21,12 @@ import { showTutorialComplete } from './ui/RoundResult'
  *
  * The rules themselves (bay lock, myBay, hiding other players) live in ledger/client.ts, so
  * game.ts needs no tutorial code of its own. This file only starts and ends it.
+ *
+ * A player who has done it can play it again from the Pixel Golf menu (replayTutorial). A replay
+ * is the same round in the same bay, but practice only: finishing or skipping it sends nothing to
+ * the ledger (no second reward) and leaves their Prompts setting as it was. Their bay is let go
+ * when it starts, and a round in progress waits for them and carries on afterwards (game.ts
+ * carries a round between bays and never onto the tutorial bay).
  */
 
 // After the tenth ball the player stays put this long to see their score, then bay 19 is cleared
@@ -58,9 +64,24 @@ export function setupTutorial(bay19: Game | undefined): void {
 
   // The Skip tutorial button (ui/SkipTutorial.tsx)
   skipFn = () => skip(bay19)
+  // The Replay Tutorial button (ui/GameModeMenu.tsx)
+  replayFn = () => begin(bay19, true)
 }
 
 let skipFn: (() => void) | null = null
+let replayFn: (() => void) | null = null
+
+/**
+ * Plays the tutorial again, as practice. Returns why it can't start right now, or '' if it has.
+ */
+export function replayTutorial(): string {
+  if (!replayFn) return 'There is no tutorial bay in this scene'
+  if (tutorial.active) return "You're already in the tutorial"
+  if (!profile.tutorialDone) return 'Your tutorial is about to start'
+  if (isShotInProgress()) return 'Wait for your shot to finish first'
+  replayFn()
+  return ''
+}
 
 /**
  * Skips the rest of the tutorial: the shot under way is dropped, the player gets their movement
@@ -74,14 +95,20 @@ export function skipTutorial(): void {
 function skip(bay19: Game): void {
   bay19.cancelForTutorialSkip()
   tutorial.active = false
-  profile.tutorialDone = true
-  sendTutorialDone()
+  if (tutorial.replay) tutorial.replay = false
+  else {
+    profile.tutorialDone = true
+    sendTutorialDone()
+  }
   bay19.newRound()
   holdTutorialBayNotice()
   showToast('Tutorial skipped. Walk up to a free bay and press F to open the menu. 1, 2 or 3 changes club.', 6)
 }
 
-function begin(bay19: Game): void {
+function begin(bay19: Game, replay = false): void {
+  // A replay: let go of the bay they're in first, so other players can use it meanwhile
+  if (replay) leaveBay()
+  tutorial.replay = replay
   tutorial.started = true
   tutorial.active = true
   resetTutorialSteps()
@@ -95,20 +122,30 @@ function begin(bay19: Game): void {
     cameraTarget: Vector3.create(tee.x + 20, ground, tee.z)
   })
 
-  showToast(`Welcome to Pixel Golf! Land ${TUTORIAL_BALLS} shots on the targets from this bay. Press E by the ball to swing.`, 8)
+  showToast(
+    replay
+      ? `Tutorial replay: land ${TUTORIAL_BALLS} shots on the targets. It's practice, so nothing is saved. Press E by the ball to swing.`
+      : `Welcome to Pixel Golf! Land ${TUTORIAL_BALLS} shots on the targets from this bay. Press E by the ball to swing.`,
+    8
+  )
 }
 
 function finish(bay19: Game, score: number): void {
   // Release the bay at once: the player can't swing here again, and the ledger has it saved.
   // The server answers with the tutorial's reward (up to TUTORIAL_LEVEL), which fills in the card.
   tutorial.active = false
-  profile.tutorialDone = true
-  sendTutorialDone()
-  // They've been shown how to play: the prompts go off from here (saved like the Settings
-  // switch, so it stays off next visit). Settings > Prompts turns them back on.
-  setPromptsEnabled(false)
+  const replay = tutorial.replay
+  tutorial.replay = false
+  if (!replay) {
+    profile.tutorialDone = true
+    sendTutorialDone()
+    // They've been shown how to play: the prompts go off from here (saved like the Settings
+    // switch, so it stays off next visit). Settings > Prompts turns them back on.
+    // A replay leaves the setting as the player had it.
+    setPromptsEnabled(false)
+  }
   holdTutorialBayNotice()
-  showTutorialComplete(score)
+  showTutorialComplete(score, replay)
 
   // Let them see their score for a moment, then clear the bay and (optionally) move them on
   let waited = 0

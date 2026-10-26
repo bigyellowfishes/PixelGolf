@@ -205,7 +205,12 @@ export const tutorial = {
   /** True while this player is playing their tutorial round in the tutorial bay. */
   active: false,
   /** True once this visit's tutorial has begun, so a later ledger update can't restart it. */
-  started: false
+  started: false,
+  /**
+   * True while this tutorial is a replay (the Replay Tutorial button in the Pixel Golf menu) by a
+   * player who's already done it: a practice run on their screen only, nothing sent to the server.
+   */
+  replay: false
 }
 
 /**

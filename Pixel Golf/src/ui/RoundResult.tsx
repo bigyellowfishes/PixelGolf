@@ -108,7 +108,7 @@ export function showRoundCounted(r: {
 }
 
 /** The tutorial's last shot has landed. The reward fills in when the server answers. */
-export function showTutorialComplete(score: number) {
+export function showTutorialComplete(score: number, replay = false) {
   state.display = 'flex'
   state.title = 'Tutorial complete!'
   state.scoreLabel = 'YOUR SCORE'
@@ -118,7 +118,10 @@ export function showTutorialComplete(score: number) {
   state.levelDisplay = 'none'
   state.levelText = ''
   state.rewardText = ''
-  state.statusText = 'Saving your progress...'
+  // A replay is practice: no reward comes from the ledger, so the card is complete as it is
+  state.statusText = replay
+    ? forTouch('Practice round, so nothing was saved. Walk up to a free bay to play. Press F there to open the menu.')
+    : 'Saving your progress...'
   state.bestDisplay = 'none'
   state.rankText = ''
   state.buttonText = "Let's play"
