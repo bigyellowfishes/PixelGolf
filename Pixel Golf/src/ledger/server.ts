@@ -22,7 +22,7 @@ import {
   TUTORIAL_LEVEL,
   xpToReach
 } from './rules'
-import { WIND, windVector } from './rules'
+import { WIND, windVector, ballProfile } from './rules'
 import {
   leaderJson,
   leadersChanged,
@@ -361,12 +361,17 @@ function sendWind(to?: string): void {
 // Each player's equipped ball (wallet -> ball id), so everyone sees it in that player's bay.
 // Only players with something other than the standard ball are listed.
 const ballLooks = new Map<string, string>()
+// Each player's equipped ball property (wallet -> prop id), which decides how their shots fly
+// (BALL_PROFILES in rules.ts). Kept up to date wherever noteBall is.
+const ballProps = new Map<string, string>()
 
 /** Notes a player's equipped ball. True if that changed what everyone should see. */
 function noteBall(address: string, wallet: Wallet): boolean {
-  const id = wallet.equipped?.ball || DEFAULT_EQUIPPED.ball
+  ballProps.set(address, wallet.equipped?.ballProp || DEFAULT_EQUIPPED.ballProp)
+  // The kind is 'ballVis' now (it was 'ball'), so reading .ball always gave the standard ball
+  const id = wallet.equipped?.ballVis || DEFAULT_EQUIPPED.ballVis
   const before = ballLooks.get(address)
-  if (id === DEFAULT_EQUIPPED.ball) {
+  if (id === DEFAULT_EQUIPPED.ballVis) {
     if (before === undefined) return false
     ballLooks.delete(address)
     return true
@@ -821,7 +826,13 @@ export function runLedger(): void {
     lastShotAsk.set(address, at)
 
     // The same rounded wind every screen was sent, so a shot played locally would match
-    const path = simulateShot(start, launch, undefined, windVector(Math.round(windDir * 10) / 10, Math.round(windSpeed * 10) / 10))
+    const path = simulateShot(
+      start,
+      launch,
+      undefined,
+      windVector(Math.round(windDir * 10) / 10, Math.round(windSpeed * 10) / 10),
+      ballProfile(ballProps.get(address))
+    )
     const payload = encodePath(path)
     void room.send('shotPath', { bay, id, u: address, data: payload })
 
@@ -954,6 +965,7 @@ export function runLedger(): void {
       sendSolo()
       // Everyone's back to the standard ball
       ballLooks.clear()
+      ballProps.clear()
       sendBallLooks()
       resetLeaders()
       await saveLeaders()

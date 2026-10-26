@@ -1,6 +1,6 @@
 import * as CANNON from 'cannon-es'
 import { courseData } from './collisionData/course_collision'
-import { WIND } from './ledger/rules'
+import { WIND, BallProfile, ballProfile } from './ledger/rules'
 
 /**
  * The ball's physics, run ahead of time.
@@ -34,9 +34,6 @@ const SUB_DT = OUTER_DT / SUBSTEPS
 const REST_SPEED_SQ = 0.01
 /** Outer steps the ball must stay still for before the shot ends (about a third of a second). */
 const REST_SAMPLES = 10
-/** Hard cap on a shot's length. */
-const MAX_SECONDS = 10
-const MAX_STEPS = MAX_SECONDS * SIM_HZ
 /** Hard cap on ball speed at any moment. */
 const MAX_BALL_SPEED = 400
 /**
@@ -58,6 +55,7 @@ const HIT_MIN_SPEED = 2
 /** Outer steps between recorded bounces, so a skidding ball doesn't thud every step. */
 const HIT_GAP = 5
 
+const GRAVITY = 9.82
 const LINEAR_DAMPING = 0.35
 const ANGULAR_DAMPING = 0.35
 const RESTITUTION = 0.2
@@ -92,6 +90,8 @@ let world: CANNON.World | undefined
 let ball: CANNON.Body
 let patch: CANNON.Body
 let patchKey = ''
+/** The ground/ball contact, so a shot can set its own bounciness (BallProfile.restitution). */
+let groundBallContact: CANNON.ContactMaterial
 /** The sim the ball body belongs to right now (for its bounce sounds). */
 let current: ShotSim | null = null
 
@@ -104,14 +104,13 @@ function ensureWorld(): CANNON.World {
 
   const groundMat = new CANNON.Material('ground')
   const ballMat = new CANNON.Material('ball')
-  w.addContactMaterial(
-    new CANNON.ContactMaterial(groundMat, ballMat, {
-      friction: 0.0,
-      restitution: RESTITUTION, // a little bounce, not a pinball
-      contactEquationStiffness: 1e8, // stiffer contacts resolve penetration faster and more consistently
-      contactEquationRelaxation: 3 // fewer "soft" steps of settling into the surface
-    })
-  )
+  groundBallContact = new CANNON.ContactMaterial(groundMat, ballMat, {
+    friction: 0.0,
+    restitution: RESTITUTION, // a little bounce, not a pinball (each shot sets its own, see run)
+    contactEquationStiffness: 1e8, // stiffer contacts resolve penetration faster and more consistently
+    contactEquationRelaxation: 3 // fewer "soft" steps of settling into the surface
+  })
+  w.addContactMaterial(groundBallContact)
 
   // The whole course: only rays use it (aiming, the surface probe). The ball collides with
   // the small patch of it under its path instead (see fitPatch).
@@ -353,7 +352,7 @@ function keepOutOfCourse(from: CANNON.Vec3): void {
   const v = ball.velocity
   const into = v.x * n.x + v.y * n.y + v.z * n.z
   if (into < 0) {
-    const k = (1 + RESTITUTION) * into
+    const k = (1 + (current ? current.profile.restitution : RESTITUTION)) * into
     v.set(v.x - k * n.x, v.y - k * n.y, v.z - k * n.z)
     if (current) {
       current.touched()
@@ -426,12 +425,51 @@ export class ShotSim {
   // let a headwind roll balls backwards.
   private landed = false
 
-  constructor(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind) {
+  /** How this ball flies (BallProfile in ledger/rules.ts). */
+  readonly profile: BallProfile
+  /** The shot's length cap in outer steps, from the profile. */
+  readonly maxSteps: number
+  // Substeps spent in the air, for the glide
+  private airSubsteps = 0
+  // The boomerang's pull: along (pullUx, pullUz), the shot's original direction, at pullA m/s2,
+  // until the ball is moving that way at pullCap m/s
+  private pullUx = 0
+  private pullUz = 0
+  private pullA = 0
+  private pullCap = 0
+  // A small seeded random, so an egg's wobble is the same every run of the same shot
+  private seed: number
+
+  constructor(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind, profile?: BallProfile) {
+    const p = profile ?? ballProfile()
+    this.profile = p
+    this.maxSteps = Math.max(1, Math.ceil(p.maxSeconds * SIM_HZ))
+    this.seed = (Math.floor(launch.x * 1000) * 31 + Math.floor(launch.z * 1000) * 17 + Math.floor(start.x * 10)) | 0
     const push = windPush(wind)
-    this.windX = push.x
-    this.windZ = push.z
+    this.windX = push.x * p.windMul
+    this.windZ = push.z * p.windMul
+
+    // Launch: the profile's speed and lift
+    let lx = launch.x * p.speedMul
+    let ly = launch.y * p.speedMul * p.liftMul
+    let lz = launch.z * p.speedMul
+    if (p.boomerang) {
+      const h = Math.sqrt(lx * lx + lz * lz)
+      const t = ly > 0 ? (2 * ly) / (GRAVITY * p.gravityMul) : 0 // flight time on a flat landing
+      if (h > 1e-6 && t > 0.1) {
+        // Constant pull that takes the ball from -back to +forward (of h) over the flight
+        this.pullA = ((p.boomerang.back + p.boomerang.forward) * h) / t
+        this.pullUx = lx / h
+        this.pullUz = lz / h
+        this.pullCap = p.boomerang.forward * h
+      }
+      lx *= -p.boomerang.back
+      lz *= -p.boomerang.back
+    }
+    // A ball that starts on the ground (no lift) is rolling, not flying: wind and glide leave it alone
+    if (ly <= 0) this.landed = true
     this.pos.set(start.x, start.y, start.z)
-    this.vel.set(launch.x, launch.y, launch.z)
+    this.vel.set(lx, ly, lz)
     clampSpeed(this.vel, MAX_BALL_SPEED)
     if (spin) this.spin.set(spin.x, spin.y, spin.z, spin.w).normalize()
     this.record()
@@ -448,12 +486,35 @@ export class ShotSim {
     if (speed < HIT_MIN_SPEED || this.step - this.lastHit < HIT_GAP) return
     this.lastHit = this.step
     this.hits.push(this.step + 1, Math.round(speed * 10) / 10)
+    if (this.profile.wobble) this.kick(this.profile.wobble)
+  }
+
+  private rand(): number {
+    // mulberry32
+    this.seed = (this.seed + 0x6d2b79f5) | 0
+    let t = Math.imul(this.seed ^ (this.seed >>> 15), 1 | this.seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+
+  /** A sideways kick, across the ball's direction of travel (the egg's wobble). */
+  private kick(size: number): void {
+    const v = ball.velocity
+    const s = Math.sqrt(v.x * v.x + v.z * v.z)
+    if (s < 0.5) return
+    const side = (this.rand() * 2 - 1) * size
+    v.x += (v.z / s) * side
+    v.z -= (v.x / s) * side
   }
 
   /** Runs up to `maxSteps` outer steps. True once the shot has ended. */
   run(maxSteps: number): boolean {
     if (this.done) return true
     ensureWorld()
+    // This shot's ball: the world and the ball body are shared, so every run sets them up again
+    world!.gravity.set(0, -GRAVITY * this.profile.gravityMul, 0)
+    ball.linearDamping = this.profile.damping
+    groundBallContact.restitution = this.profile.restitution
     ball.position.copy(this.pos)
     ball.previousPosition.copy(this.pos)
     ball.interpolatedPosition.copy(this.pos)
@@ -480,9 +541,9 @@ export class ShotSim {
 
     for (let s = 0; s < SUBSTEPS; s++) {
       fromPrev.copy(ball.position)
-      // Wind pushes the ball while it's in the air (cannon clears the force after each step)
+      // Wind, glide and the boomerang's pull act while the ball is in the air (cannon clears the force after each step)
       const inAir = !this.landed && (clear || this.substep - this.lastTouch > AIR_SUBSTEPS)
-      if ((this.windX !== 0 || this.windZ !== 0) && inAir) this.pushWithWind()
+      if (inAir) this.airForces()
       world!.step(SUB_DT)
       this.substep++
       if (!clear) keepOutOfCourse(fromPrev)
@@ -499,10 +560,37 @@ export class ShotSim {
     if (this.still >= REST_SAMPLES) {
       ball.velocity.set(0, 0, 0)
       this.done = true
-    } else if (outOfRange(p.x, p.y, p.z) || this.step >= MAX_STEPS) {
+    } else if (outOfRange(p.x, p.y, p.z) || this.step >= this.maxSteps) {
       this.done = true
     }
     this.record()
+  }
+
+  /**
+   * The forces on the ball while it's in the air this substep: the wind, the boomerang's pull
+   * and the glide's lift. All of them stop once the ball has landed.
+   */
+  private airForces(): void {
+    const p = this.profile
+    let fx = 0
+    let fy = 0
+    let fz = 0
+    if (this.windX !== 0 || this.windZ !== 0) {
+      const w = this.windForce()
+      fx += w.x
+      fz += w.z
+    }
+    if (this.pullA > 0) {
+      const v = ball.velocity
+      if (v.x * this.pullUx + v.z * this.pullUz < this.pullCap) {
+        fx += this.pullUx * this.pullA
+        fz += this.pullUz * this.pullA
+      }
+    }
+    // Glide: cancel most of gravity for the first few seconds in the air
+    if (p.glide && this.airSubsteps * SUB_DT < p.glide.seconds) fy += GRAVITY * p.gravityMul * (1 - p.glide.gravityMul)
+    this.airSubsteps++
+    if (fx !== 0 || fy !== 0 || fz !== 0) ball.force.set(fx, fy, fz)
   }
 
   /**
@@ -510,7 +598,7 @@ export class ShotSim {
    * slow the ball but never turn it round: once the ball's ground speed is down to
    * WIND_MIN_GROUND_SPEED the part of the push against its travel is dropped.
    */
-  private pushWithWind(): void {
+  private windForce(): { x: number; z: number } {
     let fx = this.windX
     let fz = this.windZ
     const v = ball.velocity
@@ -527,7 +615,7 @@ export class ShotSim {
         fz += (keep - along) * uz
       }
     }
-    ball.force.set(fx, 0, fz)
+    return { x: fx, z: fz }
   }
 
   private roll(dx: number, dz: number): void {
@@ -577,9 +665,9 @@ function trimRedundant(raw: number[]): number[] {
 }
 
 /** The whole shot at once. What the server runs. */
-export function simulateShot(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind): ShotPath {
-  const sim = new ShotSim(start, launch, spin, wind)
-  sim.run(MAX_STEPS + 1)
+export function simulateShot(start: Vec3, launch: Vec3, spin?: Quat, wind?: Wind, profile?: BallProfile): ShotPath {
+  const sim = new ShotSim(start, launch, spin, wind, profile)
+  sim.run(sim.maxSteps + 1)
   return sim.result()
 }
 
