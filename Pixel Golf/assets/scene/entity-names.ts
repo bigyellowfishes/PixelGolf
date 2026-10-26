@@ -48,6 +48,7 @@ export enum EntityNames {
   Flag_glb_7 = "Flag.glb_7",
   Flag_glb_8 = "Flag.glb_8",
   Flag_glb_9 = "Flag.glb_9",
+  Flags_P = "Flags_P",
   Ghost_Shot = "Ghost_Shot",
   Golf_Bags_glb = "Golf Bags.glb",
   Golf_Cart_Turnstile_glb = "Golf Cart Turnstile.glb",
