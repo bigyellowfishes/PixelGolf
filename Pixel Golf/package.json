@@ -13,7 +13,7 @@
     "cannon-es": "0.20.0"
   },
   "devDependencies": {
-    "@dcl/js-runtime": "7.30.2-39796956377.commit-4223559",
+    "@dcl/js-runtime": "7.30.2-37807847179.commit-24c42ea",
     "@dcl/sdk": "7.30.2-39796956377.commit-4223559"
   },
   "engines": {
