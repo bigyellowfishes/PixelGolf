@@ -314,7 +314,18 @@ export const MESSAGES = {
    * Server -> one player: their running stats for the Player Stats page, JSON (Stats in
    * server.ts). Sent on hello, after each round, and when a shot sets a new longest.
    */
-  myStats: Schemas.Map({ json: Schemas.String })
+  myStats: Schemas.Map({ json: Schemas.String }),
+
+  // Hats (added 2026-10-27)
+
+  /**
+   * Server -> everyone: each player's Pixel Golf hat, JSON { wallet: hatId } (only players
+   * wearing one). Sent whenever one changes, and on hello. clothes.ts puts them on.
+   */
+  outfits: Schemas.Map({ json: Schemas.String }),
+
+  /** Scene -> server: where I want my hat to sit (HatFit in rules.ts). Kept, and shown to everyone. */
+  hatFit: Schemas.Map({ up: Schemas.Float, forward: Schemas.Float, tilt: Schemas.Float, size: Schemas.Float })
 }
 
 export const room = registerMessages(MESSAGES)

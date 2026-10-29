@@ -19,3 +19,23 @@ README.md
 *.rar
 *.md
 src
+# Models and images nothing in the scene uses (checked against main.composite and src on 2026-10-27).
+# Left on disk, just not uploaded. Delete the lines for anything you start using again.
+assets/clothes
+assets/Models/Pidgeon_Animation_V1
+assets/Exterior Scenery/Grass.glb
+assets/Exterior Scenery/Holes.glb
+assets/Exterior Scenery/Hills.glb
+assets/Exterior Scenery/Cube.glb
+assets/Exterior Scenery/Mountains.gltf
+assets/Exterior Scenery/Mountains.bin
+assets/Shop/Shop Banner.glb
+assets/Shop/Shop Banner 1.glb
+assets/Shop/Shop Banner 2.glb
+assets/Shop/Stacked Shirts.glb
+assets/Shop/display_balls.glb
+assets/Podium/Podium.glb
+assets/hot/MultiplierGlow.glb
+assets/images/boards/board-wide-*
+assets/images/boards/board-square-*
+assets/images/boards/afk-sign.png

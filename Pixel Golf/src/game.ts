@@ -14,15 +14,17 @@ import {
 } from '@dcl/sdk/ecs'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ArwHeightEnt, ArwTurnEnt, ghostShot, cameraEntity, ScoreZones } from './index'
-import { Club, ClubType, CLUB, applyClubType, cancelBackswing, createClub, playStrike, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
+import { Club, ClubType, CLUB, applyClubType, cancelBackswing, createClub, playStrike, playDrive, stopDrive, setClubVisible, startBackswing, updateClub, isSwingGrip } from './club'
 import { reportMyClub } from './clubSync'
 import { getSelectedClubType, getLaunchPower, onClubSelected, selectClub, getClubScale } from './clubSelect'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playAt, playUi } from './sfx'
-import { sayLine } from './voice'
+import { sayLine, VoiceMoment } from './voice'
+import { noteShot } from './shotFeed'
+import { getPlayer } from '@dcl/sdk/players'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
-import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson, profile } from './ledger/client'
-import { ShotPath, Vec3, launchVelocity } from './ballSim'
+import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson, profile, shotWind } from './ledger/client'
+import { ShotPath, Vec3, launchVelocity, pathDuration, pathEnd, SIM_HZ } from './ballSim'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -320,7 +322,8 @@ export function resetTutorialSteps(): void {
 //   shot 1  POWER  (lined up on the orange target for them, and hit straight: no curve yet)
 //   shot 2  CURVE  (still lined up for them)
 //   shot 3  AIM    (they turn the camera themselves)
-//   shot 4  WIND   (a slight crosswind, TUTORIAL_WIND, on the flags and the range card too)
+//   shot 4  WIND   (a slight crosswind, TUTORIAL_WIND, on the flags and the range card too),
+//                  beaten with the curve they learnt on shot 2: bend it into the wind
 //   shot 5  HOT TARGET (the orange target is a 2X hot target for this shot, with its marker)
 // A lesson is picked by how many shots of the round are already counted.
 const LESSON_POWER = 0
@@ -332,7 +335,7 @@ const LESSON_MULTI = 4
  * The wind on the wind lesson: where it blows to (degrees, 0 = +z, 90 = +x) and how strong (m/s).
  * Bay 19 hits towards the orange target at about 116 degrees, so 206 is straight across the shot,
  * left to right. At 3 m/s (about 7 mph) it moves the ball 5 to 10 m: easy to see, and still on
- * the orange target if they aim a little into it.
+ * the orange target if they curve it a little to the left, into the wind.
  */
 const TUTORIAL_WIND = { dir: 206, speed: 3 }
 /** The lesson hot target on the last tutorial shot */
@@ -371,7 +374,7 @@ function tutorialPrompt(g: Game): string {
       if (TUTORIAL_RETRY) return 'Missed! That one doesn\'t count. Press E to try again.'
       if (n === LESSON_POWER) return 'Welcome to Pixel Golf! Press E to start.'
       if (n === LESSON_AIM) return 'Now aim yourself: turn the camera towards a target, then press E.'
-      if (n === LESSON_WIND) return 'WIND! Watch the flags and aim into it. Press E.'
+      if (n === LESSON_WIND) return 'WIND! The flags show which way it blows. Use your CURVE to fight it. Press E.'
       if (n === LESSON_MULTI) return 'Last shot! Orange is a 2X HOT TARGET. Press E.'
       if (last) return 'Last shot! Press E to take it.'
       return 'Nice! Press E to take your next shot.'
@@ -379,11 +382,12 @@ function tutorialPrompt(g: Game): string {
       if (n === LESSON_POWER) return 'This is your POWER. Press E when the bar reaches the line.'
       if (n === LESSON_CURVE) return 'Press E at the line to lock your power.'
       if (n === LESSON_AIM) return 'The indicator shows your aim. Turn the camera to adjust, then press E for power.'
-      if (n === LESSON_WIND) return 'Wind pushes the ball in the air. Press E.'
+      if (n === LESSON_WIND) return 'Wind pushes the ball sideways. Lock your power, then curve against it. Press E.'
       if (n === LESSON_MULTI) return 'Land on orange for 2X points. Press E.'
       return ''
     case 'Swing_Turn':
       if (n === LESSON_CURVE) return 'New: CURVE. The middle hits straight, either side bends the ball. Press E in the middle.'
+      if (n === LESSON_WIND) return 'Curve INTO the wind: stop on the side it is blowing from, and it will blow the ball back on target. Press E.'
       return ''
     default:
       return ''
@@ -392,6 +396,39 @@ function tutorialPrompt(g: Game): string {
 
 // True from the first E press until the ball has come to rest and reset, for any ball in the
 // player's own bay. The club rack and the Tee Off screens use it to stay shut mid-shot.
+/** AFK practice (afk.ts): swinging on a loop with the club out, no ball */
+const practice = { on: false, wait: 0, stage: 'rest' as 'rest' | 'swing' }
+
+// The commentator (voice.ts): when the shot lines come up. Tune to taste.
+/** Seconds setting power or curve before "Any time today" */
+const WAIT_LINE_SECONDS = 8
+/** Seconds standing by your ball doing nothing before "Hello? The ball's getting lonely" */
+const IDLE_LINE_SECONDS = 30
+let idleClock = 0
+/** Power (0 to 1) a swing needs for "Smashed it!" and friends */
+const STRIKE_LINE_POWER = 0.85
+/** Wind (m/s) strong enough to mention. The range's wind runs 0 to 6. */
+const WIND_LINE_SPEED = 3.5
+/** Seconds in the air before "Somebody tell air traffic control" */
+const FLIGHT_LINE_SECONDS = 3.2
+/** Seconds rolling after the first bounce before "It's not stopping, it's committed" */
+const ROLL_LINE_SECONDS = 5
+/** Seconds a line needs before the ball stops, so the result line doesn't cut it off */
+const SHOT_LINE_ROOM = 3.2
+
+/** Starts or stops the AFK practice swing loop */
+export function setAfkPractice(on: boolean): void {
+  if (practice.on === on) return
+  practice.on = on
+  practice.stage = 'rest'
+  practice.wait = on ? 0.8 : 0
+  if (!on && club) {
+    // Put the club down and let the avatar go back to standing
+    cancelBackswing(club)
+    stopDrive(club)
+  }
+}
+
 export function isShotInProgress(): boolean {
   let a1 = activeGame == null
   let a2 = allGames.some((g) => g.isMine() && g.state.phase !== 'walking')
@@ -530,6 +567,19 @@ export class Game {
   // How long the shot has been playing
   private playClock = 0
 
+  // --- the commentator (voice.ts) --------------------------------------------
+  // Seconds spent setting power and curve on this shot, and whether it has had its "any time today"
+  private waitClock = 0
+  private waitSaid = false
+  // The one line planned for while this shot plays (strike, flight, wind or roll) and when, in the
+  // shot's own time (so it lands at the same moment of the shot at any playback speed)
+  private shotLine: { moment: VoiceMoment; at: number } | null = null
+  private pathClock = 0
+  // Whether the last ball of this round has had its "no pressure" line
+  private lastBallSaid = false
+  /** Colour lines ("That's the red!") said this round: capped at COLOUR_LINES_PER_ROUND */
+  private colourLines = 0
+
   // The bay this ball sits in (Ball_N is in bay N)
   readonly bay: number
 
@@ -643,6 +693,7 @@ export class Game {
         this.swingTime += getSelectedClubType() === 'wedge' ? dt * WEDGE_POWER_SPEED : dt
         this.charge = this.heightMeter()
         this.state.shotDistance = this.physics.predictRoll(this.charge)
+        this.waitForPlayer(dt)
         if (this.clicked()) this.lockHeight()
         break
 
@@ -653,6 +704,7 @@ export class Game {
         if (this.walkedAway()) break
         this.swingTime += dt
         meters.curve = curveFromTurn(this.turnMeter())
+        this.waitForPlayer(dt)
 
         // When Turn / Bend Meter Is selected
         if (this.clicked()) this.lockTurnAndSwing()
@@ -734,6 +786,14 @@ export class Game {
     firstShotNext = false
     // The last round is finished: this ball starts a fresh one
     if (this.state.shot >= this.roundBalls()) this.newRound()
+
+    // The commentator: the wait starts again, and the last ball of a round gets a word first
+    this.waitClock = 0
+    this.waitSaid = false
+    if (!this.lastBallSaid && this.bay !== TUTORIAL_BAY && !tutorial.active && this.state.shot === this.roundBalls() - 1) {
+      this.lastBallSaid = true
+      sayLine('last', { queue: true })
+    }
 
     // The tutorial's first shots: point the camera at the orange target, which also sets the aim
     if (tutorialAutoAim(this) && ScoreZones.Orange) {
@@ -947,6 +1007,41 @@ export class Game {
 
   // --- club ----------------------------------------------------------------
 
+  // AFK practice (afk.ts): the drive on a seamless loop, club in hand, with no ball. The emote loops
+  // by itself; this only starts it and plays the whoosh at each impact.
+  static UpdatePractice(dt: number): void {
+    if (!club || !practice.on || activeGame !== null) return
+    if (practice.stage === 'rest') {
+      practice.wait -= dt
+      if (practice.wait > 0) return
+      playDrive(club)
+      practice.stage = 'swing'
+      practice.wait = CLUB.driveImpactSeconds
+      return
+    }
+    practice.wait -= dt
+    if (practice.wait <= 0) {
+      playAt('swing_whoosh', Transform.get(engine.PlayerEntity).position, 0.5, 1)
+      practice.wait += CLUB.driveEmoteSeconds
+    }
+  }
+
+  // Standing by your bay's ball with nothing happening (no shot, no menu, not practising):
+  // after IDLE_LINE_SECONDS the commentator says something. Not in the tutorial.
+  static UpdateIdle(dt: number): void {
+    const waiting =
+      activeGame === null &&
+      !tutorial.active &&
+      !practice.on &&
+      !menuOpenCheck() &&
+      allGames.some((g) => g.isMine() && g.state.phase === 'walking' && g.state.distanceToBall <= HIT_RANGE)
+    idleClock = waiting ? idleClock + dt : 0
+    if (idleClock >= IDLE_LINE_SECONDS) {
+      idleClock = 0
+      sayLine('idle')
+    }
+  }
+
   // Build the shared club once at startup (see club.ts)
   static InitClub(): void {
     club = createClub(getSelectedClubType())
@@ -969,10 +1064,12 @@ export class Game {
     // At address while setting power and curve; in the hand otherwise
     const addressing = g !== null && (g.state.phase === 'Swing_Height' || g.state.phase === 'Swing_Turn')
     updateClub(club, dt, addressing, g ? g.charge : 0)
+    Game.UpdatePractice(dt)
+    Game.UpdateIdle(dt)
 
     // In hand as you walk up to a ball, and for the whole shot
     const nearBall = allGames.some((x) => x.isMine() && x.state.phase === 'walking' && x.state.distanceToBall <= HIT_RANGE)
-    setClubVisible(club, g !== null || nearBall || club.strikeTimer > 0)
+    setClubVisible(club, g !== null || nearBall || club.strikeTimer > 0 || practice.on)
 
     // Everyone else sees this club in your hand (clubSync.ts). Sent only when it changes.
     reportMyClub(club.type, club.visible, isSwingGrip(club))
@@ -1004,11 +1101,41 @@ export class Game {
   pi: number = Math.PI 
   pio2: number = this.pi / 2
   aimAllow: number = this.pi / 4
+  /** Extra turn past the outermost target, so its far edge can be reached too (radians, about 6 degrees) */
+  aimSpare: number = 0.1
+  private aimRange: { lo: number; hi: number } | null = null
+
+  /**
+   * How far this bay can turn: 45 degrees either side of straight down the range, widened at the
+   * end bays (solo, 1 to 4, and 15 to the tutorial bay) so every target is still in reach, since
+   * the range curves round and the far Reds are more than 45 degrees off for them.
+   */
+  private aimLimits(): { lo: number; hi: number } {
+    if (this.aimRange) return this.aimRange
+    let lo = this.pio2 - this.aimAllow
+    let hi = this.pio2 + this.aimAllow
+    let found = false
+    for (const k in ScoreZones) {
+      const zone = (ScoreZones as Record<string, Entity | undefined>)[k]
+      if (!zone || k.indexOf('Bunker') === 0) continue
+      const t = Transform.getOrNull(zone)
+      if (!t) continue
+      found = true
+      const yaw = Math.atan2(t.position.x - this.startPos.x, t.position.z - this.startPos.z)
+      lo = Math.min(lo, yaw - this.aimSpare)
+      hi = Math.max(hi, yaw + this.aimSpare)
+    }
+    // Only kept once the targets are loaded, so it's worked out again if they weren't yet
+    const range = { lo, hi }
+    if (found) this.aimRange = range
+    return range
+  }
 
   // Update the arrow to allow aiming while Arrow Hieght is Playing
   private UpdateArrowDir(ent: Entity | undefined): void {
     // Grab Current Player Yaw, Locked to a specific rotation range
-    this.lockedYaw = Math.max(Math.min(this.aimYaw, this.pio2 + this.aimAllow), this.pio2 - this.aimAllow)
+    const lim = this.aimLimits()
+    this.lockedYaw = Math.max(Math.min(this.aimYaw, lim.hi), lim.lo)
     
     if (!ent) return
 
@@ -1110,6 +1237,7 @@ export class Game {
     this.freezePlayer(false)
 
     this.physics.play(this.pendingPath)
+    this.planShotLine(this.pendingPath)
     // Your own shots play at the speed you left it on (watched shots always play at 1x)
     this.physics.setSpeed(shotSpeed)
     // The ball's away: the locked meters make way for the speed buttons
@@ -1118,6 +1246,57 @@ export class Game {
     this.shotWaiting = false
     this.playClock = 0
     return true
+  }
+
+  // --- the commentator ---------------------------------------------------------
+
+  // Setting power or curve: after WAIT_LINE_SECONDS the commentator gets impatient, once a shot.
+  // Not in the tutorial, which has its own prompts.
+  private waitForPlayer(dt: number): void {
+    if (this.waitSaid || tutorial.active) return
+    this.waitClock += dt
+    if (this.waitClock < WAIT_LINE_SECONDS) return
+    this.waitSaid = true
+    sayLine('wait')
+  }
+
+  // Picks at most one line to say while this shot plays, from what the path holds: a big hit,
+  // a strong wind, a long time in the air or a long roll. Only lines that can finish before the
+  // ball stops are considered (at the speed it's playing), so the result line doesn't cut them off.
+  private planShotLine(path: ShotPath): void {
+    this.shotLine = null
+    this.pathClock = 0
+    if (tutorial.active) return
+    const duration = pathDuration(path)
+    const landsAt = path.hits.length > 0 ? path.hits[0] / SIM_HZ : duration
+    const fits = (at: number) => (duration - at) / shotSpeed >= SHOT_LINE_ROOM
+    const options: { moment: VoiceMoment; at: number }[] = []
+
+    if (this.storedPower >= STRIKE_LINE_POWER) options.push({ moment: 'strike', at: 0 })
+
+    const w = shotWind()
+    const windSpeed = Math.sqrt(w.x * w.x + w.z * w.z)
+    if (windSpeed >= WIND_LINE_SPEED && landsAt >= 1.5) {
+      // How much of the wind is along the shot: + behind it, - into it
+      const lx = this.launch.x, lz = this.launch.z
+      const along = (w.x * lx + w.z * lz) / (Math.sqrt(lx * lx + lz * lz) || 1)
+      const moment: VoiceMoment = along > windSpeed * 0.5 ? 'windHelp' : along < -windSpeed * 0.5 ? 'windAgainst' : 'windAcross'
+      options.push({ moment, at: 0.9 })
+    }
+    if (landsAt >= FLIGHT_LINE_SECONDS) options.push({ moment: 'flight', at: 1.6 })
+    if (duration - landsAt >= ROLL_LINE_SECONDS) options.push({ moment: 'roll', at: landsAt + 2 })
+
+    const fitting = options.filter((o) => fits(o.at))
+    if (fitting.length > 0) this.shotLine = fitting[Math.floor(Math.random() * fitting.length)]
+  }
+
+  // Says the shot's planned line when the shot reaches it
+  private updateShotLine(dt: number): void {
+    this.pathClock += dt * shotSpeed
+    if (this.shotLine && this.pathClock >= this.shotLine.at) {
+      sayLine(this.shotLine.moment)
+      this.shotLine = null
+    }
   }
 
   // Your shot is playing, so its speed can be changed
@@ -1147,6 +1326,7 @@ export class Game {
     // The club has hit but the shot's path isn't here yet: the ball waits on the tee
     if (!this.startPendingShot()) return
     this.playClock += dt
+    this.updateShotLine(dt)
 
     // E steps the shot's speed 1x, 2x, 3x, 1x... It's only how fast this screen plays it back,
     // so the ball ends up in the same place and scores the same. Tutorial shots too.
@@ -1179,12 +1359,16 @@ export class Game {
 
     // Handle Scoring. The hot target doubles a ball's points (see ledger/rules.ts).
     const result = this.scoreBall()
+    // Off the range altogether (the commentator has different words for that than a plain miss)
+    const end = this.physics.position()
+    const out = result.zone === '' && (end.z > 400 || end.z < 100 || end.y < 0)
+    this.shotLine = null
 
     // In the tutorial a miss (no target, a bunker, or off the range) doesn't count: the ball
     // comes back and the player takes that shot again from the same tutorial step
     if (tutorial.active && this.bay === TUTORIAL_BAY && result.points <= 0) {
       playResultSound(result.zone, result.points, false)
-      sayLine('miss', true)
+      sayLine('tutMiss')
       this.state.shot = Math.max(0, this.state.shot - 1)
       this.state.lastShotScore = 0
       this.state.lastZone = 'Missed'
@@ -1206,7 +1390,12 @@ export class Game {
     this.state.lastHot = hot
     this.state.score += points
     playResultSound(result.zone, points, hot)
-    sayResult(result.zone, points, hot)
+    if (sayResult(result.zone, points, hot, out, this.colourLines < COLOUR_LINES_PER_ROUND)) this.colourLines++
+    // The shot feed at the top of the screen (shotFeed.ts): others see this one from the server
+    if (!tutorial.active) {
+      const me = getPlayer()
+      noteShot(me?.userId ?? 'me', me?.name ?? '', result.zone, points, hot)
+    }
 
     // Ten balls make a round. The ledger is sent base points and which balls were
     // hot, and does the doubling itself. The tutorial's short round isn't sent: the server
@@ -1216,7 +1405,7 @@ export class Game {
       const balls = this.roundLog.slice(0, this.roundBalls())
       this.roundLog = []
       if (this.bay !== TUTORIAL_BAY) submitRound(balls)
-      for (const fn of roundFinishedFns) fn({ score: this.state.score, hotHits: balls.filter((b) => b.hot).length })
+      for (const fn of roundFinishedFns) fn({ score: this.state.score, hotHits: balls.filter((b) => b.hot).length, tutorial: this.bay === TUTORIAL_BAY })
     }
 
     // Reset Player and Physics
@@ -1372,6 +1561,8 @@ export class Game {
     this.state.lastZone = ''
     this.state.lastHot = false
     this.roundLog = []
+    this.lastBallSaid = false
+    this.colourLines = 0
   }
 
   // --- Camera Settings
@@ -1536,6 +1727,8 @@ export function setShotSpeed(speed: number): void {
   if (SHOT_SPEEDS.indexOf(speed) < 0 || speed === shotSpeed) return
   shotSpeed = speed
   if (activeGame) activeGame.applySpeed()
+  // Turned right up mid-shot: the commentator notices (now and then)
+  if (speed === 3 && activeGame && activeGame.shotPlaying()) sayLine('speed')
   for (const fn of settingFns) {
     fn('speed2', speed === 2)
     fn('speed3', speed === 3)
@@ -1572,7 +1765,7 @@ export function applySavedSettings(saved: Record<string, boolean>): void {
 
 // Called on the player's own client the moment their tenth ball lands, before the
 // ledger answers. The ledger's answer (multiplier, XP, Pixel Points) comes after.
-type RoundFinished = { score: number; hotHits: number }
+type RoundFinished = { score: number; hotHits: number; tutorial?: boolean }
 const roundFinishedFns: ((r: RoundFinished) => void)[] = []
 export function onRoundFinished(fn: (r: RoundFinished) => void): void {
   roundFinishedFns.push(fn)
@@ -1589,6 +1782,7 @@ export function roundInProgress(): { ball: number; balls: number; score: number 
 /** Throws away your round in progress so the next shot starts a fresh round (the Pixel Golf menu). */
 export function abandonRound(): void {
   if (activeGame !== null) return
+  if (roundInProgress() !== null) sayLine('abandon')
   carried = null
   if (roundHolder) {
     roundHolder.newRound()
@@ -1692,13 +1886,27 @@ function playResultSound(zone: string, points: number, hot = false): void {
   else playUi('score_small')
 }
 
-// The commentator's line for where a shot finished (voice.ts): a big line for the hot target
-// and the hardest targets, a good one for any other target, and a miss line otherwise
-function sayResult(zone: string, points: number, hot: boolean): void {
+// The commentator's line for where a shot finished (voice.ts): the hot target, then the target's
+// own line (or now and then a general "great" / "big" one), the bunker, off the range, or a miss.
+// In the tutorial a miss or bunker only ever gets a kind word.
+const TARGET_LINES: Record<string, VoiceMoment> = {
+  Red: 'red', Yellow: 'yellow', Green: 'green', Orange: 'orange', Blue: 'blue', White: 'white', Black: 'black'
+}
+// How often a target hit gets its own colour's line rather than a general one
+const TARGET_LINE_SHARE = 0.6
+// At most this many colour lines in one round of ten; after that a hit gets a general line
+const COLOUR_LINES_PER_ROUND = 2
+
+/** Says the line for where a shot finished. Returns whether it was a colour line. */
+function sayResult(zone: string, points: number, hot: boolean, out: boolean, colourAllowed: boolean): boolean {
   const colour = zone.replace(/\d+$/, '')
-  if (points <= 0 || colour === 'Bunker') sayLine('miss', tutorial.active)
-  else if (hot || colour === 'White' || colour === 'Black') sayLine('big')
-  else sayLine('great')
+  const hard = colour === 'White' || colour === 'Black'
+  if (colour === 'Bunker') sayLine(tutorial.active ? 'tutMiss' : 'bunker')
+  else if (points <= 0) sayLine(tutorial.active ? 'tutMiss' : out ? 'out' : 'miss')
+  else if (hot) sayLine('hot')
+  else if (colourAllowed && TARGET_LINES[colour] && Math.random() < TARGET_LINE_SHARE) return sayLine(TARGET_LINES[colour])
+  else sayLine(hard ? 'big' : 'great')
+  return false
 }
 
 // Rotate a vector by a quaternion

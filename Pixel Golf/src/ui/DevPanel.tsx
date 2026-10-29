@@ -5,6 +5,7 @@ import { range, wind, dev, amIAdmin, sendAdminHot, sendAdminPlayers, sendAdminWi
 import { HOT } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
+import { noteShot } from '../shotFeed'
 
 // The dev panel: admin only (ADMIN in ledger/rules.ts), opened from the Dev panel row in
 // Settings. Everything it changes is done by the server, which checks the wallet first, and
@@ -14,6 +15,8 @@ import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 //   - PLAYERS: pretend extra players are in the space, so the multiplier rolls as if they were.
 //   - WIND: point it relative to the bays (looking down the range) and set its strength; it stays
 //     until you change it or press Random (back to changing by itself every 2 minutes).
+//   - SHOT FEED: post a made-up notice to the shot feed (shotFeed.ts), to see how they look. These
+//     are only on your screen: nothing is sent to the server or anyone else.
 // It isn't a menu: the game carries on with it open, so you can play a shot and see the effect.
 
 export const devPanel = { open: false }
@@ -47,6 +50,31 @@ const WIND_DIRS: { label: string; dir: number }[] = [
   { label: 'Left to right', dir: 180 },
   { label: 'Right to left', dir: 0 }
 ]
+
+/** Made-up players for the fake shot feed notices */
+const FAKE_NAMES = ['Joel', 'BirdieKing', 'Tom', 'SliceMaster99', 'Jake', 'ParForTheCourse']
+let fakeCount = 0
+
+function fakeName(): string {
+  return FAKE_NAMES[fakeCount++ % FAKE_NAMES.length]
+}
+
+function fakePoints(base: number): number {
+  return base + Math.floor(Math.random() * 6) * 50
+}
+
+/** A made-up shot for the feed. Each one is a new pretend player, so streaks don't carry over. */
+function fakeShot(kind: 'hot' | 'black' | 'white' | 'bunker' | 'misses'): void {
+  const who = `dev-fake-${Date.now()}-${fakeCount}`
+  const name = fakeName()
+  if (kind === 'hot') {
+    const zone = HOT.targets[Math.floor(Math.random() * HOT.targets.length)]
+    noteShot(who, name, zone, fakePoints(300) * HOT.factor, true)
+  } else if (kind === 'black') noteShot(who, name, 'Black', fakePoints(800), false)
+  else if (kind === 'white') noteShot(who, name, 'White', fakePoints(600), false)
+  else if (kind === 'bunker') noteShot(who, name, 'Bunker1', 0, false)
+  else for (let i = 0; i < 3; i++) noteShot(who, name, '', 0, false)
+}
 
 function button(key: string, label: string, width: number, on: boolean, onPress: () => void) {
   return (
@@ -166,6 +194,18 @@ export function DevPanel(props: {}) {
         button('w-more', '+ 2 mph', 84, false, () => sendAdminWind(wind.dir, wind.speed + WIND_STEP, true)),
         button('w-calm', 'Calm', 84, wind.ready && wind.speed < 0.1, () => sendAdminWind(wind.dir, 0, true)),
         button('w-rnd', 'Random', 84, !dev.windHold, () => sendAdminWind(0, -1, false))
+      ])}
+
+      {/* Shot feed */}
+      {heading('SHOT FEED', 'Fake notices, on your screen only')}
+      {row('feed-good', [
+        button('f-hot', `${HOT.factor}X hot hit`, 115, false, () => fakeShot('hot')),
+        button('f-black', 'Black', 115, false, () => fakeShot('black')),
+        button('f-white', 'White', 115, false, () => fakeShot('white'))
+      ])}
+      {row('feed-bad', [
+        button('f-bunker', 'Bunker', 115, false, () => fakeShot('bunker')),
+        button('f-misses', '3 misses', 115, false, () => fakeShot('misses'))
       ])}
     </UiEntity>
   )

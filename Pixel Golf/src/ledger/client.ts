@@ -149,6 +149,9 @@ export const stats = {
   afkMinutes: 0
 }
 
+/** Each player's Pixel Golf hat and its fit (wallet, lower case -> 'hatId|up,forward,tilt,size'), by the server's list. */
+export const outfits: Record<string, string> = {}
+
 /** Which ball each player has equipped (wallet, lower case -> ball id), by the server's list. */
 export const ballLooks: Record<string, string> = {}
 
@@ -325,6 +328,11 @@ export function buyCosmetic(id: string): void {
   void room.send('buy', { id })
 }
 
+/** Saves where my hat sits (the backpack's Hat tab) */
+export function sendHatFit(fit: { up: number; forward: number; tilt: number; size: number }): void {
+  void room.send('hatFit', fit)
+}
+
 export function equipCosmetic(id: string): void {
   void room.send('equip', { id })
 }
@@ -434,10 +442,10 @@ export function saveSetting(key: string, on: boolean): void {
 }
 
 /**
- * Call once a minute while the player is on the AFK practice range. The server
- * pays XP for it, never Pixel Points, and ignores calls that come too fast.
+ * Call every XP.afkTickSeconds while the player is on AFK practice. The server
+ * pays XP.afkPerTick for it, never Pixel Points, and ignores calls that come too fast.
  */
-export function afkMinute(): void {
+export function afkTick(): void {
   void room.send('afk', { n: 1 })
 }
 
@@ -560,6 +568,12 @@ export function setupLedgerClient(): void {
   room.onMessage('myRanks', (d) => {
     const m = parse<Partial<Record<Period, MyRank>>>(d.json, {})
     for (const p of PERIODS) if (m[p]) boards.mine[p] = m[p] as MyRank
+  })
+
+  room.onMessage('outfits', (d) => {
+    const all = parse<Record<string, string>>(d.json, {})
+    for (const k of Object.keys(outfits)) delete outfits[k]
+    for (const k in all) outfits[k.toLowerCase()] = all[k]
   })
 
   room.onMessage('ballLooks', (d) => {

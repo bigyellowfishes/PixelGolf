@@ -21,6 +21,8 @@ import { spawnClubRacks } from './clubRack'
 import { setupTeeOffPanels, setupTeeOffScreens, setupAutoTeeOff, bayYaw, bayAnchor } from './teeOffPanels'
 import { setupBayBarriers } from './bayBarriers'
 import { setupPlaza } from './plaza'
+import { setupClothes } from './clothes'
+import { PIGEON_MODEL, pigeonLook, pigeonFollow, isPigeon } from './pigeonBall'
 import { setupLeaderboardScreens } from './leaderboardScreens'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop, closeShop } from './shop'
@@ -29,6 +31,9 @@ import { setupWindFlags } from './wind'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
 import { setupMusic, applySavedAudio, onAudioSettingChanged } from './audio'
+import { setupCommentary } from './commentary'
+import { setupSigns } from './signs'
+import { setupPigeonScreen } from './pigeonScreen'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
 import { runLedger } from './ledger/server'
@@ -53,8 +58,10 @@ import {
   myBay,
   shotWind,
   bayBallLook,
-  SOLO_BAY
+  SOLO_BAY,
+  bays
 } from './ledger/client'
+import { noteShot } from './shotFeed'
 import { itemById } from './ledger/rules'
 import { setupHotTargetMarker } from './hotTarget'
 import { setPlayerProgress } from './ui/GameModeMenu'
@@ -64,6 +71,9 @@ import { state as clubMenu } from './ui/ClubSelectMenu'
 import { state as boardsMenu } from './ui/LeaderboardMenu'
 import { state as settingsMenu } from './ui/SettingsMenu'
 import { state as replayPrompt } from './ui/ReplayTutorialPrompt'
+import { state as backpack } from './ui/BackpackMenu'
+import { state as hatFit } from './ui/HatFitPanel'
+import { afk, setupAfk } from './afk'
 import { setupMobileControls } from './mobile'
 import { setupClubSync } from './clubSync'
 import { showToast } from './ui/RangeHud'
@@ -338,7 +348,9 @@ function playShots(dt: number): void {
 function drawBall(b: BallRig): void {
   const t = Transform.getMutable(b.entity)
   t.position = Vector3.create(b.pos.x, b.pos.y, b.pos.z)
-  if (b.model) {
+  // The pigeon ball flies instead of rolling: it places and turns itself (pigeonBall.ts)
+  if (b.model && isPigeon(b.model)) pigeonFollow(b.model, b.pos.x, b.pos.y, b.pos.z)
+  else if (b.model) {
     const m = Transform.getMutable(b.model)
     m.position = Vector3.create(b.pos.x, b.pos.y, b.pos.z)
     m.rotation = Quaternion.create(b.rot.x, b.rot.y, b.rot.z, b.rot.w)
@@ -446,7 +458,11 @@ function showEquippedBall() {
           ? ballModel(bayBallLook(bay))
           : BALL_MODEL
     const g = GltfContainer.getOrNull(b.model)
-    if (g && g.src !== src) GltfContainer.getMutable(b.model).src = src
+    if (g && g.src !== src) {
+      GltfContainer.getMutable(b.model).src = src
+      // The pigeon is bigger than a ball, stands on its feet and flies (pigeonBall.ts)
+      pigeonLook(b.model, src === PIGEON_MODEL, BALL_MODEL_SCALE)
+    }
   }
 }
 
@@ -545,7 +561,16 @@ export function main() {
   // Shots the server simulated: mine play in my bay, everyone else's on their bay's ball
   onServerShot((s) => games.find((g) => g.bay === s.bay)?.receiveShot(s))
   onShotRefused((r) => games.find((g) => g.bay === r.bay)?.shotRefused(r.id))
-  onBayScore((d) => games.find((g) => g.bay === d.bay)?.showBayScore(d))
+  // Each bay's last shot number, so a repeated bay score isn't posted to the shot feed twice
+  const feedShot = new Map<number, number>()
+  onBayScore((d) => {
+    games.find((g) => g.bay === d.bay)?.showBayScore(d)
+    const seen = feedShot.get(d.bay) ?? 0
+    feedShot.set(d.bay, d.shot)
+    if (d.shot <= 0 || d.shot === seen) return
+    const owner = bays.owners[String(d.bay)]
+    noteShot(owner?.u ?? `bay-${d.bay}`, owner?.n ?? '', d.zone, d.last, d.hot)
+  })
 
   // Phones: E is the big button while playing; all the phone's buttons hide while a menu is open
   const anyMenuOpen = () =>
@@ -555,6 +580,9 @@ export function main() {
     settingsMenu.display === 'flex' ||
     roundCard.display === 'flex' ||
     replayPrompt.display === 'flex' ||
+    backpack.display === 'flex' ||
+    hatFit.display === 'flex' ||
+    afk.prompt ||
     shop.open
   setupMobileControls(anyMenuOpen)
   // No shot starts while a menu is open (so the bay menu can't sit over a swing)
@@ -565,6 +593,13 @@ export function main() {
   setupBayBarriers()
   // The plaza: the turning golf cart, the top three on the podium, and seats to sit on
   setupPlaza()
+  // Pixel Golf hats on everyone wearing one (clothes.ts)
+  setupClothes()
+  // The AFK practice area: XP every 10 seconds while your avatar practises its swing
+  setupAfk(anyMenuOpen)
+  // Floating signs: AFK AREA over the practice grass, SOLO BAY over bay 20 (needs the games built above)
+  setupSigns()
+  setupPigeonScreen()
   // The leaderboards on the plaza's screens
   setupLeaderboardScreens()
   // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
@@ -576,6 +611,9 @@ export function main() {
     settingsMenu.display = 'none'
     roundCard.display = 'none'
     replayPrompt.display = 'none'
+    backpack.display = 'none'
+    hatFit.display = 'none'
+    afk.prompt = false
     if (shop.open) closeShop()
   })
 
@@ -587,6 +625,8 @@ export function main() {
 
   // New players start in the tutorial bay (Ball_19) with a first round of ten
   setupTutorial(games.find((g) => g.bay === TUTORIAL_BAY))
+  // The commentator's lines around the range: bays, the shop, the tutorial, the end of a round
+  setupCommentary()
   // Players hidden from each other during it, and SHOOT HERE over the orange target
   setupTutorialVisuals(
   games.find((g) => g.bay === TUTORIAL_BAY),

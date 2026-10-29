@@ -163,8 +163,9 @@ export const XP = {
   dailyLogin: 100,
   /** Hours between daily login bonuses. */
   dailyHours: 24,
-  /** The AFK practice range, per minute spent there. TBD in the GDD; tune here. */
-  afkPerMinute: 5
+  /** The AFK practice range: this much XP every afkTickSeconds spent practising there. */
+  afkPerTick: 1,
+  afkTickSeconds: 10
 }
 
 /** XP for one ball. */
@@ -235,7 +236,7 @@ export function levelProgress(xp: number): { level: number; into: number; need: 
 // Cosmetics
 // ---------------------------------------------------------------------------
 
-export type CosmeticKind = 'ballVis' | 'ballProp' | 'club'
+export type CosmeticKind = 'ballVis' | 'ballProp' | 'club' | 'hat'
 
 export type Cosmetic = {
   id: string
@@ -249,6 +250,58 @@ export type Cosmetic = {
   model?: string
   /** Kept for anyone who already owns it, but not shown in the shop (no art yet) */
   shelved?: boolean
+  /** Hats only: the style ('cap', 'visor', 'bucket') and colour (HAT_COLOURS) */
+  style?: string
+  colour?: string
+}
+
+// Hats (added 2026-10-27): Pixel Golf caps, visors and bucket hats, worn on the player's head
+// (clothes.ts). Every style comes in every colour, id `hat-cap-navy` and so on, plus 'hat-none'
+// for no hat.
+export const HAT_COLOURS: { id: string; name: string; rgb: { r: number; g: number; b: number } }[] = [
+  { id: 'navy', name: 'Navy', rgb: { r: 0.03, g: 0.16, b: 0.35 } },
+  { id: 'blue', name: 'Blue', rgb: { r: 0.27, g: 0.36, b: 0.8 } },
+  { id: 'green', name: 'Green', rgb: { r: 0.31, g: 0.53, b: 0.31 } },
+  { id: 'yellow', name: 'Yellow', rgb: { r: 0.91, g: 0.78, b: 0.47 } },
+  { id: 'grey', name: 'Grey', rgb: { r: 0.64, g: 0.64, b: 0.64 } },
+  { id: 'white', name: 'White', rgb: { r: 0.86, g: 0.86, b: 0.86 } },
+  { id: 'black', name: 'Black', rgb: { r: 0.06, g: 0.06, b: 0.06 } }
+]
+export const HAT_STYLES: { id: string; name: string; level: number; price: number }[] = [
+  { id: 'cap', name: 'Golf Cap', level: 1, price: 0 },
+  { id: 'visor', name: 'Visor', level: 1, price: 0 },
+  { id: 'bucket', name: 'Bucket Hat', level: 1, price: 0 }
+]
+export const NO_HAT = 'hat-none'
+
+/**
+ * Where a hat sits on the head bone, which each player can change in their backpack (everyone
+ * sees it the way they set it): up and forward in metres, tilt in degrees (front up is positive),
+ * size as a scale.
+ */
+export type HatFit = { up: number; forward: number; tilt: number; size: number }
+export const HAT_FIT_DEFAULT: HatFit = { up: 0.09, forward: 0, tilt: 0, size: 1.08 }
+export const HAT_FIT_LIMITS: Record<keyof HatFit, [number, number]> = { up: [-0.05, 0.25], forward: [-0.08, 0.08], tilt: [-20, 20], size: [0.8, 1.4] }
+
+/** A fit kept inside the limits (anything missing or broken is the default) */
+export function cleanHatFit(f: Partial<HatFit> | undefined): HatFit {
+  const out = { ...HAT_FIT_DEFAULT }
+  if (!f) return out
+  for (const k of Object.keys(HAT_FIT_LIMITS) as (keyof HatFit)[]) {
+    const v = Number(f[k])
+    if (isFinite(v)) out[k] = Math.round(Math.min(HAT_FIT_LIMITS[k][1], Math.max(HAT_FIT_LIMITS[k][0], v)) * 1000) / 1000
+  }
+  return out
+}
+
+function hats(): Cosmetic[] {
+  const out: Cosmetic[] = [{ id: NO_HAT, kind: 'hat', name: 'No hat', level: 1, price: 0 }]
+  for (const s of HAT_STYLES) {
+    for (const c of HAT_COLOURS) {
+      out.push({ id: `hat-${s.id}-${c.id}`, kind: 'hat', name: `${c.name} ${s.name}`, level: s.level, price: s.price, style: s.id, colour: c.id })
+    }
+  }
+  return out
 }
 
 /**
@@ -263,15 +316,20 @@ export const CATALOGUE: Cosmetic[] = [
   { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Green.glb' },
   { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 1, price: 0, model: 'assets/Balls/Ball_Blue.glb' },
   { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Black.glb' },
-  { id: 'prop-classic', kind: 'ballProp', name: 'Classic Ball', level: 1, price: 0},
-  { id: 'prop-Styro', kind: 'ballProp', name: 'Styrofoam Ball', level: 1, price: 0},
-  { id: 'prop-bouncy', kind: 'ballProp', name: 'Bouncy Ball', level: 1, price: 0},
-  { id: 'prop-antigrav', kind: 'ballProp', name: 'Low Gravity', level: 1, price: 0},
-  { id: 'prop-bowling', kind: 'ballProp', name: 'Bowling Ball', level: 1, price: 0},
-  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang Ball', level: 1, price: 0},
-  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon Ball', level: 1, price: 0},
-  { id: 'prop-egg', kind: 'ballProp', name: 'Egg Ball', level: 1, price: 0},
+  // Flies once it's hit, instead of rolling (src/pigeonBall.ts)
+  { id: 'ball-pigeon',  kind: 'ballVis', name: 'Pigeon',        level: 1, price: 0, model: 'assets/Balls/Ball_Pigeon.glb' },
+  // Effects (how the ball flies, BALL_PROFILES below). Shown as "Effects" in the shop; the ids stay
+  // as they were so what players own and have equipped is kept.
+  { id: 'prop-classic', kind: 'ballProp', name: 'Standard', level: 1, price: 0},
+  { id: 'prop-Styro', kind: 'ballProp', name: 'Lightweight', level: 1, price: 0},
+  { id: 'prop-bouncy', kind: 'ballProp', name: 'Super Bounce', level: 1, price: 0},
+  { id: 'prop-antigrav', kind: 'ballProp', name: 'Moon Physics', level: 1, price: 0},
+  { id: 'prop-bowling', kind: 'ballProp', name: 'Heavyweight', level: 1, price: 0},
+  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang', level: 1, price: 0},
+  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon', level: 1, price: 0},
+  { id: 'prop-egg', kind: 'ballProp', name: 'Crazy Wobble', level: 1, price: 0},
   { id: 'club-classic', kind: 'club', name: 'Classic Clubs', level: 1, price: 0 },
+  ...hats(),
 ]
 
 // ---------------------------------------------------------------------------
@@ -301,10 +359,12 @@ export type BallProfile = {
   /** Glide: gravity is cut to gravityMul (of the normal) for the first `seconds` in the air */
   glide?: { seconds: number; gravityMul: number }
   /**
-   * Boomerang: launched backwards at `back` x the normal horizontal speed, then pulled forwards
-   * while in the air so it turns round and comes down going forwards at `forward` x that speed.
+   * Boomerang: flies out (use speedMul and liftMul to send it far and high), and is pulled back
+   * towards the player the whole time it's in the air, so it turns round and comes down `land`
+   * of the way out to the furthest point it reached (0.5 = half way back). It lands dead, keeping
+   * `landKeep` of its speed, so it stops about there rather than rolling back to the player.
    */
-  boomerang?: { back: number; forward: number }
+  boomerang?: { land: number; landKeep: number }
   /** Wobble: a sideways kick of up to this many m/s on every real bounce (the egg) */
   wobble?: number
 }
@@ -330,8 +390,8 @@ export const BALL_PROFILES: Record<string, BallProfile> = {
   'prop-antigrav': { ...BASE_PROFILE, gravityMul: 0.35, maxSeconds: 20 },
   // No lob: stays on the ground, slower off the club, and barely slows once it's rolling
   'prop-bowling': { ...BASE_PROFILE, speedMul: 0.6, liftMul: 0, damping: 0.15, maxSeconds: 20 },
-  // Goes backwards first, then comes round and lands in front (the pull stops once it's going forwards at `forward`)
-  'prop-boomerang': { ...BASE_PROFILE, boomerang: { back: 0.5, forward: 0.9 }, maxSeconds: 12 },
+  // Flies out a long way, high, then turns round in the air and comes back to about half way
+  'prop-boomerang': { ...BASE_PROFILE, speedMul: 1.7, liftMul: 1.2, boomerang: { land: 0.5, landKeep: 0.15 }, maxSeconds: 18 },
   // Flaps along near the top of its flight for a couple of seconds, then drops
   'prop-pigeon': { ...BASE_PROFILE, glide: { seconds: 2.5, gravityMul: 0.1 }, maxSeconds: 12 },
   // Wobbles off line on every bounce and doesn't roll far
@@ -343,7 +403,7 @@ export function ballProfile(id?: string): BallProfile {
   return (id && BALL_PROFILES[id]) || BALL_PROFILES['prop-classic']
 }
 
-export const DEFAULT_EQUIPPED: Record<CosmeticKind, string> = { ballVis: 'ball-classic', ballProp: 'prop-classic', club: 'club-classic' }
+export const DEFAULT_EQUIPPED: Record<CosmeticKind, string> = { ballVis: 'ball-classic', ballProp: 'prop-classic', club: 'club-classic', hat: NO_HAT }
 
 export function itemById(id: string): Cosmetic | undefined {
   return CATALOGUE.find((i) => i.id === id)

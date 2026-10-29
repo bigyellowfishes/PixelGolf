@@ -22,7 +22,7 @@ import {
   TUTORIAL_LEVEL,
   xpToReach
 } from './rules'
-import { WIND, windVector, ballProfile } from './rules'
+import { WIND, windVector, ballProfile, NO_HAT, cleanHatFit, HatFit } from './rules'
 import {
   leaderJson,
   leadersChanged,
@@ -76,8 +76,8 @@ const LEDGER = {
   hotGraceSeconds: 15 * 60,
   /** A player counts as in the space for this long after their last 'here'. */
   presenceSeconds: 50,
-  /** AFK minutes are paid no faster than this. */
-  afkMinSeconds: 55
+  /** AFK practice ticks (XP.afkTickSeconds apart) are paid no faster than this. */
+  afkMinSeconds: 9
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +111,8 @@ type Wallet = {
   settings: Record<string, boolean>
   /** The Player Stats page (added 2026-10-26). Counted from then on: older rounds aren't in it. */
   stats?: Stats
+  /** Where they've set their hat to sit (added 2026-10-27; missing = the default) */
+  hatFit?: HatFit
 }
 
 /**
@@ -155,6 +157,8 @@ type Stats = {
   lastDay: number
   playSeconds: number
   afkMinutes: number
+  /** AFK practice time in seconds (added when AFK started paying every 10 seconds) */
+  afkSeconds?: number
 }
 
 const emptyStats = (): Stats => ({
@@ -390,6 +394,34 @@ function sendBallLooks(to?: string): void {
   const data = { json: JSON.stringify(looks) }
   if (to) void room.send('ballLooks', data, { to: [to] })
   else void room.send('ballLooks', data)
+}
+
+// Each player's hat and where it sits (wallet -> 'hatId|up,forward,tilt,size'), so everyone sees it
+// on that player (clothes.ts). Only players wearing one are listed.
+const outfits = new Map<string, string>()
+
+/** Notes a player's hat. True if that changed what everyone should see. */
+function noteOutfit(address: string, wallet: Wallet): boolean {
+  const hat = wallet.equipped?.hat || NO_HAT
+  const before = outfits.get(address)
+  if (hat === NO_HAT) {
+    if (before === undefined) return false
+    outfits.delete(address)
+    return true
+  }
+  const f = cleanHatFit(wallet.hatFit)
+  const value = `${hat}|${f.up},${f.forward},${f.tilt},${f.size}`
+  if (before === value) return false
+  outfits.set(address, value)
+  return true
+}
+
+function sendOutfits(to?: string): void {
+  const all: Record<string, string> = {}
+  for (const [who, o] of outfits) all[who] = o
+  const data = { json: JSON.stringify(all) }
+  if (to) void room.send('outfits', data, { to: [to] })
+  else void room.send('outfits', data)
 }
 
 function sendRange(to?: string): void {
@@ -714,6 +746,8 @@ export function runLedger(): void {
     // Everyone's balls for the newcomer, and the newcomer's ball for everyone
     if (noteBall(address, wallet)) sendBallLooks()
     else sendBallLooks(address)
+    if (noteOutfit(address, wallet)) sendOutfits()
+    else sendOutfits(address)
     sendBays(address)
     sendSolo(address)
     for (const [u, c] of clubs) if (c.show) sendClub(u, c, address)
@@ -970,6 +1004,8 @@ export function runLedger(): void {
       ballLooks.clear()
       ballProps.clear()
       sendBallLooks()
+      outfits.clear()
+      sendOutfits()
       resetLeaders()
       await saveLeaders()
       console.log(`[ledger] reset by ${by} (${address}), now epoch ${currentEpoch()}`)
@@ -1095,8 +1131,11 @@ export function runLedger(): void {
     const t = now()
     if (t - wallet.lastAfk < LEDGER.afkMinSeconds) return
     wallet.lastAfk = t
-    statsOf(wallet).afkMinutes++
-    giveXp(wallet, XP.afkPerMinute)
+    // The stats page counts whole minutes; the time is kept in seconds now that ticks are 10 s
+    const s = statsOf(wallet)
+    s.afkSeconds = (s.afkSeconds ?? s.afkMinutes * 60) + XP.afkTickSeconds
+    s.afkMinutes = Math.floor(s.afkSeconds / 60)
+    giveXp(wallet, XP.afkPerTick)
     touch(address, wallet)
     sendLedger(address, wallet)
   })
@@ -1126,6 +1165,7 @@ export function runLedger(): void {
     touch(address, wallet)
     sendLedger(address, wallet)
     if (noteBall(address, wallet)) sendBallLooks()
+    if (noteOutfit(address, wallet)) sendOutfits()
   })
 
   room.onMessage('equip', async (data, context) => {
@@ -1139,6 +1179,16 @@ export function runLedger(): void {
     touch(address, wallet)
     sendLedger(address, wallet)
     if (noteBall(address, wallet)) sendBallLooks()
+    if (noteOutfit(address, wallet)) sendOutfits()
+  })
+
+  room.onMessage('hatFit', async (data, context) => {
+    const address = context?.from
+    if (!address) return
+    const wallet = await load(address)
+    wallet.hatFit = cleanHatFit(data)
+    touch(address, wallet)
+    if (noteOutfit(address, wallet)) sendOutfits()
   })
 
   room.onMessage('settings', async (data, context) => {

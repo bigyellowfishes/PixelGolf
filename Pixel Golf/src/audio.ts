@@ -1,4 +1,5 @@
 import { engine, Entity, Transform, AudioSource } from '@dcl/sdk/ecs'
+import { myBay } from './ledger/client'
 
 // The player's sound settings: background music and the commentator (voice.ts), each with an
 // on/off switch and a volume of 1 to 10 steps, set in the Settings panel and saved on the ledger.
@@ -36,9 +37,36 @@ function applyMusic(): void {
   })
 }
 
-/** Starts the music (call once when the scene loads). */
+/**
+ * The pigeons' coos, looping quietly where the pigeons stand (Pidgeon Animation V4.glb, by bay 20).
+ * Not global, so it fades out as you walk away and you only hear it near them. Muted while you're
+ * in a bay (playing, the solo bay or the tutorial), so it doesn't talk over your round.
+ */
+const PIGEON_CLIP = 'assets/sounds/pigeons.mp3'
+const PIGEON_AT = { x: 107.29, y: 33.4, z: 162.26 }
+const PIGEON_VOLUME = 0.425
+
+function setupPigeonSound(): void {
+  const e = engine.addEntity()
+  Transform.create(e, { position: PIGEON_AT })
+  // Stopped outright while muted (turning the volume down on a playing loop wasn't heard), and
+  // started again from the top when you leave the bay
+  const set = (on: boolean) =>
+    AudioSource.createOrReplace(e, { audioClipUrl: PIGEON_CLIP, playing: on, loop: true, global: false, volume: on ? PIGEON_VOLUME : 0, currentTime: 0 })
+  let muted = myBay() !== 0
+  set(!muted)
+  engine.addSystem(() => {
+    const mute = myBay() !== 0
+    if (mute === muted) return
+    muted = mute
+    set(!mute)
+  })
+}
+
+/** Starts the music and the pigeons (call once when the scene loads). */
 export function setupMusic(): void {
   applyMusic()
+  setupPigeonSound()
 }
 
 /** 0 to 1: how loud the commentator should be right now (0 when switched off) */

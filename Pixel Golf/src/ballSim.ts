@@ -431,12 +431,11 @@ export class ShotSim {
   readonly maxSteps: number
   // Substeps spent in the air, for the glide
   private airSubsteps = 0
-  // The boomerang's pull: along (pullUx, pullUz), the shot's original direction, at pullA m/s2,
-  // until the ball is moving that way at pullCap m/s
+  // The boomerang's pull: back along the shot's direction (pullUx, pullUz) at pullA m/s2, the
+  // whole time the ball is in the air
   private pullUx = 0
   private pullUz = 0
   private pullA = 0
-  private pullCap = 0
   // A small seeded random, so an egg's wobble is the same every run of the same shot
   private seed: number
 
@@ -455,16 +454,11 @@ export class ShotSim {
     let lz = launch.z * p.speedMul
     if (p.boomerang) {
       const h = Math.sqrt(lx * lx + lz * lz)
-      const t = ly > 0 ? (2 * ly) / (GRAVITY * p.gravityMul) : 0 // flight time on a flat landing
-      if (h > 1e-6 && t > 0.1) {
-        // Constant pull that takes the ball from -back to +forward (of h) over the flight
-        this.pullA = ((p.boomerang.back + p.boomerang.forward) * h) / t
+      if (h > 1e-6 && ly > 0) {
         this.pullUx = lx / h
         this.pullUz = lz / h
-        this.pullCap = p.boomerang.forward * h
+        this.pullA = boomerangPull(start, this.pullUx, this.pullUz, h, ly, GRAVITY * p.gravityMul, p.damping, p.boomerang.land)
       }
-      lx *= -p.boomerang.back
-      lz *= -p.boomerang.back
     }
     // A ball that starts on the ground (no lift) is rolling, not flying: wind and glide leave it alone
     if (ly <= 0) this.landed = true
@@ -477,7 +471,15 @@ export class ShotSim {
 
   /** The ball is touching the course (the collide event, or the ray guard putting it back). */
   touched(): void {
-    if (this.substep > AIR_SUBSTEPS && this.substep - this.lastTouch > AIR_SUBSTEPS) this.landed = true
+    if (!this.landed && this.substep > AIR_SUBSTEPS && this.substep - this.lastTouch > AIR_SUBSTEPS) {
+      this.landed = true
+      // A boomerang comes down going backwards: it lands dead, keeping only a little of that, so
+      // it settles about where it came down instead of rolling all the way back
+      if (this.profile.boomerang) {
+        ball.velocity.x *= this.profile.boomerang.landKeep
+        ball.velocity.z *= this.profile.boomerang.landKeep
+      }
+    }
     this.lastTouch = this.substep
   }
 
@@ -581,11 +583,8 @@ export class ShotSim {
       fz += w.z
     }
     if (this.pullA > 0) {
-      const v = ball.velocity
-      if (v.x * this.pullUx + v.z * this.pullUz < this.pullCap) {
-        fx += this.pullUx * this.pullA
-        fz += this.pullUz * this.pullA
-      }
+      fx -= this.pullUx * this.pullA
+      fz -= this.pullUz * this.pullA
     }
     // Glide: cancel most of gravity for the first few seconds in the air
     if (p.glide && this.airSubsteps * SUB_DT < p.glide.seconds) fy += GRAVITY * p.gravityMul * (1 - p.glide.gravityMul)
@@ -662,6 +661,56 @@ function trimRedundant(raw: number[]): number[] {
     for (let j = 0; j < KEY_STRIDE; j++) out.push(raw[i * KEY_STRIDE + j])
   }
   return out
+}
+
+/**
+ * The boomerang's pull (m/s2, back towards the player) for a launch: the steady pull that turns
+ * the ball round in the air and brings it down `land` of the way out to the furthest point it
+ * reached. Worked out on paper from the launch, gravity, the profile's damping and how far the
+ * ball drops to the course (looked up where it comes down), so every run of a shot gets the same.
+ */
+function boomerangPull(start: Vec3, ux: number, uz: number, speed: number, up: number, g: number, damping: number, land: number): number {
+  // Cannon damps velocity by (1 - damping) per second: v' = -c v
+  const c = Math.max(1e-6, -Math.log(1 - Math.min(0.99, damping)))
+  // Height and distance along the shot after t seconds, pulled back at a
+  const heightAt = (t: number) => ((up + g / c) * (1 - Math.exp(-c * t))) / c - (g * t) / c
+  const distAt = (t: number, a: number) => ((speed + a / c) * (1 - Math.exp(-c * t))) / c - (a * t) / c
+  // When it reaches a height (`drop` below the start) on the way down
+  const timeToDrop = (drop: number) => {
+    let lo = up / g
+    let hi = 120
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2
+      if (heightAt(mid) > -drop) lo = mid
+      else hi = mid
+    }
+    return (lo + hi) / 2
+  }
+  // The pull that lands it `land` of the way out, for a flight of T seconds
+  const pullFor = (T: number) => {
+    let lo = 0
+    let hi = (50 * speed) / T
+    for (let i = 0; i < 60; i++) {
+      const a = (lo + hi) / 2
+      // The turn: when its speed along the shot reaches 0
+      const turn = Math.log((speed + a / c) / (a / c)) / c
+      const furthest = distAt(Math.min(turn, T), a)
+      if (distAt(T, a) > land * furthest) lo = a
+      else hi = a
+    }
+    return (lo + hi) / 2
+  }
+  // Where it comes down decides how far it drops, so guess, look the course up there, and refine
+  let drop = 0
+  let a = 0
+  for (let pass = 0; pass < 3; pass++) {
+    const T = timeToDrop(drop)
+    a = pullFor(T)
+    const d = Math.max(0, distAt(T, a))
+    const ground = courseSurfaceAt(start.x + ux * d, start.z + uz * d)
+    drop = ground === null ? drop : Math.max(0, start.y - ground)
+  }
+  return a
 }
 
 /** The whole shot at once. What the server runs. */

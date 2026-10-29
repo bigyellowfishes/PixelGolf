@@ -4,7 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { shop, closeShop, ONLYSHOWBALLS } from '../shop'
 import { profile, buyCosmetic, equipCosmetic } from '../ledger/client'
-import { CATALOGUE, Cosmetic, CosmeticKind } from '../ledger/rules'
+import { CATALOGUE, Cosmetic, CosmeticKind, HAT_COLOURS, HAT_STYLES, NO_HAT, itemById } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { onPhone } from '../mobile'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
@@ -73,7 +73,8 @@ function tab(label: string, kind: CosmeticKind, width: number) {
         uiBackground: { color: WHITE },
         onMouseDown: () => showAisle(kind)
       },
-      hover: { uiBackground: { color: PALE_BLUE } },
+      // Only the tabs not showing light up on hover (on the blue one it washed out the white text)
+      hover: active ? undefined : { uiBackground: { color: PALE_BLUE } },
       active: { uiBackground: { color: BLUE } }
     },
     active
@@ -81,6 +82,79 @@ function tab(label: string, kind: CosmeticKind, width: number) {
   return (
     <UiEntity {...t}>
       <Label font="sans-serif" fontSrc={FONT_REGULAR} value={label} fontSize={14} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width, height: 30 }} />
+    </UiEntity>
+  )
+}
+
+// --- The Hats tab: a row per style, a swatch per colour ----------------------
+
+/** Click a swatch: wear it if it's yours, otherwise buy it (the server says why if it can't) */
+function pickHat(item: Cosmetic) {
+  const owned = profile.owned.indexOf(item.id) >= 0
+  if (owned && profile.equipped[item.kind] === item.id) {
+    playUi('ui_click')
+    return
+  }
+  if (owned) equip(item)
+  else buy(item)
+}
+
+function swatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
+  const on = profile.equipped[item.kind] === item.id
+  const locked = profile.level < item.level
+  return (
+    <UiEntity
+      key={`sw-${item.id}`}
+      uiTransform={{ width: 32, height: 32, margin: { left: 3 }, justifyContent: 'center', alignItems: 'center', borderRadius: 16, borderWidth: on ? 3 : 2, borderColor: on ? BLUE : RIM }}
+      uiBackground={{ color: on ? PALE_BLUE : WHITE }}
+      onMouseDown={() => pickHat(item)}
+    >
+      <UiEntity uiTransform={{ width: on ? 20 : 22, height: on ? 20 : 22, borderRadius: 11 }} uiBackground={{ color: { ...rgb, a: locked ? 0.3 : 1 } }} />
+    </UiEntity>
+  )
+}
+
+function styleRow(style: (typeof HAT_STYLES)[number], width: number) {
+  const items = HAT_COLOURS.map((c) => ({ c, item: itemById(`hat-${style.id}-${c.id}`) })).filter((x) => !!x.item)
+  const worn = items.find((x) => profile.equipped.hat === x.item!.id)
+  const note = profile.level < style.level ? `Level ${style.level}` : style.price > 0 ? `${fmt(style.price)} PP each` : 'Free'
+  return (
+    <UiEntity
+      key={`style-${style.id}`}
+      uiTransform={{ width: '100%', height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: { left: 12, right: 8 }, margin: { top: 6 }, borderRadius: 14 }}
+      uiBackground={{ color: WHITE }}
+    >
+      <UiEntity uiTransform={{ flexDirection: 'column' }}>
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={style.name} fontSize={15} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 314, height: 20 }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={worn ? `Wearing ${worn.c.name}` : note} fontSize={11} color={worn ? GREEN : GREY} textAlign="middle-left" uiTransform={{ width: width - 314, height: 16 }} />
+      </UiEntity>
+      <UiEntity uiTransform={{ flexDirection: 'row' }}>{items.map((x) => swatch(x.item!, x.c.rgb))}</UiEntity>
+    </UiEntity>
+  )
+}
+
+function hatsAisle(width: number) {
+  const none = itemById(NO_HAT)
+  const bare = (profile.equipped.hat ?? NO_HAT) === NO_HAT
+  return (
+    <UiEntity uiTransform={{ width: '100%', flexDirection: 'column' }}>
+      {HAT_STYLES.map((s) => styleRow(s, width))}
+      <UiEntity
+        uiTransform={{ width: '100%', height: 34, margin: { top: 10 }, justifyContent: 'center', alignItems: 'center', borderRadius: 17, borderWidth: 2, borderColor: bare ? GREEN : BLUE }}
+        uiBackground={{ color: bare ? GREEN : WHITE }}
+        onMouseDown={() => {
+          if (none && !bare) equip(none)
+        }}
+      >
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value="No hat" fontSize={13} color={bare ? WHITE : BLUE} textAlign="middle-center" uiTransform={{ width: 200, height: 28 }} />
+      </UiEntity>
+      <Label font="sans-serif" fontSrc={FONT_REGULAR}
+        value="Everyone here can see your hat."
+        fontSize={11}
+        color={GREY}
+        textAlign="middle-center"
+        uiTransform={{ width: '100%', height: 18, margin: { top: 8 } }}
+      />
     </UiEntity>
   )
 }
@@ -107,7 +181,8 @@ function rowAction(item: Cosmetic): RowAction {
 export function ShopMenu(props: {}) {
   const phone = onPhone()
   const width = phone ? WIDTH_PHONE : WIDTH
-  const items = CATALOGUE.filter((i) => i.kind === shop.aisle && !i.shelved)
+  const hatsTab = shop.aisle === 'hat'
+  const items = hatsTab ? [] : CATALOGUE.filter((i) => i.kind === shop.aisle && !i.shelved)
   const notice = Date.now() < shop.noticeUntil ? shop.notice : ''
 
   const closeButton = useInteraction({
@@ -175,10 +250,13 @@ export function ShopMenu(props: {}) {
         />
 
         {/* Tabs */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { bottom: 10 }, display: /*!ONLYSHOWBALLS ? 'flex' :*/ 'none' }}>
-          {tab('Balls', 'ballVis', (width - 40) / 2)}
-          {tab('Clubs', 'club', (width - 40) / 2)}
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { bottom: 10 } }}>
+          {tab('Cosmetic', 'ballVis', (width - 44) / 3)}
+          {tab('Effects', 'ballProp', (width - 44) / 3)}
+          {tab('Hats', 'hat', (width - 44) / 3)}
         </UiEntity>
+
+        {hatsTab ? hatsAisle(width) : null}
 
         {/* The aisle */}
         {items.map((item) => {
@@ -248,7 +326,7 @@ export function ShopMenu(props: {}) {
         </UiEntity>
 
         <Label font="sans-serif" fontSrc={FONT_REGULAR}
-          value="Looks only: nothing here changes how your ball flies."
+          value={shop.aisle === 'ballProp' ? 'Effects change how your shots fly.' : 'Looks only: nothing here changes how your shots fly.'}
           fontSize={11}
           color={GREY}
           textAlign="middle-center"

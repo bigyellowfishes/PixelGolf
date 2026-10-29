@@ -131,6 +131,15 @@ export const CLUB = {
    * the swing or falling back to the looping top-of-backswing hold.
    */
   swingEmoteSeconds: 1.75,
+  /**
+   * The whole drive in one seamless loop (Golf_Drive_1 from Mixamo, retargeted onto the
+   * Decentraland avatar): address, backswing to the top at 0.9s, impact at about 1.17s, a moment
+   * holding the finish, then easing back to address, which is where it starts again. 4s a loop.
+   * Used by AFK practice (afk.ts), where there's no ball to wait for.
+   */
+  driveEmote: 'assets/Emotes/Golf_Drive_emote.glb',
+  driveEmoteSeconds: 4.0,
+  driveImpactSeconds: 1.17,
 
   /** The swing, in degrees about the grip. The backswing follows the power meter. */
   backswingBase: 14,
@@ -423,6 +432,26 @@ export function playStrike(club: Club, power: number): void {
     club.emoting = true
     void triggerEmote({ predefinedEmote: CLUB.emote, ...mask })
   }
+}
+
+/** The drive on a seamless loop (AFK practice), club in the swing grip, until stopDrive */
+export function playDrive(club: Club): void {
+  club.backswingTimer = -1
+  club.holding = false
+  // Kept running until stopDrive (updateClub stops the emote when this runs out)
+  club.strikeTimer = 1e9
+  club.strikePower = 1
+  club.strikeFrom = 0
+  club.emoting = true
+  void triggerSceneEmote({ src: CLUB.driveEmote, loop: true })
+}
+
+/** Ends the looping drive and lets the avatar stand normally */
+export function stopDrive(club: Club): void {
+  if (!club.emoting) return
+  club.emoting = false
+  club.strikeTimer = 0
+  void stopEmote({})
 }
 
 /** Called on the first E press: take the club back, then hold at the top. */

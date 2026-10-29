@@ -7,6 +7,7 @@ import { hotLook, faded } from '../hotLooks'
 import { getRoundProgress } from '../game'
 import { openLeaderboards } from './LeaderboardMenu'
 import { toggleSettings } from './SettingsMenu'
+import { toggleBackpack } from './BackpackMenu'
 import { windReadout } from '../wind'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
@@ -144,11 +145,37 @@ export function RangeHud(props: {}) {
   const wind = windReadout()
   state.perfText = `${perfStats.fps} fps  ·  physics ${perfStats.physicsMs} ms`
 
+  // The round icon buttons along the bottom: Leaderboards, Backpack, Settings
+  const iconButton = (onPress: () => void, gap: boolean) => ({
+    base: {
+      uiTransform: {
+        width: z(36),
+        height: z(36),
+        justifyContent: 'center' as const,
+        alignItems: 'center' as const,
+        margin: { left: gap ? z(14) : 0 },
+        borderRadius: z(18),
+        borderWidth: 2,
+        borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
+      },
+      uiBackground: { color: { r: 1, g: 1, b: 1, a: 1 } },
+      onMouseDown: onPress
+    },
+    hover: {
+      uiTransform: { borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } },
+      uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }
+    }
+  })
+  const backpackButton = useInteraction(iconButton(() => toggleBackpack(), true))
+
   const boardsButton = useInteraction({
     base: {
       uiTransform: {
-        flexGrow: 1,
+        width: z(36),
         height: z(36),
+        // It used to stretch to fill the row (the old Leaderboards pill): set it back explicitly,
+        // as a property that's just left out can keep its old value
+        flexGrow: 0,
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: z(18),
@@ -171,7 +198,7 @@ export function RangeHud(props: {}) {
         height: z(36),
         justifyContent: 'center',
         alignItems: 'center',
-        margin: { left: z(8) },
+        margin: { left: z(14) },
         borderRadius: z(18),
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
@@ -310,12 +337,22 @@ export function RangeHud(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        {/* Leaderboards, and the Settings cog beside it */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', alignItems: 'center', margin: { top: z(10) } }}>
-          <UiEntity {...boardsButton}>
-            <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Leaderboards" fontSize={z(14)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(140), height: z(30) }} />
+        {/* Leaderboards (trophy), Backpack (clubs, balls, stats) and the Settings cog */}
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: { top: z(10) } }}>
+          <UiEntity key="boards-icon" {...boardsButton}>
+            <UiEntity
+              key="trophy"
+              uiTransform={{ width: z(20), height: z(20) }}
+              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-trophy.png' } }}
+            />
           </UiEntity>
-          <UiEntity {...settingsButton}>
+          <UiEntity key="backpack-icon" {...backpackButton}>
+            <UiEntity
+              uiTransform={{ width: z(20), height: z(20) }}
+              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-backpack.png' } }}
+            />
+          </UiEntity>
+          <UiEntity key="settings-icon" {...settingsButton}>
             <UiEntity
               uiTransform={{ width: z(20), height: z(20) }}
               uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-settings.png' } }}
