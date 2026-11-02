@@ -73,7 +73,6 @@ export enum EntityNames {
   Red2 = "Red2",
   Red3 = "Red3",
   Red4 = "Red4",
-  Ring_glb = "Ring.glb",
   RoofPanel_glb = "RoofPanel.glb",
   Round_Rug_glb = "Round Rug.glb",
   Rug_glb = "Rug.glb",
