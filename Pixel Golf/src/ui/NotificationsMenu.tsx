@@ -519,7 +519,8 @@ export function NotificationsDrawer(props: {}) {
   const panelTop = -H * (1 - shown) - liftBy
   const tabTop = H * shown - liftBy
   const count = feed.history.length
-  const unread = feed.unread > 99 ? '99+' : String(feed.unread)
+  // Up to 9, then 9+ (it's a small badge)
+  const unread = feed.unread > 9 ? '9+' : String(feed.unread)
   // On a phone the shut bell hides while another menu is open: the phone's short screen puts the
   // menus right under it, and it covered their tops
   const tabHidden = phone && shown <= 0.001 && !drag && state.display !== 'flex' && anyMenuShowing()

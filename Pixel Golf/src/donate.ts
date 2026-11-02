@@ -14,7 +14,7 @@ import { earn } from './achievements'
 // z 194 to 206, facing +x, so the area is the strip of floor in front of it.
 
 /** The donation page. PayPal "Donate" button links look like https://www.paypal.com/donate/?hosted_button_id=... */
-export const PAYPAL_URL = ''
+export const PAYPAL_URL = 'https://www.paypal.com/paypalme/bigyellowfishes'
 
 const AREA = { x0: 61.9, x1: 67, z0: 193.5, z1: 206.5, y0: 33.5, y1: 39 }
 

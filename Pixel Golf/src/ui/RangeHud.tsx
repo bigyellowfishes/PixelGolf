@@ -28,8 +28,9 @@ const SHOW_CALLOUTS = false
 // How far down the card starts. Higher on a phone: its screen is a third shorter, and the
 // phone's round buttons fill the bottom right below the card.
 const CARD_TOP = 150
-// On a phone it sits in the top right corner (the Settings cog is on the card itself)
-const CARD_TOP_PHONE = 20
+// On a phone it sits in the top right corner, this far down from the real top of the screen (the
+// scene's UI starts lower than that on a phone, so screenTopLift is taken off; it sat low on Android)
+const CARD_TOP_PHONE = 16
 
 // Phones get the same card as desktop (2026-10-20: same look everywhere), PHONE_SCALE times
 // bigger and pushed out towards the right edge (PHONE_RIGHT_SHIFT in mobile.ts). PHONE_COMPACT
@@ -267,7 +268,7 @@ export function RangeHud(props: {}) {
         positionType: 'absolute',
         flexDirection: 'column',
         alignItems: 'flex-end',
-        padding: { top: onPhone() ? CARD_TOP_PHONE : CARD_TOP, right: 16 },
+        padding: { top: phone ? 0 : CARD_TOP, right: 16 },
         pointerFilter: 'none'
       }}
     >
@@ -277,7 +278,8 @@ export function RangeHud(props: {}) {
           width: cardWidth,
           flexDirection: 'column',
           padding: { top: z(12), right: z(14), bottom: z(12), left: z(14) },
-          margin: { right: rightShift },
+          // On a phone a negative margin pulls it up past the top of the scene's UI (padding can't go negative)
+          margin: { right: rightShift, top: phone ? CARD_TOP_PHONE - topLift : 0 },
           borderRadius: z(20),
           borderWidth: 3,
           borderColor: { r: 1, g: 1, b: 1, a: 1 }

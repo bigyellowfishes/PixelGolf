@@ -1,7 +1,6 @@
 import { setupUi } from './ui'
 import {
   engine,
-  ParticleSystem,
   Transform,
   Name,
   Entity,
@@ -10,7 +9,7 @@ import {
   GltfContainer,
   ColliderLayer
 } from '@dcl/sdk/ecs'
-import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
+import { Vector3, Quaternion } from '@dcl/sdk/math'
 
 import { BALL_RADIUS, ShotPath, ShotSim, PathPlayer, probeSurface, warmUpBallSim, Vec3, Quat } from './ballSim'
 
@@ -26,7 +25,7 @@ import { setupLeaderboardScreens } from './leaderboardScreens'
 import { setupTutorial } from './tutorial'
 import { setupShop, shop, closeShop } from './shop'
 import { setupMenuGuard } from './menuGuard'
-import { setupWindFlags } from './wind'
+import { setupWindFlags, setupWindParticles } from './wind'
 import { setupTutorialVisuals } from './tutorialVisuals'
 import { playAt, playUi } from './sfx'
 import { setupMusic, applySavedAudio, onAudioSettingChanged } from './audio'
@@ -63,8 +62,7 @@ import {
   shotWind,
   bayBallLook,
   SOLO_BAY,
-  bays,
-  effectiveWind
+  bays
 } from './ledger/client'
 import { noteShot } from './shotFeed'
 import { itemById } from './ledger/rules'
@@ -504,54 +502,6 @@ function SpawnCamera() {
   })
 }
 
-function TEST_Particles() {
-  // 1. Create an entity for the particle emitter
-  const emitter = engine.addEntity()
-
-  // 2. Initialize its Transform component
-  Transform.create(emitter, {
-    position: Vector3.create(8, 0, 8),
-  })
-
-  // 3. Configure the ParticleSystem component initially
-  ParticleSystem.create(emitter, {
-    shape: ParticleSystem.Shape.Sphere({ radius: 7 }),
-    initialVelocitySpeed: { start: -0.5, end: 0.5 },
-    initialSize: { start: 0.03, end: 0.04 },
-    gravity: 0,
-    additionalForce: Vector3.create(0, 0, 0), // Initial force vector
-    initialColor: {
-      start: Color4.create(0.8, 0.8, 0.8, 0.8),
-      end: Color4.create(1, 1, 1, 1),
-    },
-  })
-
-  // 4. Create an engine system that runs every frame
-  engine.addSystem((dt: number) => {
-    // Check if the player entity transform is available
-    if (!Transform.has(engine.PlayerEntity)) return
-
-    const w = shotWind()
-    const windSpeed = Math.sqrt(w.x * w.x + w.z * w.z)
-
-    const playerTransform = Transform.get(engine.PlayerEntity)
-    const emitterTransform = Transform.getMutable(emitter)
-
-    // --- Dynamically update the particle system's force ---
-    const particleSys = ParticleSystem.getMutable(emitter)
-    if (particleSys.additionalForce) {
-      particleSys.additionalForce = Vector3.create(w.x * windSpeed, 0, w.z * windSpeed)
-    }
-
-    // Lock the emitter position to the player (with a 1-meter vertical offset)
-    emitterTransform.position = Vector3.create(
-      playerTransform.position.x,
-      playerTransform.position.y + 1,
-      playerTransform.position.z
-    )
-  })
-}
-
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -564,8 +514,6 @@ export function main() {
     runLedger()
     return
   }
-
-  TEST_Particles()
 
   buildWorldFromScene()
   swapBallModels()
@@ -590,8 +538,9 @@ export function main() {
   setupTeeOffPanels()
   // The two shopkeepers, behind the shop counter (spots in SHOP_NPCS, shop.ts)
   setupShop()
-  // The target flags turn to show the wind
+  // The target flags turn to show the wind, and wisps of air blow past you with it
   setupWindFlags()
+  setupWindParticles()
 
   SpawnCamera()
   setupUi()
