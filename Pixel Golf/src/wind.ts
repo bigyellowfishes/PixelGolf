@@ -106,8 +106,8 @@ export function setupWindFlags(): void {
  * its waves lead the right way. Every number below is for tuning to taste.
  */
 /** How fast the streaks fly (m/s): this much, plus SPEED_PER_WIND for each m/s of wind */
-const SPEED_BASE = 0.8
-const SPEED_PER_WIND = 0.4
+const SPEED_BASE = 0.5
+const SPEED_PER_WIND = 0.75
 /** How hard the wind gets them going: their flying speed is reached in about 1 / this seconds */
 const PICKUP = 3
 /** The course box: from this far down the range from the tees to this far (m) */
@@ -175,14 +175,14 @@ const STREAKS_B: Layer = {
   fps: 18,
   rate: 0.2,
   ratePerWind: 0.1,
-  gustEvery: 2.3,
-  gustChance: 0.25,
-  gustCount: 1,
+  gustEvery: 3,
+  gustChance: 0.45,
+  gustCount: 5,
   gustPerWind: 3,
   lifetime: 3.2,
   max: 16,
   size: { start: 10, end: 18 },
-  grow: { start: 0, end: 0.6 },
+  grow: { start: 0, end: 0.2 },
   alpha: { start: 1, end: 1 },
   speed: 0.85
 }
@@ -257,6 +257,7 @@ function findCourse(): Course | null {
 
 function particlesFor(layer: Layer, on: boolean, windSpeed: number, dx: number, dz: number, mirror: boolean) {
   const fly = (SPEED_BASE + SPEED_PER_WIND * windSpeed) * layer.speed
+  const sizeFromWind = Math.min(windSpeed / 10 + 0.5, 1)
   return {
     active: on,
     rate: layer.rate + layer.ratePerWind * windSpeed,
@@ -265,7 +266,7 @@ function particlesFor(layer: Layer, on: boolean, windSpeed: number, dx: number, 
         {
           time: 0,
           count: layer.gustCount + Math.floor(windSpeed / layer.gustPerWind),
-          cycles: 0, // forever
+          cycles: 0,
           interval: layer.gustEvery,
           probability: layer.gustChance
         }
@@ -279,12 +280,13 @@ function particlesFor(layer: Layer, on: boolean, windSpeed: number, dx: number, 
     initialVelocitySpeed: { start: 0, end: 0 },
     additionalForce: Vector3.create(dx * fly * PICKUP, 0, dz * fly * PICKUP),
     limitVelocity: { speed: fly, dampen: 1 },
-    initialSize: layer.size,
+    initialSize: { start: layer.size.start * sizeFromWind, end: layer.size.end * sizeFromWind},
     sizeOverTime: layer.grow,
     // Mirrored (turned half round on screen) when the wind blows right to left as you look
     initialRotation: mirror ? Quaternion.fromEulerDegrees(0, 0, 180) : Quaternion.Identity(),
     initialColor: { start: Color4.create(1, 1, 1, layer.alpha.start), end: Color4.create(1, 1, 1, layer.alpha.end) },
     colorOverTime: { start: Color4.create(1, 1, 1, 1), end: Color4.create(1, 1, 1, 0) },
+    faceTravelDirection: false,
     billboard: true,
     blendMode: PBParticleSystem_BlendMode.PSB_ALPHA,
     simulationSpace: PBParticleSystem_SimulationSpace.PSS_WORLD,
@@ -310,7 +312,6 @@ function windParticlesSystem(dt: number): void {
     }
   }
 
-  
   const camera = Transform.getOrNull(engine.CameraEntity)
   const wind = effectiveWind()
   const speed = wind.ready ? wind.speed : 0
@@ -318,9 +319,8 @@ function windParticlesSystem(dt: number): void {
   const r = (wind.dir * Math.PI) / 180
   const dx = Math.sin(r)
   const dz = Math.cos(r)
-  // Whether the wind blows to the camera's left
-  const camYaw = camera ? Quaternion.toEulerAngles(camera.rotation).y : course.yaw
-  const mirror = Math.sin(((wind.dir - camYaw) * Math.PI) / 180) < 0
+  // Whether the wind blows left or right
+  const mirror = !(r < Math.PI / 2 || r > Math.PI + (Math.PI / 2))
 
   // The particles: only re-sent when something they show changes
   const changed =
