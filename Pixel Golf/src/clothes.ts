@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, GltfContainer, AvatarAttach, AvatarAnchorPointType, ColliderLayer, PlayerIdentityData, CameraMode, CameraType, VisibilityComponent } from '@dcl/sdk/ecs'
+import { engine, Entity, Transform, GltfContainer, AvatarAttach, AvatarAnchorPointType, ColliderLayer, PlayerIdentityData, CameraMode, CameraType, VisibilityComponent, AvatarModifierArea, AvatarModifierType } from '@dcl/sdk/ecs'
 import { getPlayer } from '@dcl/sdk/players'
 import { Quaternion, Vector3 } from '@dcl/sdk/math'
 import { itemById, NO_HAT, HatFit, HAT_FIT_DEFAULT, HAT_FIT_LIMITS, cleanHatFit } from './ledger/rules'
@@ -22,6 +22,10 @@ import { outfits, profile, sendHatFit } from './ledger/client'
 //   - Only players inside the scene can wear one: it comes off when they leave.
 //   - In first person your own hat is hidden on your screen (it would sit over the camera);
 //     everyone else still sees it on you.
+//   - A hat isn't part of the avatar, so the scene's avatar-hiding areas (AvatarModifierArea:
+//     in front of the bays, the tutorial bay, the solo bay, and everyone while you're in the
+//     tutorial or solo bay) don't hide it. So another player's hat is hidden here whenever they're
+//     standing in one of those areas and it hides them from you.
 
 const DIR = 'assets/hats/'
 
@@ -113,6 +117,44 @@ function fitTransform(parent: Entity, f: HatFit) {
 let wait = 0
 let myHatHidden = false
 
+/**
+ * Whether a player at `pos` is hidden from me by one of the scene's AvatarModifierAreas (any of
+ * them, wherever they come from): inside its box, it hides avatars, and they're not left out.
+ */
+function hiddenByArea(address: string, pos: Vector3): boolean {
+  const who = address.toLowerCase()
+  for (const [, area, t] of engine.getEntitiesWith(AvatarModifierArea, Transform)) {
+    const size = area.area
+    if (!size || !area.modifiers.includes(AvatarModifierType.AMT_HIDE_AVATARS)) continue
+    if (area.excludeIds.some((id) => id.toLowerCase() === who)) continue
+    // The player's position in the box's own frame (the box is centred on its entity, turned with it)
+    const rel = Vector3.subtract(pos, t.position)
+    const local = Vector3.rotate(rel, Quaternion.create(-t.rotation.x, -t.rotation.y, -t.rotation.z, t.rotation.w))
+    if (Math.abs(local.x) <= size.x / 2 && Math.abs(local.y) <= size.y / 2 && Math.abs(local.z) <= size.z / 2) return true
+  }
+  return false
+}
+
+/** Hides or shows a hat model, only touching the component when it changes */
+function setHatShown(model: Entity, shown: boolean): void {
+  if (shown === !VisibilityComponent.has(model)) return
+  if (shown) VisibilityComponent.deleteFrom(model)
+  else VisibilityComponent.createOrReplace(model, { visible: false })
+}
+
+/** Other players' hats: hidden while the player is hidden from me by an avatar-hiding area */
+function othersHiddenCheck(): void {
+  const me = (getPlayer()?.userId ?? '').toLowerCase()
+  for (const [pe, id] of engine.getEntitiesWith(PlayerIdentityData)) {
+    const who = id.address.toLowerCase()
+    if (!who || who === me) continue
+    const w = worn.get(who)
+    if (!w) continue
+    const t = Transform.getOrNull(pe)
+    setHatShown(w.model, !(t && hiddenByArea(who, t.position)))
+  }
+}
+
 /** Hides my own hat while I'm in first person (checked every frame, so it's instant) */
 function firstPersonCheck(): void {
   const w = worn.get((getPlayer()?.userId ?? '').toLowerCase())
@@ -129,6 +171,7 @@ function firstPersonCheck(): void {
 
 export function setupClothes(): void {
   engine.addSystem(firstPersonCheck)
+  engine.addSystem(othersHiddenCheck)
   engine.addSystem((dt) => {
     wait -= dt
     if (wait > 0) return

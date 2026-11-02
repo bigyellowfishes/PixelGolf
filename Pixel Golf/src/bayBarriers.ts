@@ -57,7 +57,7 @@ const SYNC_SECONDS = 0.2
  * "BAY BUSY" sign stays at the back of the pad, reading towards the building, as before.
  * Bays 19 and 20 never get a frame. If a bay is moved in the scene, its line here needs updating.
  */
-const FRAMES: Record<number, { x: number; z: number; yaw: number }> = {
+export const FRAMES: Record<number, { x: number; z: number; yaw: number }> = {
   1: { x: 95.42, z: 175.924, yaw: -15.23 },
   2: { x: 91.932, z: 184.2, yaw: -13.88 },
   3: { x: 88.924, z: 192.641, yaw: -12.54 },
@@ -78,7 +78,7 @@ const FRAMES: Record<number, { x: number; z: number; yaw: number }> = {
   18: { x: 95.398, z: 324.005, yaw: 7.63 }
 }
 /** The top of the putting pads (scene height): the frame sits on it */
-const PAD_TOP = 33.146
+export const PAD_TOP = 33.146
 /** An extra turn on every frame, in degrees: + is clockwise seen from above */
 const FRAME_EXTRA_TURN = 4
 /** The frames' size (1 = the model's full size) */

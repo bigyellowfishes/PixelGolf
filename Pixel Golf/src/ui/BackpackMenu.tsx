@@ -176,6 +176,24 @@ function hatSwatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
   )
 }
 
+/** No hat: a swatch like the colours, with a strike through it */
+function noHatSwatch() {
+  const none = itemById(NO_HAT)
+  const on = !profile.equipped.hat || profile.equipped.hat === NO_HAT
+  return (
+    <UiEntity
+      key="bp-hat-none"
+      uiTransform={{ width: 28, height: 28, margin: { left: 3 }, justifyContent: 'center', alignItems: 'center', borderRadius: 14, borderWidth: on ? 3 : 2, borderColor: on ? BLUE : EDGE }}
+      uiBackground={{ color: on ? PALE_BLUE : WHITE }}
+      onMouseDown={() => {
+        if (none && !on) wearHat(none)
+      }}
+    >
+      <UiEntity uiTransform={{ width: 20, height: 20 }} uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-nohat.png' } }} />
+    </UiEntity>
+  )
+}
+
 function hatTab() {
   const item = itemById(profile.equipped.hat || NO_HAT)
   const wearing = item && item.id !== NO_HAT
@@ -195,15 +213,10 @@ function hatTab() {
             </UiEntity>
           </UiEntity>
         ))}
-        <UiEntity
-          uiTransform={{ width: '100%', height: 36, margin: { top: 4 }, justifyContent: 'center', alignItems: 'center', borderRadius: 18, borderWidth: 2, borderColor: wearing ? BLUE : GREEN }}
-          uiBackground={{ color: wearing ? WHITE : GREEN }}
-          onMouseDown={() => {
-            const none = itemById(NO_HAT)
-            if (none && wearing) wearHat(none)
-          }}
-        >
-          <Label font="sans-serif" fontSrc={FONT_REGULAR} value="No hat" fontSize={14} color={wearing ? BLUE : WHITE} textAlign="middle-center" uiTransform={{ width: 200, height: 28 }} />
+        {/* No hat: one struck-through swatch, lined up under the first colour */}
+        <UiEntity uiTransform={{ width: '100%', height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: { left: 12, right: 6 }, margin: { bottom: 6 }, borderRadius: 14 }} uiBackground={{ color: WHITE }}>
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value="No hat" fontSize={14} color={NAVY} textAlign="middle-left" uiTransform={{ width: 74, height: 30 }} />
+          <UiEntity uiTransform={{ width: HAT_COLOURS.length * 31, flexDirection: 'row' }}>{noHatSwatch()}</UiEntity>
         </UiEntity>
         <UiEntity
           uiTransform={{ width: '100%', height: 40, margin: { top: 8 }, justifyContent: 'center', alignItems: 'center', borderRadius: 20, borderWidth: 2, borderColor: wearing ? BLUE : EDGE }}

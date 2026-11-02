@@ -34,6 +34,9 @@ import { setupMusic, applySavedAudio, onAudioSettingChanged } from './audio'
 import { setupCommentary } from './commentary'
 import { setupSigns } from './signs'
 import { setupPigeonScreen } from './pigeonScreen'
+import { setupRangePrivacy } from './rangePrivacy'
+import { setupClubDisplays } from './clubDisplays'
+import { state as notesMenu, setupNotificationsDrawer } from './ui/NotificationsMenu'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
 import { runLedger } from './ledger/server'
@@ -582,6 +585,7 @@ export function main() {
     replayPrompt.display === 'flex' ||
     backpack.display === 'flex' ||
     hatFit.display === 'flex' ||
+    notesMenu.display === 'flex' ||
     afk.prompt ||
     shop.open
   setupMobileControls(anyMenuOpen)
@@ -591,6 +595,7 @@ export function main() {
   setupAutoTeeOff(anyMenuOpen)
   // Other players can't walk into a bay someone holds (not the tutorial or solo bay)
   setupBayBarriers()
+  setupRangePrivacy()
   // The plaza: the turning golf cart, the top three on the podium, and seats to sit on
   setupPlaza()
   // Pixel Golf hats on everyone wearing one (clothes.ts)
@@ -600,6 +605,10 @@ export function main() {
   // Floating signs: AFK AREA over the practice grass, SOLO BAY over bay 20 (needs the games built above)
   setupSigns()
   setupPigeonScreen()
+  // The spinning clubs on the shop's podiums
+  setupClubDisplays()
+  // The pull-down list of shot feed notices at the top of the screen
+  setupNotificationsDrawer()
   // The leaderboards on the plaza's screens
   setupLeaderboardScreens()
   // F closes any menu (scenes can't use Escape), and a closed menu can't reopen for a second
@@ -613,6 +622,7 @@ export function main() {
     replayPrompt.display = 'none'
     backpack.display = 'none'
     hatFit.display = 'none'
+    notesMenu.display = 'none'
     afk.prompt = false
     if (shop.open) closeShop()
   })

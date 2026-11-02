@@ -20,6 +20,7 @@ import { openPixelGolfMenu, state as pixelGolfMenu } from './ui/GameModeMenu'
 import { state as clubMenu } from './ui/ClubSelectMenu'
 import { isShotInProgress, GameState, getAllGames, playerBusy, roundInProgress, requestShotStart, stepOutForMenu, menuKeyAllowed, tutorialReplayOffered } from './game'
 import { openReplayPrompt, state as replayPrompt } from './ui/ReplayTutorialPrompt'
+import { toggleBackpack } from './ui/BackpackMenu'
 import { onMenuKey } from './menuGuard'
 import { ROUND_BALLS } from './ledger/rules'
 import { bayTakenBy, claimBay, bayLockReason, tutorial, myBay, leaveBay, TUTORIAL_BAY, TUTORIAL_BALLS } from './ledger/client'
@@ -352,7 +353,7 @@ function onPuttingArea(dt: number): boolean {
  * F (with no menu open): the Pixel Golf menu for the bay you're standing in, the same as clicking
  * its Tee Off screen used to. Free bay: it becomes yours. Mid-shot it works while you're setting
  * power or curve; the shot is put on hold and you're back at the power meter when the menu
- * closes. Not in the tutorial, and nothing if you're not in a bay.
+ * closes. Not in the tutorial. Not in a bay: F opens your backpack instead.
  */
 function openBayMenuByKey(): void {
   if (tutorial.active || !menuKeyAllowed()) return
@@ -363,7 +364,11 @@ function openBayMenuByKey(): void {
   }
   // Mid-shot the walk-in check is paused, so the bay is the one you're playing
   const bay = playerBusy() ? myBay() : bayHere
-  if (!bay || bay === TUTORIAL_BAY) return
+  if (!bay) {
+    toggleBackpack()
+    return
+  }
+  if (bay === TUTORIAL_BAY) return
   stepOutForMenu()
   teeOff(bay, false, true)
 }

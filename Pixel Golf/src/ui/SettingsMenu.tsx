@@ -10,10 +10,12 @@ import { toggleDevPanel, devPanel } from './DevPanel'
 import { forTouch } from '../mobile'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 import { audio, VOLUME_STEPS, toggleMusic, setMusicVolume, toggleVoice, setVoiceVolume } from '../audio'
+import { feed, toggleIgnoreFeed } from '../shotFeed'
 
 // The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx).
 // Holds the Ball cam on/off switch (only here now: key 1 picks the wedge) and the Orbit camera switch.
-// Then Music and Commentary, each with an on/off switch and a volume bar (audio.ts).
+// Then Ignore notifications (the shot feed pills stop popping up: shotFeed.ts), and Music and
+// Commentary, each with an on/off switch and a volume bar (audio.ts).
 // Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
 
 export interface State {
@@ -358,7 +360,7 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{
             width: 560,
-            height: state.isAdmin ? 774 : 600,
+            height: state.isAdmin ? 846 : 672,
             flexDirection: 'column',
             borderRadius: 28,
             borderWidth: 4,
@@ -549,6 +551,43 @@ export function SettingsMenu(props: {}) {
                   uiTransform={{ width: 30, height: 30, borderRadius: 15 }}
                   uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
                 />
+              </UiEntity>
+            </UiEntity>
+
+            {/* Ignore notifications: on stops the shot feed's pills popping up (they still go in the pull-down list) */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 58,
+                flexDirection: 'row',
+                alignItems: 'center',
+                margin: { top: 14 },
+                padding: { left: 20, right: 18 },
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: EDGE
+              }}
+              uiBackground={{ color: WHITE }}
+            >
+              <Label font="sans-serif" fontSrc={FONT_BOLD} value="Ignore notifications" fontSize={20} color={NAVY} textAlign="middle-left" uiTransform={{ flexGrow: 1, height: 28 }} />
+              <Label font="sans-serif" fontSrc={FONT_REGULAR} value={feed.ignore ? 'On' : 'Off'} fontSize={14} color={GREY} textAlign="middle-right" uiTransform={{ width: 36, height: 38, margin: { right: 10 } }} />
+              <UiEntity
+                uiTransform={{
+                  width: 76,
+                  height: 38,
+                  flexDirection: 'row',
+                  justifyContent: feed.ignore ? 'flex-end' : 'flex-start',
+                  alignItems: 'center',
+                  padding: { left: 4, right: 4 },
+                  borderRadius: 19
+                }}
+                uiBackground={{ color: feed.ignore ? GREEN : OFF }}
+                onMouseDown={() => {
+                  toggleIgnoreFeed()
+                  playUi('ui_click')
+                }}
+              >
+                <UiEntity uiTransform={{ width: 30, height: 30, borderRadius: 15 }} uiBackground={{ color: WHITE }} />
               </UiEntity>
             </UiEntity>
 
