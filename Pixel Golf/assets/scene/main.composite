@@ -3582,7 +3582,7 @@
             "value": [
               {
                 "entity": 0,
-                "open": true,
+                "open": false,
                 "children": [
                   550,
                   568,

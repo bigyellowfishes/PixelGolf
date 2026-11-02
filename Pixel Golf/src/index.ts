@@ -1,17 +1,16 @@
 import { setupUi } from './ui'
 import {
   engine,
-  InputAction,
+  ParticleSystem,
   Transform,
   Name,
   Entity,
   MeshRenderer,
-  TouchScreenControls,
   VisibilityComponent,
   GltfContainer,
   ColliderLayer
 } from '@dcl/sdk/ecs'
-import { Vector3, Quaternion } from '@dcl/sdk/math'
+import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 
 import { BALL_RADIUS, ShotPath, ShotSim, PathPlayer, probeSurface, warmUpBallSim, Vec3, Quat } from './ballSim'
 
@@ -64,7 +63,8 @@ import {
   shotWind,
   bayBallLook,
   SOLO_BAY,
-  bays
+  bays,
+  effectiveWind
 } from './ledger/client'
 import { noteShot } from './shotFeed'
 import { itemById } from './ledger/rules'
@@ -504,6 +504,55 @@ function SpawnCamera() {
   })
 }
 
+function TEST_Particles() {
+  // 1. Create an entity for the particle emitter
+  const emitter = engine.addEntity()
+
+  // 2. Initialize its Transform component
+  Transform.create(emitter, {
+    position: Vector3.create(8, 0, 8),
+  })
+
+  // 3. Configure the ParticleSystem component initially
+  ParticleSystem.create(emitter, {
+    shape: ParticleSystem.Shape.Sphere({ radius: 7 }),
+    initialVelocitySpeed: { start: -0.5, end: 0.5 },
+    initialSize: { start: 0.03, end: 0.04 },
+    gravity: 0,
+    additionalForce: Vector3.create(0, 0, 0), // Initial force vector
+    initialColor: {
+      start: Color4.create(0.8, 0.8, 0.8, 0.8),
+      end: Color4.create(1, 1, 1, 1),
+    },
+  })
+
+  // 4. Create an engine system that runs every frame
+  engine.addSystem((dt: number) => {
+    // Check if the player entity transform is available
+    if (!Transform.has(engine.PlayerEntity)) return
+
+    const constDir = 0
+    const constSpeed = (0 + effectiveWind().speed) * .2
+    const thisWind = (effectiveWind().dir + constDir / 180) * Math.PI
+
+    const playerTransform = Transform.get(engine.PlayerEntity)
+    const emitterTransform = Transform.getMutable(emitter)
+
+    // --- Dynamically update the particle system's force ---
+    const particleSys = ParticleSystem.getMutable(emitter)
+    if (particleSys.additionalForce) {
+      particleSys.additionalForce = Vector3.create(Math.sin(thisWind) * constSpeed, 0, Math.cos(thisWind) * constSpeed)
+    }
+
+    // Lock the emitter position to the player (with a 1-meter vertical offset)
+    emitterTransform.position = Vector3.create(
+      playerTransform.position.x,
+      playerTransform.position.y + 1,
+      playerTransform.position.z
+    )
+  })
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -516,6 +565,8 @@ export function main() {
     runLedger()
     return
   }
+
+  TEST_Particles()
 
   buildWorldFromScene()
   swapBallModels()
