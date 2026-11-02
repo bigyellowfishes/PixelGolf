@@ -36,6 +36,7 @@ import { setupSigns } from './signs'
 import { setupPigeonScreen } from './pigeonScreen'
 import { setupRangePrivacy } from './rangePrivacy'
 import { setupClubDisplays } from './clubDisplays'
+import { setupDonate, donate } from './donate'
 import { state as notesMenu, setupNotificationsDrawer } from './ui/NotificationsMenu'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
@@ -587,6 +588,7 @@ export function main() {
     hatFit.display === 'flex' ||
     notesMenu.display === 'flex' ||
     afk.prompt ||
+    donate.prompt ||
     shop.open
   setupMobileControls(anyMenuOpen)
   // No shot starts while a menu is open (so the bay menu can't sit over a swing)
@@ -607,6 +609,8 @@ export function main() {
   setupPigeonScreen()
   // The spinning clubs on the shop's podiums
   setupClubDisplays()
+  // The Wall of Honour's donation box
+  setupDonate(anyMenuOpen)
   // The pull-down list of shot feed notices at the top of the screen
   setupNotificationsDrawer()
   // The leaderboards on the plaza's screens
@@ -624,6 +628,7 @@ export function main() {
     hatFit.display = 'none'
     notesMenu.display = 'none'
     afk.prompt = false
+    donate.prompt = false
     if (shop.open) closeShop()
   })
 

@@ -17,6 +17,8 @@ import { BackpackMenu, state as backpack } from './BackpackMenu'
 import { HatFitPanel, state as hatFit } from './HatFitPanel'
 import { NotificationsDrawer } from './NotificationsMenu'
 import { AfkPrompt } from './AfkPrompt'
+import { DonatePrompt } from './DonatePrompt'
+import { donate } from '../donate'
 import { AfkHud } from './AfkHud'
 import { afk } from '../afk'
 import { shop } from '../shop'
@@ -51,6 +53,7 @@ export function setupUi() {
       <ScreenInsetArea>{hatFit.display === 'flex' ? <HatFitPanel /> : null}</ScreenInsetArea>
       <ScreenInsetArea>{afk.active ? <AfkHud /> : null}</ScreenInsetArea>
       <ScreenInsetArea>{afk.prompt ? <AfkPrompt /> : null}</ScreenInsetArea>
+      <ScreenInsetArea>{donate.prompt ? <DonatePrompt /> : null}</ScreenInsetArea>
       {/* Cooer, the shot feed: pop-ups, and the pull-down list whose bell tab is always at the top of the screen */}
       <ScreenInsetArea>
         <NotificationsDrawer />
