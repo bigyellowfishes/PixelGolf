@@ -6,6 +6,7 @@ import { feed, FeedItem } from '../shotFeed'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 import { screenRoom, screenTopLift } from './screenRoom'
 import { onPhone } from '../mobile'
+import { anyMenuShowing } from '../menuGuard'
 
 // "Cooer": the shot feed's notifications (shotFeed.ts), built from the Cooer design
 // (cooer-notifications: ChirpFeed.ts and chirp.css), redrawn here in the scene's UI. Like Chirper
@@ -519,6 +520,9 @@ export function NotificationsDrawer(props: {}) {
   const tabTop = H * shown - liftBy
   const count = feed.history.length
   const unread = feed.unread > 99 ? '99+' : String(feed.unread)
+  // On a phone the shut bell hides while another menu is open: the phone's short screen puts the
+  // menus right under it, and it covered their tops
+  const tabHidden = phone && shown <= 0.001 && !drag && state.display !== 'flex' && anyMenuShowing()
 
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', pointerFilter: 'none', zIndex: 9 }}>
@@ -606,7 +610,7 @@ export function NotificationsDrawer(props: {}) {
       ) : null}
 
       {/* The bell tab, hanging off the panel's bottom edge (the top of the screen when it's shut) */}
-      <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%', flexDirection: 'column', alignItems: 'center', pointerFilter: 'none', zIndex: 2 }}>
+      <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%', flexDirection: 'column', alignItems: 'center', pointerFilter: 'none', zIndex: 2, display: tabHidden ? 'none' : 'flex' }}>
         <UiEntity
           uiTransform={{
             width: tw,

@@ -14,6 +14,7 @@ import { perfStats } from '../index'
 import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
 import { engine, UiCanvasInformation } from '@dcl/sdk/ecs'
 import { screenTopLift } from './screenRoom'
+import { anyMenuShowing } from '../menuGuard'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
@@ -392,8 +393,9 @@ export function RangeHud(props: {}) {
         )}
       </UiEntity>
 
-      {/* The buttons on a phone: a row top left, beside the chat button */}
-      {phone ? (
+      {/* The buttons on a phone: a row top left, beside the chat button. Hidden while any menu is
+          open (the Cooer panel too), as they sat over the menus' tops on a phone's short screen */}
+      {phone && !anyMenuShowing() ? (
         <UiEntity
           uiTransform={{
             positionType: 'absolute',

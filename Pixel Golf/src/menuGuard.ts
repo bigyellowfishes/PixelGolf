@@ -22,6 +22,11 @@ export function onMenuKey(fn: () => void): void {
 let wasOpen = false
 let closedAt = 0
 
+/** Whether any menu is showing right now (the Cooer panel counts too) */
+export function anyMenuShowing(): boolean {
+  return anyOpen()
+}
+
 /** True for a moment after the last menu closed: open functions skip opening while it is. */
 export function menuReopenBlocked(): boolean {
   return !anyOpen() && Date.now() - closedAt < MENU_REOPEN_MS
