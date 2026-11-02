@@ -22,7 +22,7 @@ import { playAt, playUi } from './sfx'
 import { sayLine, VoiceMoment } from './voice'
 import { noteShot } from './shotFeed'
 import { getPlayer } from '@dcl/sdk/players'
-import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
+import { HOT, ROUND_BALLS, ZONE_SCORES, ballPoints } from './ledger/rules'
 import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson, profile, shotWind } from './ledger/client'
 import { ShotPath, Vec3, launchVelocity, pathDuration, pathEnd, SIM_HZ } from './ballSim'
 import { isMobile } from '@dcl/sdk/platform'
@@ -188,7 +188,7 @@ export type GameState = {
   // Points from the most recent shot, and the zone that gave them
   lastShotScore: number
   lastZone: string
-  // Whether the last ball landed on the hot target (its points were doubled)
+  // Whether the last ball landed on the hot target (it got the hot bonus)
   lastHot: boolean
   //Distance from Player To Ball
   distanceToBall: number
@@ -327,7 +327,7 @@ export function resetTutorialSteps(): void {
 //   shot 3  AIM    (they turn the camera themselves)
 //   shot 4  WIND   (a slight crosswind, TUTORIAL_WIND, on the flags and the range card too),
 //                  beaten with the curve they learnt on shot 2: bend it into the wind
-//   shot 5  HOT TARGET (the orange target is a 2X hot target for this shot, with its marker)
+//   shot 5  HOT TARGET (the orange target is the hot target for this shot, with its marker)
 // A lesson is picked by how many shots of the round are already counted.
 const LESSON_POWER = 0
 const LESSON_CURVE = 1
@@ -378,7 +378,7 @@ function tutorialPrompt(g: Game): string {
       if (n === LESSON_POWER) return 'Welcome to Pixel Golf! Press E to start.'
       if (n === LESSON_AIM) return 'Now aim yourself: turn the camera towards a target, then press E.'
       if (n === LESSON_WIND) return 'WIND! The flags show which way it blows. Use your CURVE to fight it. Press E.'
-      if (n === LESSON_MULTI) return 'Last shot! Orange is a 2X HOT TARGET. Press E.'
+      if (n === LESSON_MULTI) return 'Last shot! Orange is the HOT TARGET: +20,000. Press E.'
       if (last) return 'Last shot! Press E to take it.'
       return 'Nice! Press E to take your next shot.'
     case 'Swing_Height':
@@ -386,7 +386,7 @@ function tutorialPrompt(g: Game): string {
       if (n === LESSON_CURVE) return 'Press E at the line to lock your power.'
       if (n === LESSON_AIM) return 'The indicator shows your aim. Turn the camera to adjust, then press E for power.'
       if (n === LESSON_WIND) return 'Wind pushes the ball sideways. Lock your power, then curve against it. Press E.'
-      if (n === LESSON_MULTI) return 'Land on orange for 2X points. Press E.'
+      if (n === LESSON_MULTI) return 'Land on orange for +20,000 points. Press E.'
       return ''
     case 'Swing_Turn':
       if (n === LESSON_CURVE) return 'New: CURVE. The middle hits straight, either side bends the ball. Press E in the middle.'
@@ -1360,7 +1360,7 @@ export class Game {
     showMeters(false, false)
     releaseTutorialCam()
 
-    // Handle Scoring. The hot target doubles a ball's points (see ledger/rules.ts).
+    // Handle Scoring. The hot target adds 20,000 to a ball, up to 40,000 (ballPoints in ledger/rules.ts).
     const result = this.scoreBall()
     // Off the range altogether (the commentator has different words for that than a plain miss)
     const end = this.physics.position()
@@ -1387,7 +1387,7 @@ export class Game {
     }
 
     const hot = result.zone !== '' && isHot(result.zone)
-    const points = Math.min( hot ? result.points + 20000 : result.points, 40000)
+    const points = ballPoints(result.points, hot)
     this.state.lastShotScore = points
     this.state.lastZone = result.zone
     this.state.lastHot = hot
@@ -1398,10 +1398,16 @@ export class Game {
     if (!tutorial.active) {
       const me = getPlayer()
       noteShot(me?.userId ?? 'me', me?.name ?? '', result.zone, points, hot)
+      const w = shotWind()
+      const windSpeed = Math.sqrt(w.x * w.x + w.z * w.z)
+      const lx = this.launch.x, lz = this.launch.z
+      const windAlong = (w.x * lx + w.z * lz) / (Math.sqrt(lx * lx + lz * lz) || 1)
+      const shot: MyShot = { zone: result.zone, points, basePoints: result.points, hot, out, club: getSelectedClubType(), windAlong, windSpeed, bay: this.bay, ballInRound: this.roundLog.length + 1 }
+      for (const fn of myShotFns) fn(shot)
     }
 
     // Ten balls make a round. The ledger is sent base points and which balls were
-    // hot, and does the doubling itself. The tutorial's short round isn't sent: the server
+    // hot, and adds the hot bonus itself. The tutorial's short round isn't sent: the server
     // only takes full rounds, and the tutorial is ticked off by its own message (tutorial.ts).
     this.roundLog.push({ zone: result.zone, points: result.points, hot })
     if (this.roundLog.length >= this.roundBalls()) {
@@ -1772,6 +1778,17 @@ type RoundFinished = { score: number; hotHits: number; tutorial?: boolean }
 const roundFinishedFns: ((r: RoundFinished) => void)[] = []
 export function onRoundFinished(fn: (r: RoundFinished) => void): void {
   roundFinishedFns.push(fn)
+}
+
+/**
+ * Each of your own shots as it lands (not the tutorial's), for the achievements (achievements.ts):
+ * where it landed, its points (with the hot target) and base points, whether it went off the range,
+ * the club, and the wind along the shot (m/s, + behind it, - into it) and its strength.
+ */
+export type MyShot = { zone: string; points: number; basePoints: number; hot: boolean; out: boolean; club: string; windAlong: number; windSpeed: number; bay: number; ballInRound: number }
+const myShotFns: ((s: MyShot) => void)[] = []
+export function onMyShot(fn: (s: MyShot) => void): void {
+  myShotFns.push(fn)
 }
 
 /** Your round in progress (started but not finished), wherever it is, or null. Not the tutorial's. */

@@ -22,7 +22,7 @@ import {
   TUTORIAL_LEVEL,
   xpToReach
 } from './rules'
-import { WIND, windVector, ballProfile, NO_HAT, cleanHatFit, HatFit } from './rules'
+import { WIND, windVector, ballProfile, NO_HAT, cleanHatFit, HatFit, achievementById, ballPoints } from './rules'
 import {
   leaderJson,
   leadersChanged,
@@ -113,6 +113,8 @@ type Wallet = {
   stats?: Stats
   /** Where they've set their hat to sit (added 2026-10-27; missing = the default) */
   hatFit?: HatFit
+  /** Achievements earned, id -> epoch seconds (added 2026-11-02) */
+  achievements?: Record<string, number>
 }
 
 /**
@@ -136,7 +138,7 @@ type Stats = {
   /** Target hits by colour: Red, Yellow, Green, Orange, Blue, White, Black */
   hits: Record<string, number>
   hotHits: number
-  /** Best single ball's points (with the hot target doubling) and where it landed */
+  /** Best single ball's points (with the hot target's bonus) and where it landed */
   bestShot: number
   bestShotZone: string
   /** True Score of every round counted, for the average */
@@ -159,6 +161,8 @@ type Stats = {
   afkMinutes: number
   /** AFK practice time in seconds (added when AFK started paying every 10 seconds) */
   afkSeconds?: number
+  /** Different UTC days they've been here (added 2026-11-02, for the Regular achievement) */
+  daysPlayed?: number
 }
 
 const emptyStats = (): Stats => ({
@@ -189,6 +193,10 @@ const emptyStats = (): Stats => ({
 function statsOf(wallet: Wallet): Stats {
   wallet.stats = { ...emptyStats(), ...(wallet.stats ?? {}) }
   return wallet.stats
+}
+
+function sendAchievements(address: string, wallet: Wallet): void {
+  void room.send('myAchievements', { json: JSON.stringify(wallet.achievements ?? {}) }, { to: [address] })
 }
 
 function sendStats(address: string, wallet: Wallet): void {
@@ -731,6 +739,7 @@ export function runLedger(): void {
       const s = statsOf(wallet)
       const day = Math.floor(now() / 86400)
       if (s.lastDay !== day) {
+        s.daysPlayed = (s.daysPlayed ?? 0) + 1
         s.streak = s.lastDay === day - 1 ? s.streak + 1 : 1
         s.bestStreak = Math.max(s.bestStreak, s.streak)
         s.lastDay = day
@@ -740,6 +749,7 @@ export function runLedger(): void {
 
     sendLedger(address, wallet)
     sendStats(address, wallet)
+    sendAchievements(address, wallet)
     sendRange(address)
     sendWind(address)
     sendDevState(address)
@@ -1050,12 +1060,12 @@ export function runLedger(): void {
       return notCounted(address, 'Rounds can only be posted once a minute.')
     }
 
-    // True Score: base points, with hot targets doubled
+    // True Score: base points, with the hot target's bonus (ballPoints in rules.ts)
     let trueScore = 0
     let hotHits = 0
     let xp = XP.roundComplete
     for (const b of balls) {
-      trueScore += b.h ? b.p * HOT.factor : b.p
+      trueScore += ballPoints(b.p, b.h === 1)
       if (b.h) hotHits++
       xp += ballXp(b.z, b.h === 1)
     }
@@ -1091,7 +1101,7 @@ export function runLedger(): void {
         onTarget++
       }
       if (b.h) s.hotHits++
-      const value = b.h ? b.p * HOT.factor : b.p
+      const value = ballPoints(b.p, b.h === 1)
       if (value > s.bestShot) {
         s.bestShot = value
         s.bestShotZone = colour
@@ -1189,6 +1199,20 @@ export function runLedger(): void {
     wallet.hatFit = cleanHatFit(data)
     touch(address, wallet)
     if (noteOutfit(address, wallet)) sendOutfits()
+  })
+
+  // An achievement the player's scene spotted (achievements.ts). Badges only, so nothing is paid:
+  // the server just checks it's a real one, keeps it once, and tells everyone for Cooer.
+  room.onMessage('achieve', async (data, context) => {
+    const address = context?.from
+    if (!address || !achievementById(data.id ?? '')) return
+    const wallet = await load(address)
+    const got = (wallet.achievements = wallet.achievements ?? {})
+    if (got[data.id]) return
+    got[data.id] = now()
+    touch(address, wallet)
+    sendAchievements(address, wallet)
+    void room.send('achieved', { wallet: address, name: wallet.name || tidyName('', address), id: data.id })
   })
 
   room.onMessage('settings', async (data, context) => {

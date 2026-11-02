@@ -37,6 +37,7 @@ import { setupPigeonScreen } from './pigeonScreen'
 import { setupRangePrivacy } from './rangePrivacy'
 import { setupClubDisplays } from './clubDisplays'
 import { setupDonate, donate } from './donate'
+import { setupAchievements } from './achievements'
 import { state as notesMenu, setupNotificationsDrawer } from './ui/NotificationsMenu'
 import { isServer } from '@dcl/sdk/network'
 import { isMobile } from '@dcl/sdk/platform'
@@ -611,6 +612,8 @@ export function main() {
   setupClubDisplays()
   // The Wall of Honour's donation box
   setupDonate(anyMenuOpen)
+  // Achievements: spotted here, kept by the server, shown in the backpack's Badges tab
+  setupAchievements()
   // The pull-down list of shot feed notices at the top of the screen
   setupNotificationsDrawer()
   // The leaderboards on the plaza's screens

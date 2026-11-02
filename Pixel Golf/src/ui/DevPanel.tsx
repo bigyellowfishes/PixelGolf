@@ -2,7 +2,7 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { range, wind, dev, amIAdmin, sendAdminHot, sendAdminPlayers, sendAdminWind, hotSecondsLeft, currentFloor, currentCeiling } from '../ledger/client'
-import { HOT } from '../ledger/rules'
+import { HOT, ballPoints } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 import { noteShot } from '../shotFeed'
@@ -69,7 +69,7 @@ function fakeShot(kind: 'hot' | 'black' | 'white' | 'bunker' | 'misses'): void {
   const name = fakeName()
   if (kind === 'hot') {
     const zone = HOT.targets[Math.floor(Math.random() * HOT.targets.length)]
-    noteShot(who, name, zone, fakePoints(300) * HOT.factor, true)
+    noteShot(who, name, zone, ballPoints(fakePoints(300), true), true)
   } else if (kind === 'black') noteShot(who, name, 'Black', fakePoints(800), false)
   else if (kind === 'white') noteShot(who, name, 'White', fakePoints(600), false)
   else if (kind === 'bunker') noteShot(who, name, 'Bunker1', 0, false)
@@ -199,7 +199,7 @@ export function DevPanel(props: {}) {
       {/* Shot feed */}
       {heading('SHOT FEED', 'Fake notices, on your screen only')}
       {row('feed-good', [
-        button('f-hot', `${HOT.factor}X hot hit`, 115, false, () => fakeShot('hot')),
+        button('f-hot', 'Hot hit', 115, false, () => fakeShot('hot')),
         button('f-black', 'Black', 115, false, () => fakeShot('black')),
         button('f-white', 'White', 115, false, () => fakeShot('white'))
       ])}

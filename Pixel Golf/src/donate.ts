@@ -3,6 +3,7 @@ import { openExternalUrl } from '~system/RestrictedActions'
 import { tutorial } from './ledger/client'
 import { isShotInProgress } from './game'
 import { playUi } from './sfx'
+import { earn } from './achievements'
 
 // The Wall of Honour (Wall of Honor/Wall of Honor.glb, on the plaza): walk up to it and a box asks
 // if you'd like to support Pixel Golf with a donation through PayPal (ui/DonatePrompt.tsx, in the
@@ -30,6 +31,7 @@ export const donate = {
 export function acceptDonate(): void {
   donate.prompt = false
   playUi('ui_select')
+  earn('supporter')
   if (PAYPAL_URL) void openExternalUrl({ url: PAYPAL_URL })
   else console.log('[donate] PAYPAL_URL is not set in donate.ts')
 }

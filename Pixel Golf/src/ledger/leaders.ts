@@ -7,7 +7,7 @@ import { currentEpoch, epochKey, epochReady } from './epoch'
  * The leaderboards, on the server.
  *
  * Four periods (daily, weekly, monthly, all-time), each with two boards:
- *   true   ranked by True Score: base points with hot targets doubled, no multiplier
+ *   true   ranked by True Score: base points plus the hot target's bonus, no multiplier
  *   multi  ranked by Multiplier score: the True Score times the round's roll
  *
  * Each row is a player's best single round in that period. A player holds one

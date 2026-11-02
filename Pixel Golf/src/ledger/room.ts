@@ -325,7 +325,18 @@ export const MESSAGES = {
   outfits: Schemas.Map({ json: Schemas.String }),
 
   /** Scene -> server: where I want my hat to sit (HatFit in rules.ts). Kept, and shown to everyone. */
-  hatFit: Schemas.Map({ up: Schemas.Float, forward: Schemas.Float, tilt: Schemas.Float, size: Schemas.Float })
+  hatFit: Schemas.Map({ up: Schemas.Float, forward: Schemas.Float, tilt: Schemas.Float, size: Schemas.Float }),
+
+  // Achievements (added 2026-11-02)
+
+  /** Scene -> server: I've earned this achievement (an id from ACHIEVEMENTS in rules.ts). Kept once. */
+  achieve: Schemas.Map({ id: Schemas.String }),
+
+  /** Server -> one player: the achievements they have, JSON { id: epoch seconds earned }. Sent on hello and on each new one. */
+  myAchievements: Schemas.Map({ json: Schemas.String }),
+
+  /** Server -> everyone: someone just earned an achievement, for Cooer. */
+  achieved: Schemas.Map({ wallet: Schemas.String, name: Schemas.String, id: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

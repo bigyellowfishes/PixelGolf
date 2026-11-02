@@ -255,7 +255,7 @@ export function RangeHud(props: {}) {
           uiBackground={{ color: hot.fill }}
         >
           <UiEntity uiTransform={{ width: z(112), height: z(38), flexDirection: 'column' }}>
-            <Label font="sans-serif" fontSrc={FONT_BOLD} value="HOT TARGET  2X" fontSize={z(11)} color={faded(hot.text)} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value="HOT TARGET +20K" fontSize={z(11)} color={faded(hot.text)} textAlign="middle-left" uiTransform={{ width: z(112), height: z(14) }} />
             <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.hotName} fontSize={z(18)} color={hot.text} textAlign="middle-left" uiTransform={{ width: z(112), height: z(24) }} />
           </UiEntity>
           <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.hotTime} fontSize={z(20)} color={hot.text} textAlign="middle-right" uiTransform={{ width: z(64), height: z(30) }} />

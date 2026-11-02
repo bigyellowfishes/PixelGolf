@@ -619,7 +619,7 @@ export function setupTeeOffScreens(games: { name: string; state: GameState }[]):
       const played = st.shot > 0
       const last = played ? `${st.lastShotScore >= 0 ? '+' : ''}${formatNumber(st.lastShotScore)}` : '-'
       // Red1 -> Red
-      const zone = played ? st.lastZone.replace(/\d+$/, '') + (st.lastHot ? ' 2X' : '') : ''
+      const zone = played ? st.lastZone.replace(/\d+$/, '') + (st.lastHot ? ' HOT' : '') : ''
       const key = `${st.score}|${st.shot}|${last}|${zone}`
       if (key === sc.key) continue
       sc.key = key

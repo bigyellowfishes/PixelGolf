@@ -69,13 +69,20 @@ export function validBall(zone: string, points: number): boolean {
 export const HOT = {
   /** How long each target stays hot before the next one lights up. */
   seconds: 30,
-  /** What a hot target multiplies a ball's points by, on both boards. */
-  factor: 2,
+  /** What a hot target adds to a ball's points, on both boards... */
+  bonus: 20000,
+  /** ...up to this much for the ball altogether. */
+  max: 40000,
   /**
    * The zones that can light up. These are the entity names in the scene.
    * Bunkers are never hot.
    */
   targets: ['Red1', 'Red2', 'Red3', 'Red4', 'Yellow1', 'Yellow2', 'Green', 'Orange', 'Blue', 'White', 'Black']
+}
+
+/** One ball's points: its base points, plus the hot target's bonus if it was hot (game.ts and the server both use this). */
+export function ballPoints(base: number, hot: boolean): number {
+  return hot ? Math.min(base + HOT.bonus, HOT.max) : base
 }
 
 // ---------------------------------------------------------------------------
@@ -480,4 +487,73 @@ export function isAdminWallet(address: string): boolean {
 export function isAdminName(name: string): boolean {
   const n = (name || '').split('#')[0].trim().toLowerCase()
   return n !== '' && ADMIN.names.some((x) => x.toLowerCase() === n)
+}
+
+// ---------------------------------------------------------------------------
+// Achievements (added 2026-11-02)
+// ---------------------------------------------------------------------------
+// Badges only: nothing is paid for them. The scene spots them (achievements.ts) and asks the
+// server to note them down ('achieve'); the server keeps each player's list and tells everyone,
+// so Cooer can post it. The pictures are assets/images/badges/<id>.png and <id>-locked.png,
+// made from the Claude Design canvas "Pixel Golf Achievement Badges". Never reuse an id.
+
+export const ACHIEVEMENT_CATEGORIES = [
+  'Getting started',
+  'Targets',
+  'Scores and rounds',
+  'Bad shots (with love)',
+  'Clubs, balls and weather',
+  'The long game',
+  'Around the range'
+]
+
+export type Achievement = { id: string; name: string; how: string; cat: number; elite?: boolean }
+
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'first-swing', name: 'First Swing', how: 'Finish the tutorial', cat: 0 },
+  { id: 'tee-time', name: 'Tee Time', how: 'Finish your first round of 10 balls', cat: 0 },
+  { id: 'window-shopper', name: 'Window Shopper', how: 'Buy your first item in the shop', cat: 0 },
+  { id: 'dressed-for-it', name: 'Dressed for It', how: 'Wear a hat', cat: 0 },
+  { id: 'on-the-board', name: 'On the Board', how: 'Land a ball on any target', cat: 1 },
+  { id: 'rainbow', name: 'Rainbow', how: 'Land on all seven colours, Red to Black', cat: 1, elite: true },
+  { id: 'into-the-black', name: 'Into the Black', how: 'Land a ball on Black', cat: 1 },
+  { id: 'bullseye', name: 'Bullseye', how: "Land dead centre for a target's top score", cat: 1, elite: true },
+  { id: 'hot-shot', name: 'Hot Shot', how: 'Hit the hot target', cat: 1 },
+  { id: 'hot-streak', name: 'Hot Streak', how: 'Hit the hot target twice in one round', cat: 1 },
+  { id: 'clean-sheet', name: 'Clean Sheet', how: 'A round with no misses and no bunkers', cat: 1 },
+  { id: 'perfect-10', name: 'Perfect 10', how: 'Every ball in a round on Blue, White or Black', cat: 1, elite: true },
+  { id: 'big-round', name: 'Big Round', how: 'Score 50,000 in a round', cat: 2 },
+  { id: 'huge-round', name: 'Huge Round', how: 'Score 100,000 in a round', cat: 2, elite: true },
+  { id: 'personal-best', name: 'Personal Best', how: 'Beat your own best round', cat: 2 },
+  { id: 'lucky-roll', name: 'Lucky Roll', how: 'Roll a 5x or higher multiplier', cat: 2 },
+  { id: 'busy-range', name: 'Busy Range', how: 'Finish a round with 5 or more players here', cat: 2 },
+  { id: 'beach-holiday', name: 'Beach Holiday', how: 'Land in a bunker', cat: 3 },
+  { id: 'sandcastle', name: 'Sandcastle', how: 'Three bunkers in one round', cat: 3 },
+  { id: 'wayward', name: 'Wayward', how: 'Five misses in a row', cat: 3 },
+  { id: 'postcode-lottery', name: 'Postcode Lottery', how: 'Hit the ball off the range', cat: 3 },
+  { id: 'glutton-for-punishment', name: 'Glutton for Punishment', how: 'Finish a round scoring under 1,000', cat: 3 },
+  { id: 'full-bag', name: 'Full Bag', how: 'Score with the wedge, iron and driver', cat: 4 },
+  { id: 'into-the-wind', name: 'Into the Wind', how: 'Blue or better into a strong headwind', cat: 4 },
+  { id: 'wind-assisted', name: 'Wind Assisted', how: 'Blue or better with a strong tailwind', cat: 4 },
+  { id: 'pigeon-post', name: 'Pigeon Post', how: 'Land a target with the Pigeon ball', cat: 4 },
+  { id: 'it-came-back', name: 'It Came Back', how: 'Land a target with the Boomerang', cat: 4 },
+  { id: 'moonwalker', name: 'Moonwalker', how: 'Land a target with Moon Physics', cat: 4 },
+  { id: 'collector', name: 'Collector', how: 'Own every ball effect', cat: 4 },
+  { id: 'mad-hatter', name: 'Mad Hatter', how: 'Own every hat', cat: 4 },
+  { id: 'regular', name: 'Regular', how: 'Visit on 7 different days', cat: 5 },
+  { id: 'centurion', name: 'Centurion', how: 'Finish 100 rounds', cat: 5, elite: true },
+  { id: 'level-10', name: 'Level 10', how: 'Reach level 10', cat: 5 },
+  { id: 'level-25', name: 'Level 25', how: 'Reach level 25', cat: 5 },
+  { id: 'level-50', name: 'Level 50', how: 'Reach level 50', cat: 5, elite: true },
+  { id: 'pixel-rich', name: 'Pixel Rich', how: 'Hold 100,000 Pixel Points at once', cat: 5, elite: true },
+  { id: 'on-the-leaderboard', name: 'On the Leaderboard', how: "Get into today's top 5", cat: 5 },
+  { id: 'champion', name: 'Champion', how: 'Be number 1 on any leaderboard', cat: 5, elite: true },
+  { id: 'practice-makes-perfect', name: 'Practice Makes Perfect', how: 'Spend 30 minutes in the AFK area', cat: 6 },
+  { id: 'going-solo', name: 'Going Solo', how: 'Finish a round in the solo bay', cat: 6 },
+  { id: 'pigeon-watcher', name: 'Pigeon Watcher', how: 'Watch the pigeons finish a round', cat: 6 },
+  { id: 'supporter', name: 'Supporter', how: 'Press Donate at the Wall of Honour', cat: 6 },
+]
+
+export function achievementById(id: string): Achievement | undefined {
+  return ACHIEVEMENTS.find((a) => a.id === id)
 }

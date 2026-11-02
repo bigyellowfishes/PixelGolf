@@ -1,10 +1,10 @@
-import { HOT } from './ledger/rules'
-import { onSavedSettings, saveSetting } from './ledger/client'
+import { achievementById } from './ledger/rules'
+import { onSavedSettings, saveSetting, onAchieved } from './ledger/client'
 
 // The shot feed: "Cooer", little tweet-style notices that pop up at the top of the screen when
 // anyone in the range plays a great shot or a bad one (ui/NotificationsMenu.tsx draws them).
 //
-//   great: the hot target (2X), or the hardest targets, White and Black
+//   great: the hot target (+20,000), or the hardest targets, White and Black
 //   bad:   a bunker, or a third (and fifth, seventh...) miss in a row
 //
 // Each notice waits its turn in feed.queue, drops in one at a time with a coo, stays a few
@@ -19,7 +19,7 @@ import { onSavedSettings, saveSetting } from './ledger/client'
 // of the Cooer design (pixelgolfChirps.ts): first person, a nod to @pixelgolf and a #hashtag or
 // two (ui/NotificationsMenu.tsx shows #tags and @mentions in blue). Picked at random from the
 // lists below, never the same line twice in a row, and only from lines whose {placeholders} all
-// have a value: {colour}, {x} (the hot factor), {pts} (the shot's points, with its sign) and {n}
+// have a value: {colour}, {pts} (the shot's points, with its sign) and {n}
 // (misses in a row).
 
 export type FeedItem = {
@@ -33,15 +33,15 @@ export type FeedItem = {
   born: number
 }
 
-type LineKind = 'hot' | 'big' | 'bunker' | 'misses'
+type LineKind = 'hot' | 'big' | 'bunker' | 'misses' | 'badge' | 'eliteBadge'
 
 const LINES: Record<LineKind, string[]> = {
   hot: [
-    'Just hit the {x}X on {colour} for {pts}! Drinks are on me @pixelgolf #hottarget',
-    'Called it. {x}X on {colour}, {pts} in the bag @pixelgolf #nailedit',
-    'Did that just happen?! {x}X on {colour} for {pts} #hottarget #pixelgolf',
-    '{pts} off the {x}X on {colour}. Somebody frame this @pixelgolf #legend',
-    'Hot target? More like MY target. {x}X on {colour}, {pts} @pixelgolf #onfire'
+    'Just hit the hot {colour} for {pts}! Drinks are on me @pixelgolf #hottarget',
+    'Called it. Hot {colour}, {pts} in the bag @pixelgolf #nailedit',
+    'Did that just happen?! Hot {colour} for {pts} #hottarget #pixelgolf',
+    '{pts} off the hot {colour}. Somebody frame this @pixelgolf #legend',
+    'Hot target? More like MY target. {colour}, {pts} @pixelgolf #onfire'
   ],
   big: [
     'Landed it on {colour} for {pts}! Feeling like a pro today @pixelgolf #whatashot',
@@ -54,6 +54,17 @@ const LINES: Record<LineKind, string[]> = {
     'That bunker just cost me {pts}. Building a sandcastle to cope @pixelgolf #sandtrap',
     'Stuck in the bunker. Send help, or a shovel @pixelgolf #sandtrap',
     'Not a bad beach, this. {pts} for the view though @pixelgolf #bunker'
+  ],
+  // Someone earned an achievement (the server tells everyone)
+  badge: [
+    'Just unlocked {badge} at @pixelgolf! #achievement',
+    'New badge: {badge}. Not bad, if I say so myself @pixelgolf #achievementunlocked',
+    '{badge} unlocked! Adding it to the trophy cabinet @pixelgolf #badge',
+    'Got the {badge} badge. Next stop, all of them @pixelgolf #collector'
+  ],
+  eliteBadge: [
+    'ELITE badge unlocked: {badge}! You may now bow @pixelgolf #elite',
+    'Only went and got {badge}. Gold rim and everything @pixelgolf #elite #achievement'
   ],
   misses: [
     'I just missed {n} shots in a row at @pixelgolf, anyone got any advice for an amateur? #help #golflife',
@@ -137,7 +148,7 @@ function post(good: boolean, who: string, name: string, text: string): void {
 /**
  * A finished shot. who: something that stays the same for the player (wallet or bay), name: what
  * to show, zone: where it landed ('' for nothing, 'Red1', 'Bunker2'...), points: what it scored
- * (with the hot target already doubled), hot: whether it hit the hot target.
+ * (with the hot bonus already added), hot: whether it hit the hot target.
  */
 export function noteShot(who: string, name: string, zone: string, points: number, hot: boolean): void {
   const colour = zone.replace(/\d+$/, '')
@@ -150,7 +161,14 @@ export function noteShot(who: string, name: string, zone: string, points: number
     return
   }
   missStreaks.set(who, 0)
-  const fill = { colour, x: String(HOT.factor), pts: '+' + fmt(points) }
+  const fill = { colour, pts: '+' + fmt(points) }
   if (hot) post(true, who, shown, line('hot', fill))
   else if (BIG_TARGETS.indexOf(colour) >= 0) post(true, who, shown, line('big', fill))
 }
+
+// Achievements: the server tells everyone when someone earns one, and it's tweeted like a shot
+onAchieved((a) => {
+  const badge = achievementById(a.id)
+  if (!badge) return
+  post(true, a.wallet, a.name || 'Someone', line(badge.elite ? 'eliteBadge' : 'badge', { badge: badge.name }))
+})

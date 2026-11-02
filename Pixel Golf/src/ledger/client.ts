@@ -146,8 +146,14 @@ export const stats = {
   bestStreak: 0,
   lastDay: 0,
   playSeconds: 0,
-  afkMinutes: 0
+  afkMinutes: 0,
+  afkSeconds: 0,
+  /** Different days they've been here */
+  daysPlayed: 0
 }
+
+/** My achievements, as the server last sent them: id -> epoch seconds earned. ready once it has. */
+export const achievements: { ready: boolean; got: Record<string, number> } = { ready: false, got: {} }
 
 /** Each player's Pixel Golf hat and its fit (wallet, lower case -> 'hatId|up,forward,tilt,size'), by the server's list. */
 export const outfits: Record<string, string> = {}
@@ -326,6 +332,17 @@ export function submitRound(balls: BallResult[]): void {
 
 export function buyCosmetic(id: string): void {
   void room.send('buy', { id })
+}
+
+/** Asks the server to note an achievement down (achievements.ts). It keeps each one once. */
+export function sendAchieve(id: string): void {
+  void room.send('achieve', { id })
+}
+
+const achievedFns: ((a: { wallet: string; name: string; id: string }) => void)[] = []
+/** Someone (you included) has just earned an achievement */
+export function onAchieved(fn: (a: { wallet: string; name: string; id: string }) => void): void {
+  achievedFns.push(fn)
 }
 
 /** Saves where my hat sits (the backpack's Hat tab) */
@@ -527,6 +544,15 @@ export function setupLedgerClient(): void {
   room.onMessage('tutorialReward', (d) => {
     const v = { xp: d.xp, level: d.level, unlocked: parse<string[]>(d.unlocked, []) }
     for (const fn of tutorialRewardFns) fn(v)
+  })
+
+  room.onMessage('myAchievements', (d) => {
+    achievements.got = parse<Record<string, number>>(d.json, {})
+    achievements.ready = true
+  })
+
+  room.onMessage('achieved', (d) => {
+    for (const fn of achievedFns) fn(d)
   })
 
   room.onMessage('myStats', (d) => {

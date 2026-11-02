@@ -6,22 +6,27 @@ import { PlayerStats } from './PlayerStats'
 import { profile, equipCosmetic, buyCosmetic } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind, HAT_COLOURS, HAT_STYLES, NO_HAT, itemById } from '../ledger/rules'
 import { openHatFit } from './HatFitPanel'
+import { AchievementsTab } from './AchievementsTab'
 import { CLUB_TYPES, ClubType } from '../club'
 import { getSelectedClubType, selectClub } from '../clubSelect'
 import { clubChangeAllowed } from '../game'
 import { playUi } from '../sfx'
 import { menuReopenBlocked } from '../menuGuard'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
+import { screenRoom } from './screenRoom'
 
 // The backpack: everything you carry, from the backpack button on the range card (ui/RangeHud.tsx).
 //   - Balls: the ball looks and ball types you own, to equip (the same as Equip in the shop)
 //   - Hat: pick a Pixel Golf hat, and Adjust fit to move or size it (ui/HatFitPanel.tsx, on the
 //     right of the screen so you can see your avatar; closing it comes back here)
 //   - Clubs: wedge, iron or driver, the same as keys 1, 2 and 3 (and only when they'd work)
+//   - Badges: your achievements (ui/AchievementsTab.tsx)
 //   - Stats: your Player Stats page
 // It's a menu like the others: F closes it, and no shot starts while it's open (index.ts).
+// It shrinks to fit a smaller screen (a phone, or one held upright): the tabs narrow, the Balls
+// columns stack, the club cards shrink, and the Badges tab picks how many fit (screenRoom.ts).
 
-export type BackpackTab = 'balls' | 'hat' | 'clubs' | 'stats'
+export type BackpackTab = 'balls' | 'hat' | 'clubs' | 'badges' | 'stats'
 export const state = { display: 'none' as 'flex' | 'none', tab: 'balls' as BackpackTab }
 
 const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
@@ -36,6 +41,8 @@ const GREEN = { r: 0.165, g: 0.525, b: 0.106, a: 1 }
 
 const WIDTH = 720
 const HEIGHT = 700
+/** Narrower than this, the Balls columns stack and the tabs and padding tighten */
+const NARROW = 660
 const CLUB_ORDER: ClubType[] = ['wedge', 'iron', 'driver']
 const CLUB_KEY: Record<ClubType, number> = { wedge: 1, iron: 2, driver: 3 }
 
@@ -76,12 +83,12 @@ function pickClub(type: ClubType): void {
   playUi('ui_select')
 }
 
-function tabButton(label: string, tab: BackpackTab) {
+function tabButton(label: string, tab: BackpackTab, w: number, narrow: boolean) {
   const active = state.tab === tab
   const t = useInteraction(
     {
       base: {
-        uiTransform: { width: 156, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, margin: { left: 6, right: 6 } },
+        uiTransform: { width: w, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, margin: { left: narrow ? 3 : 6, right: narrow ? 3 : 6 } },
         uiBackground: { color: WHITE },
         onMouseDown: () => showTab(tab)
       },
@@ -93,7 +100,7 @@ function tabButton(label: string, tab: BackpackTab) {
   )
   return (
     <UiEntity {...t}>
-      <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={16} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: 150, height: 30 }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={narrow ? 14 : 16} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: w - 6, height: 30 }} />
     </UiEntity>
   )
 }
@@ -137,18 +144,19 @@ function itemColumn(title: string, kind: CosmeticKind) {
   )
 }
 
-function clubCard(type: ClubType) {
+function clubCard(type: ClubType, w: number) {
   const on = getSelectedClubType() === type
+  const k = w / 196
   return (
     <UiEntity
       key={type}
-      uiTransform={{ width: 196, height: 250, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: { left: 8, right: 8 }, borderRadius: 22, borderWidth: on ? 3 : 2, borderColor: on ? BLUE_LIGHT : EDGE }}
+      uiTransform={{ width: w, height: Math.round(250 * k), flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: { left: 6, right: 6 }, borderRadius: 22, borderWidth: on ? 3 : 2, borderColor: on ? BLUE_LIGHT : EDGE }}
       uiBackground={{ color: on ? PALE_BLUE : WHITE }}
       onMouseDown={() => pickClub(type)}
     >
-      <UiEntity uiTransform={{ width: 120, height: 120 }} uiBackground={{ textureMode: 'stretch', texture: { src: `assets/images/menus/club-${type}.png` } }} />
-      <Label font="sans-serif" fontSrc={FONT_BOLD} value={CLUB_TYPES[type].label} fontSize={22} color={NAVY} textAlign="middle-center" uiTransform={{ width: 180, height: 32, margin: { top: 10 } }} />
-      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={on ? 'In your hands' : `Key ${CLUB_KEY[type]}`} fontSize={14} color={on ? BLUE : GREY} textAlign="middle-center" uiTransform={{ width: 180, height: 22 }} />
+      <UiEntity uiTransform={{ width: Math.round(120 * k), height: Math.round(120 * k) }} uiBackground={{ textureMode: 'stretch', texture: { src: `assets/images/menus/club-${type}.png` } }} />
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={CLUB_TYPES[type].label} fontSize={k < 0.85 ? 18 : 22} color={NAVY} textAlign="middle-center" uiTransform={{ width: w - 16, height: 32, margin: { top: Math.round(10 * k) } }} />
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={on ? 'In your hands' : `Key ${CLUB_KEY[type]}`} fontSize={k < 0.85 ? 12 : 14} color={on ? BLUE : GREY} textAlign="middle-center" uiTransform={{ width: w - 16, height: 22 }} />
     </UiEntity>
   )
 }
@@ -244,6 +252,18 @@ export function BackpackMenu(props: {}) {
     hover: { uiTransform: { borderColor: BLUE_LIGHT }, uiBackground: { color: PALE_BLUE } }
   })
 
+  // Fit the screen: never bigger than WIDTH x HEIGHT, and 12px clear of each edge
+  const room = screenRoom()
+  const width = Math.min(WIDTH, room.w - 24)
+  const height = Math.min(HEIGHT, room.h - 24)
+  const narrow = width < NARROW
+  const pad = narrow ? 12 : 24
+  const tabW = Math.min(124, Math.floor((width - 16) / 5) - (narrow ? 6 : 12))
+  // The room inside for the tab showing (less the frame, header, tabs and padding)
+  const innerW = width - 8 - pad * 2
+  const innerH = height - 8 - 64 - 64 - 18
+  const clubW = Math.min(196, Math.floor((innerW - 36) / 3))
+
   return (
     <UiEntity
       uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center', pointerFilter: 'block', zIndex: 10 }}
@@ -254,7 +274,7 @@ export function BackpackMenu(props: {}) {
         uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
       />
       <UiEntity
-        uiTransform={{ width: WIDTH, height: HEIGHT, flexDirection: 'column', borderRadius: 28, borderWidth: 4, borderColor: WHITE, overflow: 'hidden' }}
+        uiTransform={{ width, height, flexDirection: 'column', borderRadius: 28, borderWidth: 4, borderColor: WHITE, overflow: 'hidden' }}
         uiBackground={{ color: PANEL }}
       >
         {/* Header */}
@@ -283,24 +303,25 @@ export function BackpackMenu(props: {}) {
 
         {/* Tabs */}
         <UiEntity uiTransform={{ width: '100%', height: 64, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-          {tabButton('Balls', 'balls')}
-          {tabButton('Hat', 'hat')}
-          {tabButton('Clubs', 'clubs')}
-          {tabButton('Stats', 'stats')}
+          {tabButton('Balls', 'balls', tabW, narrow)}
+          {tabButton('Hat', 'hat', tabW, narrow)}
+          {tabButton('Clubs', 'clubs', tabW, narrow)}
+          {tabButton('Badges', 'badges', tabW, narrow)}
+          {tabButton('Stats', 'stats', tabW, narrow)}
         </UiEntity>
 
         {/* The tab showing */}
-        <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', padding: { left: 24, right: 24, bottom: 18 } }}>
+        <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', padding: { left: pad, right: pad, bottom: 18 } }}>
           {state.tab === 'balls' ? (
-            <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }}>
+            <UiEntity uiTransform={{ width: '100%', flexDirection: narrow ? 'column' : 'row', justifyContent: 'space-between', alignItems: narrow ? 'center' : 'flex-start' }}>
               {itemColumn('COSMETIC', 'ballVis')}
               {itemColumn('EFFECTS', 'ballProp')}
             </UiEntity>
           ) : null}
           {state.tab === 'hat' ? hatTab() : null}
           {state.tab === 'clubs' ? (
-            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', alignItems: 'center', margin: { top: 40 } }}>
-              <UiEntity uiTransform={{ flexDirection: 'row', justifyContent: 'center' }}>{CLUB_ORDER.map((c) => clubCard(c))}</UiEntity>
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', alignItems: 'center', margin: { top: narrow ? 16 : 40 } }}>
+              <UiEntity uiTransform={{ flexDirection: 'row', justifyContent: 'center' }}>{CLUB_ORDER.map((c) => clubCard(c, clubW))}</UiEntity>
               <Label
                 font="sans-serif"
                 fontSrc={FONT_REGULAR}
@@ -308,10 +329,11 @@ export function BackpackMenu(props: {}) {
                 fontSize={14}
                 color={GREY}
                 textAlign="middle-center"
-                uiTransform={{ width: 600, height: 30, margin: { top: 24 } }}
+                uiTransform={{ width: innerW, height: 30, margin: { top: 24 } }}
               />
             </UiEntity>
           ) : null}
+          {state.tab === 'badges' ? <AchievementsTab width={innerW} height={innerH} /> : null}
           {state.tab === 'stats' ? <PlayerStats /> : null}
         </UiEntity>
       </UiEntity>
