@@ -12,6 +12,8 @@ import { windReadout } from '../wind'
 import { playUi } from '../sfx'
 import { perfStats } from '../index'
 import { onPhone, forTouch, PHONE_RIGHT_SHIFT } from '../mobile'
+import { engine, UiCanvasInformation } from '@dcl/sdk/ecs'
+import { screenTopLift } from './screenRoom'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
@@ -33,7 +35,20 @@ const CARD_TOP_PHONE = 20
 // true brings back the old tidier phone card (no multiplier box, no "Pixel Points" label, no
 // frame rate readout, no wind words). The previous version is in RangeHud.tsx.bak.
 const PHONE_COMPACT = false
-const PHONE_SCALE = 1.1
+const PHONE_SCALE = 1.3
+// The round icon buttons (Leaderboards, Backpack, Settings) before scaling: bigger on a phone so
+// they're easy to tap (36 on desktop, so about 60 on a phone with PHONE_SCALE)
+const BUTTON = 36
+const BUTTON_PHONE = 46
+const ICON = 20
+const ICON_PHONE = 26
+// On a phone the three buttons sit at the top left in a row, just right of the phone's chat button
+// (beside its profile picture), lined up with its middle. UI pixels from the top left of the
+// screen, measured from a phone screenshot: the chat button's middle is CHAT_MID_Y down from the
+// top and its right edge CHAT_RIGHT_X in from the left. Nudge these if the row sits off.
+const CHAT_MID_Y = 73
+const CHAT_RIGHT_X = 302
+const PHONE_BUTTONS_GAP = 18
 const CARD_WIDTH = 240
 
 // The scale every size in the card goes through: 1 on desktop, PHONE_SCALE on a phone
@@ -139,7 +154,10 @@ export function RangeHud(props: {}) {
   // it stays hidden until the tutorial's over. Its 2X hot target lesson uses the hot box instead.
   state.multiplierDisplay = compact || tutorial.active ? 'none' : 'flex'
   state.pointsLabelDisplay = compact ? 'none' : 'flex'
-  scale = onPhone() ? PHONE_SCALE : 1
+  const phone = onPhone()
+  scale = phone ? PHONE_SCALE : 1
+  const btn = z(onPhone() ? BUTTON_PHONE : BUTTON)
+  const icon = z(onPhone() ? ICON_PHONE : ICON)
   const cardWidth = z(CARD_WIDTH)
   const rightShift = onPhone() ? -PHONE_RIGHT_SHIFT : 0
   const wind = windReadout()
@@ -149,12 +167,12 @@ export function RangeHud(props: {}) {
   const iconButton = (onPress: () => void, gap: boolean) => ({
     base: {
       uiTransform: {
-        width: z(36),
-        height: z(36),
+        width: btn,
+        height: btn,
         justifyContent: 'center' as const,
         alignItems: 'center' as const,
         margin: { left: gap ? z(14) : 0 },
-        borderRadius: z(18),
+        borderRadius: btn / 2,
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
       },
@@ -171,14 +189,14 @@ export function RangeHud(props: {}) {
   const boardsButton = useInteraction({
     base: {
       uiTransform: {
-        width: z(36),
-        height: z(36),
+        width: btn,
+        height: btn,
         // It used to stretch to fill the row (the old Leaderboards pill): set it back explicitly,
         // as a property that's just left out can keep its old value
         flexGrow: 0,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: z(18),
+        borderRadius: btn / 2,
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
       },
@@ -194,12 +212,12 @@ export function RangeHud(props: {}) {
   const settingsButton = useInteraction({
     base: {
       uiTransform: {
-        width: z(36),
-        height: z(36),
+        width: btn,
+        height: btn,
         justifyContent: 'center',
         alignItems: 'center',
         margin: { left: z(14) },
-        borderRadius: z(18),
+        borderRadius: btn / 2,
         borderWidth: 2,
         borderColor: { r: 0.788, g: 0.827, b: 0.859, a: 1 }
       },
@@ -211,6 +229,34 @@ export function RangeHud(props: {}) {
       uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }
     }
   })
+
+  // The three round buttons, in the card on desktop and bottom left on a phone
+  const buttons = [
+    <UiEntity key="boards-icon" {...boardsButton}>
+      <UiEntity
+        key="trophy"
+        uiTransform={{ width: icon, height: icon }}
+        uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-trophy.png' } }}
+      />
+    </UiEntity>,
+    <UiEntity key="backpack-icon" {...backpackButton}>
+      <UiEntity
+        uiTransform={{ width: icon, height: icon }}
+        uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-backpack.png' } }}
+      />
+    </UiEntity>,
+    <UiEntity key="settings-icon" {...settingsButton}>
+      <UiEntity
+        uiTransform={{ width: icon, height: icon }}
+        uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-settings.png' } }}
+      />
+    </UiEntity>
+  ]
+  // Where the phone's row goes: beside the chat button, measured from the screen's edges, so less
+  // the margins the scene's UI starts inside
+  const canvas = UiCanvasInformation.getOrNull(engine.RootEntity)
+  const insetLeft = canvas?.screenInsetArea?.left ?? 0
+  const topLift = screenTopLift(phone)
 
   return (
     <UiEntity
@@ -337,29 +383,29 @@ export function RangeHud(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        {/* Leaderboards (trophy), Backpack (clubs, balls, stats) and the Settings cog */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: { top: z(10) } }}>
-          <UiEntity key="boards-icon" {...boardsButton}>
-            <UiEntity
-              key="trophy"
-              uiTransform={{ width: z(20), height: z(20) }}
-              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-trophy.png' } }}
-            />
+        {/* Leaderboards (trophy), Backpack (clubs, balls, stats) and the Settings cog (on a phone,
+            bottom left instead: phoneButtons below) */}
+        {phone ? null : (
+          <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: { top: z(10) } }}>
+            {buttons}
           </UiEntity>
-          <UiEntity key="backpack-icon" {...backpackButton}>
-            <UiEntity
-              uiTransform={{ width: z(20), height: z(20) }}
-              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-backpack.png' } }}
-            />
-          </UiEntity>
-          <UiEntity key="settings-icon" {...settingsButton}>
-            <UiEntity
-              uiTransform={{ width: z(20), height: z(20) }}
-              uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-settings.png' } }}
-            />
-          </UiEntity>
-        </UiEntity>
+        )}
       </UiEntity>
+
+      {/* The buttons on a phone: a row top left, beside the chat button */}
+      {phone ? (
+        <UiEntity
+          uiTransform={{
+            positionType: 'absolute',
+            position: { left: CHAT_RIGHT_X + PHONE_BUTTONS_GAP - insetLeft, top: CHAT_MID_Y - btn / 2 - topLift },
+            flexDirection: 'row',
+            alignItems: 'center',
+            pointerFilter: 'none'
+          }}
+        >
+          {buttons}
+        </UiEntity>
+      ) : null}
 
       {/* Frame rate readout (PERF_READOUT) */}
       <Label font="sans-serif" fontSrc={FONT_REGULAR}

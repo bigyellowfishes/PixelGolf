@@ -4,6 +4,8 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { engine, Entity, Transform, AudioSource, PrimaryPointerInfo } from '@dcl/sdk/ecs'
 import { feed, FeedItem } from '../shotFeed'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
+import { screenRoom, screenTopLift } from './screenRoom'
+import { onPhone } from '../mobile'
 
 // "Cooer": the shot feed's notifications (shotFeed.ts), built from the Cooer design
 // (cooer-notifications: ChirpFeed.ts and chirp.css), redrawn here in the scene's UI. Like Chirper
@@ -70,6 +72,10 @@ const PANEL_MS = 450
 
 // ---- Sizes (px), as chirp.css ----
 const TAB = { w: 64, h: 34 }
+/** The bell tab is this many times bigger on a phone, to be easy to tap */
+const TAB_PHONE_SCALE = 2
+/** The open panel is this many times bigger on a phone */
+const PANEL_PHONE_SCALE = 2
 const BANNER_TOP = 44
 const BANNER_W = 420
 const CARD_PAD = { top: 10, right: 14, bottom: 16, left: 54 }
@@ -168,21 +174,28 @@ let drag: Drag | null = null
 
 const ITEM_TEXT_W = SHADE_W - 2 * 12 - ITEM_PAD.left - ITEM_PAD.right - AVATAR - 10
 
+/** The open panel's scale (1 on desktop, PANEL_PHONE_SCALE on a phone): every size in it goes through P() */
+let S = 1
+const P = (n: number) => n * S
+/** The tallest the panel can be right now (MAX_PANEL, or less to fit a phone's screen) */
+let maxPanel = MAX_PANEL
+
+/** Line wrapping is worked out at the design size (text and widths scale together), then scaled */
 function itemHeight(i: FeedItem): number {
-  return ITEM_PAD.top + Math.max(AVATAR, 18 + 2 + linesFor(i.text, ITEM_TEXT_W) * LINE_H) + ITEM_PAD.bottom
+  return P(ITEM_PAD.top + Math.max(AVATAR, 18 + 2 + linesFor(i.text, ITEM_TEXT_W) * LINE_H) + ITEM_PAD.bottom)
 }
 
 /** The pages of the history, newest page first; each page is oldest-first so its newest is at the bottom */
 function pages(): FeedItem[][] {
   const out: FeedItem[][] = []
   let cur: FeedItem[] = []
-  let h = HEADER_H + FOOTER_H + 2 * LIST_PAD
+  let h = P(HEADER_H + FOOTER_H + 2 * LIST_PAD)
   for (const i of feed.history) {
-    const ih = itemHeight(i) + 2 * ITEM_MARGIN
-    if (cur.length && h + ih > MAX_PANEL) {
+    const ih = itemHeight(i) + P(2 * ITEM_MARGIN)
+    if (cur.length && h + ih > maxPanel) {
       out.push(cur.reverse())
       cur = []
-      h = HEADER_H + FOOTER_H + 2 * LIST_PAD
+      h = P(HEADER_H + FOOTER_H + 2 * LIST_PAD)
     }
     cur.push(i)
     h += ih
@@ -192,8 +205,8 @@ function pages(): FeedItem[][] {
 }
 
 function panelHeight(list: FeedItem[]): number {
-  const items = list.length ? list.reduce((t, i) => t + itemHeight(i) + 2 * ITEM_MARGIN, 0) : 110
-  return HEADER_H + 2 * LIST_PAD + items + FOOTER_H
+  const items = list.length ? list.reduce((t, i) => t + itemHeight(i) + P(2 * ITEM_MARGIN), 0) : P(110)
+  return P(HEADER_H + 2 * LIST_PAD + FOOTER_H) + items
 }
 
 function pointerY(): number | null {
@@ -324,7 +337,7 @@ const TAG_MARKUP = ['<b><color=#1B78C4>', '</color></b>']
  * Message text with its #hashtags and @mentions picked out, Chirper-style: one wrapping label,
  * using the text's own markup for the coloured words (the scene's labels take simple markup).
  */
-function richText(key: string, text: string, width: number, height: number) {
+function richText(key: string, text: string, width: number, height: number, fontSize = 14) {
   // Anything that looks like markup in the message itself is left as plain text
   const safe = text.split('<').join('‹')
   const marked = safe.replace(/[#@]\w+/g, (m) => TAG_MARKUP[0] + m + TAG_MARKUP[1])
@@ -334,11 +347,11 @@ function richText(key: string, text: string, width: number, height: number) {
       font="sans-serif"
       fontSrc={FONT_REGULAR}
       value={marked}
-      fontSize={14}
+      fontSize={fontSize}
       color={INK}
       textWrap="wrap"
       textAlign="top-left"
-      uiTransform={{ width, height, margin: { top: 2 } }}
+      uiTransform={{ width, height, margin: { top: 2 * (fontSize / 14) } }}
     />
   )
 }
@@ -354,13 +367,13 @@ function gradient(key: string, radius?: { bottomLeft: number; bottomRight: numbe
   )
 }
 
-function grabber(key: string, top: number) {
+function grabber(key: string, top: number, k = 1) {
   return (
     <UiEntity
       key={key}
-      uiTransform={{ positionType: 'absolute', position: { top, left: 0 }, width: '100%', height: 4, justifyContent: 'center', pointerFilter: 'none' }}
+      uiTransform={{ positionType: 'absolute', position: { top, left: 0 }, width: '100%', height: 4 * k, justifyContent: 'center', pointerFilter: 'none' }}
     >
-      <UiEntity uiTransform={{ width: 36, height: 4, borderRadius: 2 }} uiBackground={{ color: GRABBER }} />
+      <UiEntity uiTransform={{ width: 36 * k, height: 4 * k, borderRadius: 2 * k }} uiBackground={{ color: GRABBER }} />
     </UiEntity>
   )
 }
@@ -447,28 +460,28 @@ function item(i: FeedItem) {
     <UiEntity
       key={`coo-${i.id}`}
       uiTransform={{
-        width: SHADE_W - 24,
+        width: P(SHADE_W - 24),
         height: itemHeight(i),
         flexShrink: 0,
         flexDirection: 'row',
-        margin: { top: ITEM_MARGIN, bottom: ITEM_MARGIN },
-        padding: ITEM_PAD,
-        borderRadius: 14
+        margin: { top: P(ITEM_MARGIN), bottom: P(ITEM_MARGIN) },
+        padding: { top: P(ITEM_PAD.top), right: P(ITEM_PAD.right), bottom: P(ITEM_PAD.bottom), left: P(ITEM_PAD.left) },
+        borderRadius: P(14)
       }}
       uiBackground={{ color: WHITE }}
     >
       {/* Profile picture: the player's own, over the default silhouette */}
-      <UiEntity uiTransform={{ width: AVATAR, height: AVATAR, flexShrink: 0, borderRadius: AVATAR / 2, overflow: 'hidden' }} uiBackground={{ textureMode: 'stretch', texture: { src: DEFAULT_AVATAR } }}>
-        {wallet ? <UiEntity uiTransform={{ width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2 }} uiBackground={{ textureMode: 'stretch', avatarTexture: { userId: i.who } }} /> : null}
+      <UiEntity uiTransform={{ width: P(AVATAR), height: P(AVATAR), flexShrink: 0, borderRadius: P(AVATAR / 2), overflow: 'hidden' }} uiBackground={{ textureMode: 'stretch', texture: { src: DEFAULT_AVATAR } }}>
+        {wallet ? <UiEntity uiTransform={{ width: P(AVATAR), height: P(AVATAR), borderRadius: P(AVATAR / 2) }} uiBackground={{ textureMode: 'stretch', avatarTexture: { userId: i.who } }} /> : null}
       </UiEntity>
-      <UiEntity uiTransform={{ width: ITEM_TEXT_W, flexDirection: 'column', margin: { left: 10 } }}>
-        <UiEntity uiTransform={{ width: '100%', height: 18, flexDirection: 'row', alignItems: 'flex-end' }}>
-          <Label font="sans-serif" fontSrc={FONT_BOLD} value={i.name} fontSize={14} color={INK} textAlign="bottom-left" uiTransform={{ width: 'auto', height: 18 }} />
-          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={handleOf(i.name)} fontSize={13} color={MUTED} textAlign="bottom-left" uiTransform={{ width: 'auto', height: 18, margin: { left: 6 } }} />
+      <UiEntity uiTransform={{ width: P(ITEM_TEXT_W), flexDirection: 'column', margin: { left: P(10) } }}>
+        <UiEntity uiTransform={{ width: '100%', height: P(18), flexDirection: 'row', alignItems: 'flex-end' }}>
+          <Label font="sans-serif" fontSrc={FONT_BOLD} value={i.name} fontSize={P(14)} color={INK} textAlign="bottom-left" uiTransform={{ width: 'auto', height: P(18) }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={handleOf(i.name)} fontSize={P(13)} color={MUTED} textAlign="bottom-left" uiTransform={{ width: 'auto', height: P(18), margin: { left: P(6) } }} />
           <UiEntity uiTransform={{ flexGrow: 1 }} />
-          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={timeAgo(i.born)} fontSize={12} color={MUTED} textAlign="bottom-right" uiTransform={{ width: 'auto', height: 18 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={timeAgo(i.born)} fontSize={P(12)} color={MUTED} textAlign="bottom-right" uiTransform={{ width: 'auto', height: P(18) }} />
         </UiEntity>
-        {richText(`item-${i.id}`, i.text, ITEM_TEXT_W, lines * LINE_H)}
+        {richText(`item-${i.id}`, i.text, P(ITEM_TEXT_W), P(lines * LINE_H), P(14))}
       </UiEntity>
     </UiEntity>
   )
@@ -476,22 +489,34 @@ function item(i: FeedItem) {
 
 function smallButton(key: string, label: string, onPress: () => void) {
   return (
-    <UiEntity key={key} uiTransform={{ width: 70, height: 22, justifyContent: 'center', alignItems: 'center' }} onMouseDown={onPress}>
-      <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={12} color={BLUE} textAlign="middle-center" uiTransform={{ width: 70, height: 20 }} />
+    <UiEntity key={key} uiTransform={{ width: P(70), height: P(22), justifyContent: 'center', alignItems: 'center' }} onMouseDown={onPress}>
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={P(12)} color={BLUE} textAlign="middle-center" uiTransform={{ width: P(70), height: P(20) }} />
     </UiEntity>
   )
 }
 
 export function NotificationsDrawer(props: {}) {
   if (state.display === 'flex') feed.unread = 0
+  const phone = onPhone()
+  // On a phone the UI starts below the screen's top safe margin: lift the panel and the bell by
+  // that much so they hang from the very top of the screen (0 on desktop)
+  const liftBy = screenTopLift(phone)
+  // The bell tab's size: bigger on a phone
+  const k = phone ? TAB_PHONE_SCALE : 1
+  const tw = TAB.w * k
+  const th = TAB.h * k
+  const bell = 26 * k
+  // The open panel: bigger on a phone, and never taller than the screen leaves room for (with the tab under it)
+  S = phone ? PANEL_PHONE_SCALE : 1
+  maxPanel = Math.min(P(MAX_PANEL), screenRoom().h + liftBy - th - 8)
   const all = pages()
   if (page >= all.length) page = all.length - 1
   const list = all[page]
   const H = panelHeight(drag ? all[0] : list)
   if (!Number.isFinite(progress)) progress = state.display === 'flex' ? 1 : 0
   const shown = Math.max(0, Math.min(1, progress))
-  const panelTop = -H * (1 - shown)
-  const tabTop = H * shown
+  const panelTop = -H * (1 - shown) - liftBy
+  const tabTop = H * shown - liftBy
   const count = feed.history.length
   const unread = feed.unread > 99 ? '99+' : String(feed.unread)
 
@@ -520,61 +545,61 @@ export function NotificationsDrawer(props: {}) {
       {shown > 0.001 ? (
         <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%', flexDirection: 'column', alignItems: 'center', pointerFilter: 'none' }}>
           <UiEntity
-            uiTransform={{ width: SHADE_W, height: H, flexShrink: 0, margin: { top: panelTop }, flexDirection: 'column', borderRadius: { bottomLeft: 24, bottomRight: 24 }, overflow: 'hidden', pointerFilter: 'block' }}
+            uiTransform={{ width: P(SHADE_W), height: H, flexShrink: 0, margin: { top: panelTop }, flexDirection: 'column', borderRadius: { bottomLeft: P(24), bottomRight: P(24) }, overflow: 'hidden', pointerFilter: 'block' }}
             uiBackground={{ color: PANEL }}
           >
             {/* Header */}
             <UiEntity
-              uiTransform={{ width: '100%', height: HEADER_H, flexShrink: 0, flexDirection: 'row', alignItems: 'center', padding: { left: 10, right: 14 } }}
+              uiTransform={{ width: '100%', height: P(HEADER_H), flexShrink: 0, flexDirection: 'row', alignItems: 'center', padding: { left: P(10), right: P(14) } }}
               uiBackground={{ color: BLUE_MID }}
               onMouseDown={() => startDrag('shade')}
               onMouseUp={() => endDrag()}
             >
               {gradient('header-grad')}
-              <UiEntity uiTransform={{ width: 44, height: 44, flexShrink: 0 }} uiBackground={{ textureMode: 'stretch', texture: { src: PIGEON } }} />
-              <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 10 } }}>
-                <Label font="sans-serif" fontSrc={FONT_BOLD} value={TITLE} fontSize={17} color={WHITE} textAlign="middle-left" uiTransform={{ width: 200, height: 21 }} />
+              <UiEntity uiTransform={{ width: P(44), height: P(44), flexShrink: 0 }} uiBackground={{ textureMode: 'stretch', texture: { src: PIGEON } }} />
+              <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: P(10) } }}>
+                <Label font="sans-serif" fontSrc={FONT_BOLD} value={TITLE} fontSize={P(17)} color={WHITE} textAlign="middle-left" uiTransform={{ width: P(200), height: P(21) }} />
                 <Label
                   font="sans-serif"
                   fontSrc={FONT_REGULAR}
                   value={`${count} ${count === 1 ? 'message' : 'messages'}`}
-                  fontSize={12}
+                  fontSize={P(12)}
                   color={{ r: 1, g: 1, b: 1, a: 0.85 }}
                   textAlign="middle-left"
-                  uiTransform={{ width: 200, height: 15 }}
+                  uiTransform={{ width: P(200), height: P(15) }}
                 />
               </UiEntity>
               <UiEntity
-                uiTransform={{ width: 32, height: 32, flexShrink: 0, justifyContent: 'center', alignItems: 'center', borderRadius: 16 }}
+                uiTransform={{ width: P(32), height: P(32), flexShrink: 0, justifyContent: 'center', alignItems: 'center', borderRadius: P(16) }}
                 uiBackground={{ color: { r: 1, g: 1, b: 1, a: 0.2 } }}
                 onMouseDown={() => closeFeed()}
               >
                 {/* A drawn cross, so it sits dead centre (the × character sat off to one side) */}
-                <UiEntity uiTransform={{ width: 14, height: 14 }} uiBackground={{ textureMode: 'stretch', texture: { src: CLOSE } }} />
+                <UiEntity uiTransform={{ width: P(14), height: P(14) }} uiBackground={{ textureMode: 'stretch', texture: { src: CLOSE } }} />
               </UiEntity>
             </UiEntity>
 
             {/* The list: oldest at the top, newest at the bottom by the tab */}
-            <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'column', alignItems: 'center', padding: { top: LIST_PAD, bottom: LIST_PAD } }}>
+            <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'column', alignItems: 'center', padding: { top: P(LIST_PAD), bottom: P(LIST_PAD) } }}>
               {list.length ? (
                 list.map((i) => item(i))
               ) : (
-                <UiEntity uiTransform={{ width: '100%', height: 110, flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                  <Label font="sans-serif" fontSrc={FONT_BOLD} value="No messages yet" fontSize={15} color={INK} textAlign="middle-center" uiTransform={{ width: 300, height: 22 }} />
-                  <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Activity will be displayed here." fontSize={14} color={MUTED} textAlign="middle-center" uiTransform={{ width: 300, height: 22, margin: { top: 4 } }} />
+                <UiEntity uiTransform={{ width: '100%', height: P(110), flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                  <Label font="sans-serif" fontSrc={FONT_BOLD} value="No messages yet" fontSize={P(15)} color={INK} textAlign="middle-center" uiTransform={{ width: P(300), height: P(22) }} />
+                  <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Activity will be displayed here." fontSize={P(14)} color={MUTED} textAlign="middle-center" uiTransform={{ width: P(300), height: P(22), margin: { top: P(4) } }} />
                 </UiEntity>
               )}
             </UiEntity>
 
             {/* Footer: the grabber, and older or newer pages when there are more than fit */}
             <UiEntity
-              uiTransform={{ width: '100%', height: FOOTER_H, flexShrink: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: { left: 8, right: 8 } }}
+              uiTransform={{ width: '100%', height: P(FOOTER_H), flexShrink: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: { left: P(8), right: P(8) } }}
               onMouseDown={() => startDrag('shade')}
               onMouseUp={() => endDrag()}
             >
-              {page < all.length - 1 ? smallButton('older', 'Older', () => (page += 1)) : <UiEntity uiTransform={{ width: 70 }} />}
-              {grabber('foot-grab', 11)}
-              {page > 0 ? smallButton('newer', 'Newer', () => (page -= 1)) : <UiEntity uiTransform={{ width: 70 }} />}
+              {page < all.length - 1 ? smallButton('older', 'Older', () => (page += 1)) : <UiEntity uiTransform={{ width: P(70) }} />}
+              {grabber('foot-grab', P(11), S)}
+              {page > 0 ? smallButton('newer', 'Newer', () => (page -= 1)) : <UiEntity uiTransform={{ width: P(70) }} />}
             </UiEntity>
           </UiEntity>
         </UiEntity>
@@ -584,8 +609,8 @@ export function NotificationsDrawer(props: {}) {
       <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%', flexDirection: 'column', alignItems: 'center', pointerFilter: 'none', zIndex: 2 }}>
         <UiEntity
           uiTransform={{
-            width: TAB.w,
-            height: TAB.h,
+            width: tw,
+            height: th,
             flexShrink: 0,
             margin: { top: tabTop },
             overflow: 'hidden',
@@ -597,28 +622,28 @@ export function NotificationsDrawer(props: {}) {
           {/* Its blue, as pieces placed exactly (like the badge, which always showed): a solid blue
               rounded box with its top corners pushed up off the top, the gradient over it, then the bell */}
           <UiEntity
-            uiTransform={{ positionType: 'absolute', position: { top: -18, left: 0 }, width: TAB.w, height: TAB.h + 18, borderRadius: 18, pointerFilter: 'none' }}
+            uiTransform={{ positionType: 'absolute', position: { top: -18 * k, left: 0 }, width: tw, height: th + 18 * k, borderRadius: 18 * k, pointerFilter: 'none' }}
             uiBackground={{ color: BLUE_MID }}
           />
           {/* The gradient with the rounded bottom corners drawn into the picture (a picture isn't rounded by borderRadius) */}
           <UiEntity
-            uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: TAB.w, height: TAB.h, pointerFilter: 'none' }}
+            uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: tw, height: th, pointerFilter: 'none' }}
             uiBackground={{ textureMode: 'stretch', texture: { src: TAB_IMAGE } }}
           />
           <UiEntity
-            uiTransform={{ positionType: 'absolute', position: { top: (TAB.h - 26) / 2, left: (TAB.w - 26) / 2 }, width: 26, height: 26, pointerFilter: 'none' }}
+            uiTransform={{ positionType: 'absolute', position: { top: (th - bell) / 2, left: (tw - bell) / 2 }, width: bell, height: bell, pointerFilter: 'none' }}
             uiBackground={{ textureMode: 'stretch', texture: { src: BELL } }}
           />
           {/* Unread count, overlapping the bell's top right */}
           <UiEntity
             uiTransform={{
               positionType: 'absolute',
-              position: { top: 2, left: 37 },
-              width: unread.length > 1 ? 17 + (unread.length - 1) * 6 : 17,
-              height: 17,
+              position: { top: 2 * k, left: 37 * k },
+              width: (unread.length > 1 ? 17 + (unread.length - 1) * 6 : 17) * k,
+              height: 17 * k,
               justifyContent: 'center',
               alignItems: 'center',
-              borderRadius: 9,
+              borderRadius: 9 * k,
               borderWidth: 2,
               borderColor: BLUE,
               display: feed.unread > 0 && state.display !== 'flex' ? 'flex' : 'none',
@@ -626,7 +651,7 @@ export function NotificationsDrawer(props: {}) {
             }}
             uiBackground={{ color: BADGE }}
           >
-            <Label font="sans-serif" fontSrc={FONT_BOLD} value={unread} fontSize={10} color={WHITE} textAlign="middle-center" uiTransform={{ width: 'auto', height: 15 }} />
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={unread} fontSize={10 * k} color={WHITE} textAlign="middle-center" uiTransform={{ width: 'auto', height: 15 * k }} />
           </UiEntity>
         </UiEntity>
       </UiEntity>
