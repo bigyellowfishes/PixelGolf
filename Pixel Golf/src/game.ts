@@ -44,7 +44,7 @@ const RETURN_HOLD_SECONDS = 0.15
 // the ball, or use A / D. W / S zoom in and out. Every shot starts from the default view.
 // ---------------------------------------------------------------------------
 const ORBIT_DEFAULT_PC = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
-const ORBIT_DEFAULT_MOBILE = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
+const ORBIT_DEFAULT_MOBILE = { pitch: 70, yaw: 90, distance: 10 } // degrees, degrees, metres
 const ORBIT_DRAG_SPEED = 0.25   // degrees per pixel dragged
 const ORBIT_KEY_SPEED = 90      // degrees per second with A / D
 const ORBIT_ZOOM_SPEED = 15     // metres per second with W / S
