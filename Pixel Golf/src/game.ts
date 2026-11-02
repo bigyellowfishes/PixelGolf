@@ -1384,7 +1384,7 @@ export class Game {
     }
 
     const hot = result.zone !== '' && isHot(result.zone)
-    const points = hot ? result.points * HOT.factor : result.points
+    const points = Math.min( hot ? result.points + 20000 : result.points, 40000)
     this.state.lastShotScore = points
     this.state.lastZone = result.zone
     this.state.lastHot = hot
