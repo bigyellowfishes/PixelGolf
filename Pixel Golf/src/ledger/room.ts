@@ -336,7 +336,18 @@ export const MESSAGES = {
   myAchievements: Schemas.Map({ json: Schemas.String }),
 
   /** Server -> everyone: someone just earned an achievement, for Cooer. */
-  achieved: Schemas.Map({ wallet: Schemas.String, name: Schemas.String, id: Schemas.String })
+  achieved: Schemas.Map({ wallet: Schemas.String, name: Schemas.String, id: Schemas.String }),
+
+  // Codes (added 2026-11-02)
+
+  /** Scene -> server: redeem a code typed into Settings (Codes tab). Checked on the server. */
+  redeem: Schemas.Map({ code: Schemas.String }),
+
+  /**
+   * Server -> one player: what the code did. ok false: not a code (message says so). tester true:
+   * everything is unlocked for this visit (Settings "Tester" code; the next hello ends it).
+   */
+  redeemed: Schemas.Map({ ok: Schemas.Boolean, tester: Schemas.Boolean, message: Schemas.String })
 }
 
 export const room = registerMessages(MESSAGES)

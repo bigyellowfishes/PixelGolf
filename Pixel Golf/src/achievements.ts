@@ -107,7 +107,8 @@ export function setupAchievements(): void {
     }
     scoredWith.add(s.club)
     if (scoredWith.has('wedge') && scoredWith.has('iron') && scoredWith.has('driver')) earn('full-bag')
-    const effect = profile.equipped.ballProp ?? ''
+    // The effect badges only count with an effect you've unlocked yourself (not the Tester code)
+    const effect = profile.tester ? '' : profile.equipped.ballProp ?? ''
     if (effect === 'prop-pigeon') earn('pigeon-post')
     if (effect === 'prop-boomerang') earn('it-came-back')
     if (effect === 'prop-antigrav') earn('moonwalker')
@@ -155,14 +156,17 @@ export function setupAchievements(): void {
     if (profile.level >= 50) earn('level-50')
     if (profile.points >= 100000) earn('pixel-rich')
 
-    // Bought anything that costs Pixel Points
-    if (profile.owned.some((id) => (CATALOGUE.find((c) => c.id === id)?.price ?? 0) > 0)) earn('window-shopper')
-    const hat = profile.equipped.hat
-    if (hat && hat !== NO_HAT) earn('dressed-for-it')
-    const effects = CATALOGUE.filter((c) => c.kind === 'ballProp' && c.id !== 'prop-classic')
-    if (effects.length && effects.every((c) => profile.owned.indexOf(c.id) >= 0)) earn('collector')
-    const allHats = CATALOGUE.filter((c) => c.kind === 'hat' && c.id !== NO_HAT)
-    if (allHats.length && allHats.every((h) => profile.owned.indexOf(h.id) >= 0)) earn('mad-hatter')
+    // What you own and wear: not while the Tester code has unlocked everything for this visit
+    if (!profile.tester) {
+      // Bought anything that costs Pixel Points
+      if (profile.owned.some((id) => (CATALOGUE.find((c) => c.id === id)?.price ?? 0) > 0)) earn('window-shopper')
+      const hat = profile.equipped.hat
+      if (hat && hat !== NO_HAT) earn('dressed-for-it')
+      const effects = CATALOGUE.filter((c) => c.kind === 'ballProp' && c.id !== 'prop-classic')
+      if (effects.length && effects.every((c) => profile.owned.indexOf(c.id) >= 0)) earn('collector')
+      const allHats = CATALOGUE.filter((c) => c.kind === 'hat' && c.id !== NO_HAT)
+      if (allHats.length && allHats.every((h) => profile.owned.indexOf(h.id) >= 0)) earn('mad-hatter')
+    }
 
     if (stats.ready) {
       const hits = stats.hits

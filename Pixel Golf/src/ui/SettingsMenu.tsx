@@ -1,25 +1,32 @@
 /** @jsx ReactEcs.createElement */
 import ReactEcs from '@dcl/sdk/react-ecs'
-import { UiEntity, Label } from '@dcl/sdk/react-ecs'
+import { UiEntity, Label, Input } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, promptsEnabled, toggleBallCam, toggleOrbitCam, togglePrompts } from '../game'
 import { playUi } from '../sfx'
 import { menuReopenBlocked } from '../menuGuard'
-import { amIAdmin, sendAdminReset } from '../ledger/client'
+import { amIAdmin, sendAdminReset, sendRedeem, onRedeemed, profile } from '../ledger/client'
 import { toggleDevPanel, devPanel } from './DevPanel'
 import { forTouch } from '../mobile'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 import { audio, VOLUME_STEPS, toggleMusic, setMusicVolume, toggleVoice, setVoiceVolume } from '../audio'
 import { feed, toggleIgnoreFeed } from '../shotFeed'
 
-// The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx).
-// Holds the Ball cam on/off switch (only here now: key 1 picks the wedge) and the Orbit camera switch.
-// Then Ignore notifications (the shot feed pills stop popping up: shotFeed.ts), and Music and
-// Commentary, each with an on/off switch and a volume bar (audio.ts).
-// Admins (ADMIN in ledger/rules.ts) also get a Reset ledger row. It takes two presses.
+// The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx), in tabs:
+//   - Visual: Ball cam (only here now: key 1 picks the wedge), Orbit camera, Prompts, and Ignore
+//     notifications (the shot feed pills stop popping up: shotFeed.ts)
+//   - Audio: Music and Commentary, each with an on/off switch and a volume bar (audio.ts)
+//   - Codes: Redeem a code. "Tester" unlocks everything in the shop for this visit (CODES in
+//     ledger/server.ts, which checks it)
+//   - Developer (admins only, ADMIN in ledger/rules.ts): the Dev panel, and Reset ledger, which
+//     takes two presses
+
+export type SettingsTab = 'visual' | 'audio' | 'codes' | 'developer'
 
 export interface State {
   display: 'flex' | 'none'
+  /** Which tab is showing */
+  tab: SettingsTab
   ballCamOn: boolean
   orbitCamOn: boolean
   promptsOn: boolean
@@ -46,6 +53,7 @@ let resetArmedUntil = 0
 
 export const state: State = {
   display: 'none',
+  tab: 'visual',
   ballCamOn: true,
   orbitCamOn: false,
   promptsOn: true,
@@ -112,6 +120,29 @@ function pressResetLedger({ state, props }: UiAction) {
   sendAdminReset()
   state.display = 'none'
   playUi('ui_close')
+}
+
+// ---- Codes ----
+/** What's typed in the code box, and the answer to the last code sent */
+let codeText = ''
+let codeAnswer = { text: '', ok: false }
+onRedeemed((r) => {
+  codeAnswer = { text: r.message, ok: r.ok }
+  playUi(r.ok ? 'ui_select' : 'ui_click')
+})
+
+function redeemCode(): void {
+  const code = codeText.trim()
+  if (!code) return
+  codeAnswer = { text: 'Checking...', ok: true }
+  sendRedeem(code)
+  playUi('ui_click')
+}
+
+function showTab(tab: SettingsTab): void {
+  if (state.tab === tab) return
+  state.tab = tab
+  playUi('ui_select')
 }
 
 const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
@@ -192,6 +223,33 @@ function soundRow(key: string, title: string, on: boolean, step: number, onToggl
   )
 }
 
+/** A tab along the top: blue when it's showing (the same as the Backpack's tabs) */
+function tabButton(label: string, tab: SettingsTab, t: ReturnType<typeof useInteraction>) {
+  const active = state.tab === tab
+  return (
+    <UiEntity key={`settings-tab-${tab}`} {...t}>
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={16} color={active ? WHITE : NAVY} textAlign="middle-center" uiTransform={{ width: 112, height: 30 }} />
+    </UiEntity>
+  )
+}
+
+function tabStyle(tab: SettingsTab) {
+  const active = state.tab === tab
+  return useInteraction(
+    {
+      base: {
+        uiTransform: { width: 118, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, margin: { left: 4, right: 4 } },
+        uiBackground: { color: WHITE },
+        onMouseDown: () => showTab(tab)
+      },
+      // Only the tabs not showing light up on hover (on the blue one it washed out the white text)
+      hover: active ? undefined : { uiBackground: { color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } } },
+      active: { uiBackground: { color: BLUE } }
+    },
+    active
+  )
+}
+
 export function SettingsMenu(props: {}) {
   // The settings live in game.ts; mirror them here for the switches and labels
   state.ballCamOn = ballCamEnabled
@@ -202,6 +260,8 @@ export function SettingsMenu(props: {}) {
   state.promptsLabel = promptsEnabled ? 'On' : 'Off'
   state.promptsText = 'Instructions on screen, like how to set your power. The tutorial always shows them.'
   state.isAdmin = amIAdmin()
+  // The Developer tab is only there for admins
+  if (state.tab === 'developer' && !state.isAdmin) state.tab = 'visual'
   state.resetArmed = Date.now() < resetArmedUntil
   state.resetLabel = state.resetArmed ? 'Sure?' : 'Reset'
   state.ballCamText = 'Follow the ball after each shot.'
@@ -211,6 +271,12 @@ export function SettingsMenu(props: {}) {
       ? 'Press again to wipe everyone. This can\'t be undone.'
       : 'Wipes everyone\'s XP, points, bests and leaderboards. Everyone redoes the tutorial.'
   )
+
+  // Every tab's style is worked out every time (it's a hook), the Developer one only drawn for admins
+  const visualTab = tabStyle('visual')
+  const audioTab = tabStyle('audio')
+  const codesTab = tabStyle('codes')
+  const developerTab = tabStyle('developer')
 
   const closeButton = useInteraction({
     base: {
@@ -360,7 +426,7 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{
             width: 560,
-            height: state.isAdmin ? 846 : 672,
+            height: 548,
             flexDirection: 'column',
             borderRadius: 28,
             borderWidth: 4,
@@ -412,8 +478,18 @@ export function SettingsMenu(props: {}) {
             </UiEntity>
           </UiEntity>
 
+          {/* Tabs */}
+          <UiEntity uiTransform={{ width: '100%', height: 64, flexShrink: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+            {tabButton('Visual', 'visual', visualTab)}
+            {tabButton('Audio', 'audio', audioTab)}
+            {tabButton('Codes', 'codes', codesTab)}
+            {state.isAdmin ? tabButton('Developer', 'developer', developerTab) : null}
+          </UiEntity>
+
           {/* Rows */}
-          <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'column', padding: { top: 18, right: 24, bottom: 20, left: 24 } }}>
+          <UiEntity uiTransform={{ width: '100%', flexGrow: 1, flexDirection: 'column', padding: { top: 4, right: 24, bottom: 20, left: 24 } }}>
+            {/* ---- Visual ---- */}
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', display: state.tab === 'visual' ? 'flex' : 'none' }}>
             {/* Ball cam */}
             <UiEntity
               uiTransform={{
@@ -591,9 +667,84 @@ export function SettingsMenu(props: {}) {
               </UiEntity>
             </UiEntity>
 
-            {/* Sound */}
-            {soundRow('music', 'Music', audio.musicOn, audio.musicVol, toggleMusic, setMusicVolume)}
-            {soundRow('voice', 'Commentary', audio.voiceOn, audio.voiceVol, toggleVoice, setVoiceVolume)}
+            </UiEntity>
+
+            {/* ---- Audio ---- */}
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: -14 }, display: state.tab === 'audio' ? 'flex' : 'none' }}>
+              {soundRow('music', 'Music', audio.musicOn, audio.musicVol, toggleMusic, setMusicVolume)}
+              {soundRow('voice', 'Commentary', audio.voiceOn, audio.voiceVol, toggleVoice, setVoiceVolume)}
+            </UiEntity>
+
+            {/* ---- Codes ---- */}
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', display: state.tab === 'codes' ? 'flex' : 'none' }}>
+              <UiEntity
+                uiTransform={{ width: '100%', flexDirection: 'column', padding: { top: 16, left: 20, right: 18, bottom: 18 }, borderRadius: 20, borderWidth: 2, borderColor: EDGE }}
+                uiBackground={{ color: WHITE }}
+              >
+                <Label font="sans-serif" fontSrc={FONT_BOLD} value="Redeem a code" fontSize={20} color={NAVY} textAlign="middle-left" uiTransform={{ width: '100%', height: 28 }} />
+                <Label
+                  font="sans-serif"
+                  fontSrc={FONT_REGULAR}
+                  value="Got a code? Type it in and press Redeem."
+                  fontSize={13}
+                  textWrap="wrap"
+                  color={GREY}
+                  textAlign="top-left"
+                  uiTransform={{ width: 460, height: 22, margin: { top: 4 } }}
+                />
+                <UiEntity uiTransform={{ width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', margin: { top: 10 } }}>
+                  {/* Just the explorer's own text box (it draws its own outline: a box round it showed as two) */}
+                  <UiEntity uiTransform={{ flexGrow: 1, height: 44, justifyContent: 'center' }}>
+                    <Input
+                      font="sans-serif"
+                      fontSrc={FONT_REGULAR}
+                      placeholder="Enter code"
+                      fontSize={16}
+                      color={NAVY}
+                      placeholderColor={{ r: 0.6, g: 0.64, b: 0.68, a: 1 }}
+                      textAlign="middle-left"
+                      onChange={(v) => (codeText = v)}
+                      onSubmit={(v) => {
+                        codeText = v
+                        redeemCode()
+                      }}
+                      uiTransform={{ width: '100%', height: 44 }}
+                    />
+                  </UiEntity>
+                  <UiEntity
+                    uiTransform={{ width: 110, height: 40, justifyContent: 'center', alignItems: 'center', margin: { left: 12 }, borderRadius: 20 }}
+                    uiBackground={{ color: BLUE }}
+                    onMouseDown={() => redeemCode()}
+                  >
+                    <Label font="sans-serif" fontSrc={FONT_BOLD} value="Redeem" fontSize={16} color={WHITE} textAlign="middle-center" uiTransform={{ width: 100, height: 30 }} />
+                  </UiEntity>
+                </UiEntity>
+                <Label
+                  font="sans-serif"
+                  fontSrc={FONT_REGULAR}
+                  value={codeAnswer.text}
+                  fontSize={14}
+                  textWrap="wrap"
+                  color={codeAnswer.ok ? GREEN : { r: 0.773, g: 0.192, b: 0.192, a: 1 }}
+                  textAlign="middle-left"
+                  uiTransform={{ width: 460, height: 24, margin: { top: 10 }, display: codeAnswer.text ? 'flex' : 'none' }}
+                />
+              </UiEntity>
+              {/* While the Tester code is on */}
+              <Label
+                font="sans-serif"
+                fontSrc={FONT_REGULAR}
+                value="Tester mode is on: everything in the shop is unlocked until you leave."
+                fontSize={13}
+                textWrap="wrap"
+                color={GREY}
+                textAlign="middle-left"
+                uiTransform={{ width: 500, height: 22, margin: { top: 12 }, display: profile.tester ? 'flex' : 'none' }}
+              />
+            </UiEntity>
+
+            {/* ---- Developer (admins only) ---- */}
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: -14 }, display: state.tab === 'developer' && state.isAdmin ? 'flex' : 'none' }}>
 
             {/* Admin: the dev panel (hot target, pretend players, wind). Only drawn for admins */}
             <UiEntity
@@ -687,6 +838,7 @@ export function SettingsMenu(props: {}) {
                   uiTransform={{ width: 90, height: 30 }}
                 />
               </UiEntity>
+            </UiEntity>
             </UiEntity>
           </UiEntity>
         </UiEntity>

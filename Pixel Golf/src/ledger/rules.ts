@@ -274,10 +274,11 @@ export const HAT_COLOURS: { id: string; name: string; rgb: { r: number; g: numbe
   { id: 'white', name: 'White', rgb: { r: 0.86, g: 0.86, b: 0.86 } },
   { id: 'black', name: 'Black', rgb: { r: 0.06, g: 0.06, b: 0.06 } }
 ]
+// Each style unlocks at a level, in every colour at once (the unlock ladder: see CATALOGUE)
 export const HAT_STYLES: { id: string; name: string; level: number; price: number }[] = [
-  { id: 'cap', name: 'Golf Cap', level: 1, price: 0 },
-  { id: 'visor', name: 'Visor', level: 1, price: 0 },
-  { id: 'bucket', name: 'Bucket Hat', level: 1, price: 0 }
+  { id: 'cap', name: 'Golf Cap', level: 2, price: 0 },
+  { id: 'visor', name: 'Visor', level: 11, price: 0 },
+  { id: 'bucket', name: 'Bucket Hat', level: 22, price: 0 }
 ]
 export const NO_HAT = 'hat-none'
 
@@ -314,27 +315,33 @@ function hats(): Cosmetic[] {
 /**
  * The clubhouse shop. Cosmetic only: none of these change how far or how
  * straight a ball flies. Placeholder names and prices until the art exists.
+ *
+ * The unlock ladder (2026-11-02): everything is free but level locked, so levelling up is what
+ * opens the shop. A free item is yours the moment you reach its level (server.ts ownedIds), and
+ * the level-up card lists what it unlocked. The ladder runs to level 50 (LEVELS.max): the
+ * tutorial takes a new player to level 2 (Red Ball and the Golf Cap), and the Pigeon effect is last. Change a number here to move an item up or down the ladder; the server
+ * checks the same numbers. The "Tester" code (Settings, Codes) unlocks the lot for one visit.
  */
 export const CATALOGUE: Cosmetic[] = [
   { id: 'ball-classic', kind: 'ballVis', name: 'Classic Ball',  level: 1, price: 0, model: 'assets/Balls/Ball_Classic.glb' },
-  { id: 'ball-red',     kind: 'ballVis', name: 'Red Ball',      level: 1, price: 0, model: 'assets/Balls/Ball_Red.glb' },
-  { id: 'ball-orange',  kind: 'ballVis', name: 'Orange Ball',   level: 1, price: 0, model: 'assets/Balls/Ball_Orange.glb' },
-  { id: 'ball-yellow',  kind: 'ballVis', name: 'Yellow Ball',   level: 1, price: 0, model: 'assets/Balls/Ball_Yellow.glb' },
-  { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Green.glb' },
-  { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 1, price: 0, model: 'assets/Balls/Ball_Blue.glb' },
-  { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 1, price: 0, model: 'assets/Balls/Ball_Black.glb' },
+  { id: 'ball-red',     kind: 'ballVis', name: 'Red Ball',      level: 2, price: 0, model: 'assets/Balls/Ball_Red.glb' },
+  { id: 'ball-orange',  kind: 'ballVis', name: 'Orange Ball',   level: 5, price: 0, model: 'assets/Balls/Ball_Orange.glb' },
+  { id: 'ball-yellow',  kind: 'ballVis', name: 'Yellow Ball',   level: 9, price: 0, model: 'assets/Balls/Ball_Yellow.glb' },
+  { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 14, price: 0, model: 'assets/Balls/Ball_Green.glb' },
+  { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 20, price: 0, model: 'assets/Balls/Ball_Blue.glb' },
+  { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 30, price: 0, model: 'assets/Balls/Ball_Black.glb' },
   // Flies once it's hit, instead of rolling (src/pigeonBall.ts)
-  { id: 'ball-pigeon',  kind: 'ballVis', name: 'Pigeon',        level: 1, price: 0, model: 'assets/Balls/Ball_Pigeon.glb' },
+  { id: 'ball-pigeon',  kind: 'ballVis', name: 'Pigeon',        level: 45, price: 0, model: 'assets/Balls/Ball_Pigeon.glb' },
   // Effects (how the ball flies, BALL_PROFILES below). Shown as "Effects" in the shop; the ids stay
   // as they were so what players own and have equipped is kept.
   { id: 'prop-classic', kind: 'ballProp', name: 'Standard', level: 1, price: 0},
-  { id: 'prop-Styro', kind: 'ballProp', name: 'Lightweight', level: 1, price: 0},
-  { id: 'prop-bouncy', kind: 'ballProp', name: 'Super Bounce', level: 1, price: 0},
-  { id: 'prop-antigrav', kind: 'ballProp', name: 'Moon Physics', level: 1, price: 0},
-  { id: 'prop-bowling', kind: 'ballProp', name: 'Heavyweight', level: 1, price: 0},
-  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang', level: 1, price: 0},
-  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon', level: 1, price: 0},
-  { id: 'prop-egg', kind: 'ballProp', name: 'Crazy Wobble', level: 1, price: 0},
+  { id: 'prop-Styro', kind: 'ballProp', name: 'Lightweight', level: 4, price: 0},
+  { id: 'prop-bouncy', kind: 'ballProp', name: 'Super Bounce', level: 8, price: 0},
+  { id: 'prop-bowling', kind: 'ballProp', name: 'Heavyweight', level: 12, price: 0},
+  { id: 'prop-antigrav', kind: 'ballProp', name: 'Moon Physics', level: 18, price: 0},
+  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang', level: 25, price: 0},
+  { id: 'prop-egg', kind: 'ballProp', name: 'Crazy Wobble', level: 35, price: 0},
+  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon', level: 50, price: 0},
   { id: 'club-classic', kind: 'club', name: 'Classic Clubs', level: 1, price: 0 },
   ...hats(),
 ]

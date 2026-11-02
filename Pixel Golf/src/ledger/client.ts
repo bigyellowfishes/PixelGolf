@@ -44,7 +44,14 @@ export const profile = {
    * Whether the server has this player down as having finished the tutorial round (the
    * 'tutorial' message). Starts true so nothing happens until the server explicitly says false.
    */
-  tutorialDone: true
+  tutorialDone: true,
+  /** The Tester code is on for this visit: everything in the shop is unlocked (Settings, Codes) */
+  tester: false
+}
+
+/** The level that decides what's unlocked: your level, or everything for a tester */
+export function unlockLevel(): number {
+  return profile.tester ? 9999 : profile.level
 }
 
 /**
@@ -332,6 +339,17 @@ export function submitRound(balls: BallResult[]): void {
 
 export function buyCosmetic(id: string): void {
   void room.send('buy', { id })
+}
+
+/** Sends a code typed into Settings (Codes tab). The answer comes back to onRedeemed. */
+export function sendRedeem(code: string): void {
+  void room.send('redeem', { code })
+}
+
+const redeemedFns: ((r: { ok: boolean; tester: boolean; message: string }) => void)[] = []
+/** The server's answer to a code */
+export function onRedeemed(fn: (r: { ok: boolean; tester: boolean; message: string }) => void): void {
+  redeemedFns.push(fn)
 }
 
 /** Asks the server to note an achievement down (achievements.ts). It keeps each one once. */
@@ -657,6 +675,11 @@ export function setupLedgerClient(): void {
     for (const fn of rolledFns) fn({ ...d })
   })
 
+  room.onMessage('redeemed', (d) => {
+    profile.tester = d.tester
+    for (const fn of redeemedFns) fn({ ok: d.ok, tester: d.tester, message: d.message })
+  })
+
   room.onMessage('refused', (d) => {
     for (const fn of refusedFns) fn(d.reason)
   })
@@ -666,6 +689,8 @@ export function setupLedgerClient(): void {
   // tutorial for everyone.
   room.onMessage('ledgerReset', (d) => {
     profile.ready = false
+    // Saying hello again ends the Tester code on the server too
+    profile.tester = false
     profile.xp = 0
     profile.level = 1
     profile.levelXp = 0

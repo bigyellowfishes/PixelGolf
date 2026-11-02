@@ -3,7 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { shop, closeShop, ONLYSHOWBALLS } from '../shop'
-import { profile, buyCosmetic, equipCosmetic } from '../ledger/client'
+import { profile, buyCosmetic, equipCosmetic, unlockLevel } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind, HAT_COLOURS, HAT_STYLES, NO_HAT, itemById } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { onPhone } from '../mobile'
@@ -101,7 +101,7 @@ function pickHat(item: Cosmetic) {
 
 function swatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
   const on = profile.equipped[item.kind] === item.id
-  const locked = profile.level < item.level
+  const locked = unlockLevel() < item.level
   return (
     <UiEntity
       key={`sw-${item.id}`}
@@ -117,7 +117,7 @@ function swatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
 function styleRow(style: (typeof HAT_STYLES)[number], width: number) {
   const items = HAT_COLOURS.map((c) => ({ c, item: itemById(`hat-${style.id}-${c.id}`) })).filter((x) => !!x.item)
   const worn = items.find((x) => profile.equipped.hat === x.item!.id)
-  const note = profile.level < style.level ? `Level ${style.level}` : style.price > 0 ? `${fmt(style.price)} PP each` : 'Free'
+  const note = unlockLevel() < style.level ? `Level ${style.level}` : style.price > 0 ? `${fmt(style.price)} PP each` : 'Free'
   return (
     <UiEntity
       key={`style-${style.id}`}
@@ -166,7 +166,7 @@ function rowAction(item: Cosmetic): RowAction {
   const owned = profile.owned.indexOf(item.id) >= 0
   if (owned && profile.equipped[item.kind] === item.id) return { label: 'Equipped', fill: GREEN, text: WHITE, border: GREEN }
   if (owned) return { label: 'Equip', fill: WHITE, text: BLUE, border: BLUE, onClick: () => equip(item) }
-  if (profile.level < item.level) return { label: `Level ${item.level}`, fill: CLEAR, text: GREY, border: RIM }
+  if (unlockLevel() < item.level) return { label: `Level ${item.level}`, fill: CLEAR, text: GREY, border: RIM }
   const afford = profile.points >= item.price
   return {
     label: item.price > 0 ? `${fmt(item.price)} PP` : 'Free',

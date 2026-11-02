@@ -3,7 +3,7 @@ import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { PlayerStats } from './PlayerStats'
-import { profile, equipCosmetic, buyCosmetic } from '../ledger/client'
+import { profile, equipCosmetic, buyCosmetic, unlockLevel } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind, HAT_COLOURS, HAT_STYLES, NO_HAT, itemById } from '../ledger/rules'
 import { openHatFit } from './HatFitPanel'
 import { AchievementsTab } from './AchievementsTab'
@@ -179,7 +179,7 @@ function hatSwatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
       uiBackground={{ color: on ? PALE_BLUE : WHITE }}
       onMouseDown={() => wearHat(item)}
     >
-      <UiEntity uiTransform={{ width: on ? 16 : 18, height: on ? 16 : 18, borderRadius: 9 }} uiBackground={{ color: { ...rgb, a: profile.level < item.level ? 0.3 : 1 } }} />
+      <UiEntity uiTransform={{ width: on ? 16 : 18, height: on ? 16 : 18, borderRadius: 9 }} uiBackground={{ color: { ...rgb, a: unlockLevel() < item.level ? 0.3 : 1 } }} />
     </UiEntity>
   )
 }

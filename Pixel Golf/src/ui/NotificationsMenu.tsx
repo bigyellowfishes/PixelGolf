@@ -521,6 +521,8 @@ export function NotificationsDrawer(props: {}) {
   const count = feed.history.length
   // Up to 9, then 9+ (it's a small badge)
   const unread = feed.unread > 9 ? '9+' : String(feed.unread)
+  // The unread badge: round for one digit, a little wider for 9+
+  const badgeW = (unread.length > 1 ? 24 : 17) * k
   // On a phone the shut bell hides while another menu is open: the phone's short screen puts the
   // menus right under it, and it covered their tops
   const tabHidden = phone && shown <= 0.001 && !drag && state.display !== 'flex' && anyMenuShowing()
@@ -644,7 +646,7 @@ export function NotificationsDrawer(props: {}) {
             uiTransform={{
               positionType: 'absolute',
               position: { top: 2 * k, left: 37 * k },
-              width: (unread.length > 1 ? 17 + (unread.length - 1) * 6 : 17) * k,
+              width: badgeW,
               height: 17 * k,
               justifyContent: 'center',
               alignItems: 'center',
@@ -656,7 +658,8 @@ export function NotificationsDrawer(props: {}) {
             }}
             uiBackground={{ color: BADGE }}
           >
-            <Label font="sans-serif" fontSrc={FONT_BOLD} value={unread} fontSize={10 * k} color={WHITE} textAlign="middle-center" uiTransform={{ width: 'auto', height: 15 * k }} />
+            {/* One line, the badge's own width ("9+" wrapped onto two lines in an 'auto' width) */}
+            <Label font="sans-serif" fontSrc={FONT_BOLD} value={unread} fontSize={10 * k} textWrap="nowrap" color={WHITE} textAlign="middle-center" uiTransform={{ width: badgeW, height: 15 * k }} />
           </UiEntity>
         </UiEntity>
       </UiEntity>

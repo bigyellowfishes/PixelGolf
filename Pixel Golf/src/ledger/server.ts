@@ -612,10 +612,44 @@ function ledgerSystem(dt: number): void {
 // ---------------------------------------------------------------------------
 
 /** Bought, plus everything free that their level has unlocked. */
-function ownedIds(wallet: Wallet): string[] {
+function ownedIds(wallet: Wallet, address?: string): string[] {
+  // A tester (the "Tester" code) has the whole shop for this visit
+  if (address && testers.has(address)) return Array.from(new Set([...CATALOGUE.filter((i) => !i.shelved).map((i) => i.id), ...wallet.owned]))
   const level = levelFor(wallet.xp)
   const free = CATALOGUE.filter((i) => i.price <= 0 && i.level <= level).map((i) => i.id)
   return Array.from(new Set([...free, ...wallet.owned]))
+}
+
+// ---------------------------------------------------------------------------
+// Codes (Settings, Codes tab)
+// ---------------------------------------------------------------------------
+
+/**
+ * Codes players can type in Settings. Case and spaces don't matter. "tester" unlocks every item in
+ * the shop for this visit only: nothing is bought or kept, and the next hello (rejoining) ends it,
+ * putting back anything they'd equipped that their level hasn't reached.
+ */
+const CODES: Record<string, 'tester'> = { tester: 'tester' }
+/** Wallets that have redeemed the Tester code this visit (not stored) */
+const testers = new Set<string>()
+
+/** Anything equipped that they don't own (or no longer can use) goes back to the starter item */
+function tidyEquipped(address: string, wallet: Wallet): boolean {
+  const owned = ownedIds(wallet, address)
+  let changed = false
+  for (const kind of Object.keys(DEFAULT_EQUIPPED) as (keyof typeof DEFAULT_EQUIPPED)[]) {
+    const id = wallet.equipped[kind]
+    if (id && owned.indexOf(id) < 0) {
+      wallet.equipped[kind] = DEFAULT_EQUIPPED[kind]
+      changed = true
+    }
+  }
+  if (changed) {
+    dirty.add(address)
+    if (noteBall(address, wallet)) sendBallLooks()
+    if (noteOutfit(address, wallet)) sendOutfits()
+  }
+  return changed
 }
 
 function dailyIn(wallet: Wallet): number {
@@ -632,7 +666,7 @@ function sendLedger(address: string, wallet: Wallet): void {
       best: wallet.best,
       bestMulti: wallet.bestMulti,
       rounds: wallet.rounds,
-      owned: JSON.stringify(ownedIds(wallet)),
+      owned: JSON.stringify(ownedIds(wallet, address)),
       equipped: JSON.stringify(wallet.equipped),
       dailyIn: dailyIn(wallet),
       durable: isWallet(address)
@@ -711,6 +745,10 @@ export function runLedger(): void {
     if (!address) return
     seen.set(address, now())
     const wallet = await load(address)
+
+    // A new visit: the Tester code (if they used it last time) has run out
+    testers.delete(address)
+    tidyEquipped(address, wallet)
 
     const name = tidyName(data.name ?? '', address)
     if (name !== wallet.name) {
@@ -1156,7 +1194,7 @@ export function runLedger(): void {
     const wallet = await load(address)
     const item = itemById(data.id)
     if (!item) return
-    if (ownedIds(wallet).indexOf(item.id) >= 0) return
+    if (ownedIds(wallet, address).indexOf(item.id) >= 0) return
     if (!canEarn(address)) {
       void room.send('refused', { reason: 'Connect a wallet to keep anything you buy.' }, { to: [address] })
       return
@@ -1183,13 +1221,28 @@ export function runLedger(): void {
     if (!address) return
     const wallet = await load(address)
     const item = itemById(data.id)
-    if (!item || ownedIds(wallet).indexOf(item.id) < 0) return
+    if (!item || ownedIds(wallet, address).indexOf(item.id) < 0) return
     if (wallet.equipped[item.kind] === item.id) return
     wallet.equipped[item.kind] = item.id
     touch(address, wallet)
     sendLedger(address, wallet)
     if (noteBall(address, wallet)) sendBallLooks()
     if (noteOutfit(address, wallet)) sendOutfits()
+  })
+
+  // A code typed into Settings (Codes tab)
+  room.onMessage('redeem', async (data, context) => {
+    const address = context?.from
+    if (!address) return
+    const code = CODES[String(data.code ?? '').replace(/\s+/g, '').toLowerCase()]
+    if (!code) {
+      void room.send('redeemed', { ok: false, tester: testers.has(address), message: "That code doesn't work." }, { to: [address] })
+      return
+    }
+    const wallet = await load(address)
+    testers.add(address)
+    void room.send('redeemed', { ok: true, tester: true, message: 'Tester mode: everything is unlocked until you leave.' }, { to: [address] })
+    sendLedger(address, wallet)
   })
 
   room.onMessage('hatFit', async (data, context) => {
