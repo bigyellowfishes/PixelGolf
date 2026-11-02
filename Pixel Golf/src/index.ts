@@ -531,9 +531,8 @@ function TEST_Particles() {
     // Check if the player entity transform is available
     if (!Transform.has(engine.PlayerEntity)) return
 
-    const constDir = 0
-    const constSpeed = (0 + effectiveWind().speed) * .2
-    const thisWind = (effectiveWind().dir + constDir / 180) * Math.PI
+    const w = shotWind()
+    const windSpeed = Math.sqrt(w.x * w.x + w.z * w.z)
 
     const playerTransform = Transform.get(engine.PlayerEntity)
     const emitterTransform = Transform.getMutable(emitter)
@@ -541,7 +540,7 @@ function TEST_Particles() {
     // --- Dynamically update the particle system's force ---
     const particleSys = ParticleSystem.getMutable(emitter)
     if (particleSys.additionalForce) {
-      particleSys.additionalForce = Vector3.create(Math.sin(thisWind) * constSpeed, 0, Math.cos(thisWind) * constSpeed)
+      particleSys.additionalForce = Vector3.create(w.x * windSpeed, 0, w.z * windSpeed)
     }
 
     // Lock the emitter position to the player (with a 1-meter vertical offset)
