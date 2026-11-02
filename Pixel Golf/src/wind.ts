@@ -116,7 +116,7 @@ const COURSE_FAR = 90
 /** and this much wider than the line of bays, each side (m) */
 const COURSE_SIDE = 10
 /** Its height, and how high its middle is above the tees (m): from just off the grass to well up */
-const COURSE_HIGH = 12
+const COURSE_HIGH = 35
 const COURSE_Y = 6.5
 const TARGET_NAMES = /^(Red\d|Yellow\d|Green|Orange|Blue|White|Black)$/
 const TEE_NAMES = /^Ball_\d+$/
@@ -160,13 +160,13 @@ const STREAKS_A: Layer = {
   rate: 0.3,
   ratePerWind: 0.15,
   gustEvery: 1.7,
-  gustChance: 0.35,
+  gustChance: 0.3,
   gustCount: 2,
   gustPerWind: 2,
   lifetime: 3,
   max: 24,
   size: { start: 12, end: 22 },
-  grow: { start: 0.7, end: 1.1 },
+  grow: { start: 0, end: 1 },
   alpha: { start: 1, end: 1 },
   speed: 1
 }
@@ -176,13 +176,13 @@ const STREAKS_B: Layer = {
   rate: 0.2,
   ratePerWind: 0.1,
   gustEvery: 2.3,
-  gustChance: 0.3,
+  gustChance: 0.25,
   gustCount: 1,
   gustPerWind: 3,
   lifetime: 3.2,
   max: 16,
   size: { start: 10, end: 18 },
-  grow: { start: 0.7, end: 1.1 },
+  grow: { start: 0, end: 0.6 },
   alpha: { start: 1, end: 1 },
   speed: 0.85
 }
@@ -310,6 +310,7 @@ function windParticlesSystem(dt: number): void {
     }
   }
 
+  
   const camera = Transform.getOrNull(engine.CameraEntity)
   const wind = effectiveWind()
   const speed = wind.ready ? wind.speed : 0
