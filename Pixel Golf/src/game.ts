@@ -25,6 +25,7 @@ import { getPlayer } from '@dcl/sdk/players'
 import { HOT, ROUND_BALLS, ZONE_SCORES } from './ledger/rules'
 import { BallResult, isHot, submitRound, myBay, bayTakenBy, bayLockReason, askShot, sendShotDone, ServerShot, BayScore, tutorial, TUTORIAL_BAY, TUTORIAL_BALLS, SOLO_BAY, tutorialLesson, profile, shotWind } from './ledger/client'
 import { ShotPath, Vec3, launchVelocity, pathDuration, pathEnd, SIM_HZ } from './ballSim'
+import { isMobile } from '@dcl/sdk/platform'
 
 // The club in the player's hand, shared by every ball like the arrows
 let club: Club | undefined
@@ -42,21 +43,23 @@ const RETURN_HOLD_SECONDS = 0.15
 // follows a shot, hold the left mouse button (or touch) and drag to orbit around
 // the ball, or use A / D. W / S zoom in and out. Every shot starts from the default view.
 // ---------------------------------------------------------------------------
-const ORBIT_DEFAULT = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
+const ORBIT_DEFAULT_PC = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
+const ORBIT_DEFAULT_MOBILE = { pitch: 70, yaw: 90, distance: 20 } // degrees, degrees, metres
 const ORBIT_DRAG_SPEED = 0.25   // degrees per pixel dragged
 const ORBIT_KEY_SPEED = 90      // degrees per second with A / D
 const ORBIT_ZOOM_SPEED = 15     // metres per second with W / S
 const ORBIT_PITCH_LIMITS = { min: 8, max: 88 } // 8 = almost level with the ball, 88 = straight down
 const ORBIT_ZOOM_LIMITS = { min: 3, max: 40 }
 
-let orbitPitch = ORBIT_DEFAULT.pitch
-let orbitYaw = ORBIT_DEFAULT.yaw
-let orbitDistance = ORBIT_DEFAULT.distance
+let orbitPitch = isMobile() ? ORBIT_DEFAULT_MOBILE.pitch : ORBIT_DEFAULT_PC.pitch
+let orbitYaw = isMobile() ? ORBIT_DEFAULT_MOBILE.yaw : ORBIT_DEFAULT_PC.yaw
+let orbitDistance = isMobile() ? ORBIT_DEFAULT_MOBILE.distance : ORBIT_DEFAULT_PC.distance
+
 
 function resetOrbit(): void {
-  orbitPitch = ORBIT_DEFAULT.pitch
-  orbitYaw = ORBIT_DEFAULT.yaw
-  orbitDistance = ORBIT_DEFAULT.distance
+  orbitPitch = isMobile() ? ORBIT_DEFAULT_MOBILE.pitch : ORBIT_DEFAULT_PC.pitch
+  orbitYaw = isMobile() ? ORBIT_DEFAULT_MOBILE.yaw : ORBIT_DEFAULT_PC.yaw
+  orbitDistance = isMobile() ? ORBIT_DEFAULT_MOBILE.distance : ORBIT_DEFAULT_PC.distance
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
