@@ -7,7 +7,7 @@ import { onPhone } from '../mobile'
 import { playUi } from '../sfx'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
-// "Support Pixel Golf?" with Donate and Not now: the AFK practice box (AfkPrompt.tsx), word for
+// "Wall of Honor" with Donate and Not now: the AFK practice box (AfkPrompt.tsx), word for
 // word in its style. Pops up when you walk up to the Wall of Honour (donate.ts). It counts as a
 // menu, so F closes it too (index.ts).
 
@@ -18,6 +18,7 @@ const BLUE = { r: 0.075, g: 0.533, b: 0.722, a: 1 }
 const BLUE_HOVER = { r: 0.161, g: 0.694, b: 0.898, a: 1 }
 const RIM = { r: 0.788, g: 0.827, b: 0.859, a: 1 }
 const PALE_BLUE = { r: 0.839, g: 0.949, b: 0.988, a: 1 }
+const GREY = { r: 0.337, g: 0.388, b: 0.435, a: 1 }
 
 function pressYes(): void {
   acceptDonate()
@@ -81,7 +82,7 @@ export function DonatePrompt(props: {}) {
         <Label
           font="sans-serif"
           fontSrc={FONT_BOLD}
-          value="Support Pixel Golf?"
+          value="Wall of Honor"
           fontSize={22}
           textWrap="wrap"
           color={NAVY}
@@ -91,12 +92,31 @@ export function DonatePrompt(props: {}) {
         <Label
           font="sans-serif"
           fontSrc={FONT_REGULAR}
-          value="Pixel Golf is free to play. If you're enjoying it, a donation through PayPal helps keep the range open and new things coming."
+          value="Pixel Golf is free to play. Enjoying the game? A donation through PayPal helps keep the range open and new things coming!"
           fontSize={14}
           textWrap="wrap"
-          color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
+          color={GREY}
           textAlign="middle-center"
-          uiTransform={{ width: 380, height: 62, margin: { top: 4, bottom: 18 } }}
+          uiTransform={{ width: 380, height: 62, margin: { top: 4 } }}
+        />
+        <Label
+          font="sans-serif"
+          fontSrc={FONT_REGULAR}
+          value="Leave a note on your PayPal donation with your username and it will appear here on our Wall of Honor."
+          fontSize={14}
+          textWrap="wrap"
+          color={GREY}
+          textAlign="middle-center"
+          uiTransform={{ width: 380, height: 62, margin: { top: 8 } }}
+        />
+        <Label
+          font="sans-serif"
+          fontSrc={FONT_BOLD}
+          value="Thank you."
+          fontSize={15}
+          color={NAVY}
+          textAlign="middle-center"
+          uiTransform={{ width: 380, height: 24, margin: { top: 8, bottom: 18 } }}
         />
         <UiEntity uiTransform={{ flexDirection: 'row', justifyContent: 'center' }}>
           <UiEntity {...yes}>
