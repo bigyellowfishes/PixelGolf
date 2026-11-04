@@ -105,7 +105,8 @@ export function setupMobileControls(menuOpen: () => boolean): void {
     const clubs = clubsOut && !tutorial.active
     TouchScreenControls.createOrReplace(engine.RootEntity, {
       hideJoystick: false,
-      hideCrosshair: false,
+      // No cross in the middle of the screen (2026-11-03): taps on things work without it
+      hideCrosshair: true,
       mainAction: InputAction.IA_PRIMARY,
       touchInputs: [
         { inputAction: InputAction.IA_PRIMARY, hide: false, icon: chip('key-e.png') },

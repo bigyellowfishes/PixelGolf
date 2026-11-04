@@ -1,8 +1,9 @@
 import { engine, Entity, Transform, AudioSource } from '@dcl/sdk/ecs'
 import { myBay } from './ledger/client'
 
-// The player's sound settings: background music and the commentator (voice.ts), each with an
-// on/off switch and a volume of 1 to 10 steps, set in the Settings panel and saved on the ledger.
+// The player's sound settings: background music, the commentator (voice.ts), the sound effects
+// (sfx.ts) and Cooer's coo (NotificationsMenu.tsx), each with an on/off switch and a volume of 1
+// to 10 steps, set in the Settings panel and saved on the ledger.
 //
 // The ledger stores settings as on/off switches only, so a volume is saved as one switch per step
 // (musicVol1 .. musicVol10), the same way the shot speed is: the step that's on is the volume.
@@ -13,13 +14,17 @@ export const audio = {
   musicOn: true,
   musicVol: 4,
   voiceOn: true,
-  voiceVol: 8
+  voiceVol: 8,
+  sfxOn: true,
+  sfxVol: 10,
+  cooOn: true,
+  cooVol: 10
 }
 
 /** The music track, in assets/sounds/music/ */
 const MUSIC_CLIP = 'assets/sounds/music/background.mp3'
-/** The loudest the music gets at full volume, so it sits under the game's sounds */
-const MUSIC_MAX = 0.6
+/** The loudest the music gets at full volume, so it sits under the game's sounds (halved from 0.6, 2026-11-03) */
+const MUSIC_MAX = 0.3
 
 let music: Entity | null = null
 
@@ -67,6 +72,16 @@ function setupPigeonSound(): void {
 export function setupMusic(): void {
   applyMusic()
   setupPigeonSound()
+}
+
+/** 0 to 1: how loud the sound effects should be right now (0 when switched off) */
+export function sfxLevel(): number {
+  return audio.sfxOn ? audio.sfxVol / VOLUME_STEPS : 0
+}
+
+/** 0 to 1: how loud Cooer's coo should be right now (0 when switched off) */
+export function cooLevel(): number {
+  return audio.cooOn ? audio.cooVol / VOLUME_STEPS : 0
 }
 
 /** 0 to 1: how loud the commentator should be right now (0 when switched off) */
@@ -118,6 +133,34 @@ export function setVoiceVolume(step: number): void {
   if (!audio.voiceOn) toggleVoice()
 }
 
+export function toggleSfx(): void {
+  audio.sfxOn = !audio.sfxOn
+  save('sfx', audio.sfxOn)
+}
+
+export function setSfxVolume(step: number): void {
+  const s = clampStep(step)
+  if (s === audio.sfxVol) return
+  save('sfxVol' + audio.sfxVol, false)
+  audio.sfxVol = s
+  save('sfxVol' + s, true)
+  if (!audio.sfxOn) toggleSfx()
+}
+
+export function toggleCoo(): void {
+  audio.cooOn = !audio.cooOn
+  save('coo', audio.cooOn)
+}
+
+export function setCooVolume(step: number): void {
+  const s = clampStep(step)
+  if (s === audio.cooVol) return
+  save('cooVol' + audio.cooVol, false)
+  audio.cooVol = s
+  save('cooVol' + s, true)
+  if (!audio.cooOn) toggleCoo()
+}
+
 function savedStep(saved: Record<string, boolean>, prefix: string): number {
   for (let i = 1; i <= VOLUME_STEPS; i++) if (saved[prefix + i] === true) return i
   return 0
@@ -127,6 +170,12 @@ function savedStep(saved: Record<string, boolean>, prefix: string): number {
 export function applySavedAudio(saved: Record<string, boolean>): void {
   if (typeof saved.music === 'boolean') audio.musicOn = saved.music
   if (typeof saved.voice === 'boolean') audio.voiceOn = saved.voice
+  if (typeof saved.sfx === 'boolean') audio.sfxOn = saved.sfx
+  if (typeof saved.coo === 'boolean') audio.cooOn = saved.coo
+  const sx = savedStep(saved, 'sfxVol')
+  if (sx) audio.sfxVol = sx
+  const c = savedStep(saved, 'cooVol')
+  if (c) audio.cooVol = c
   const m = savedStep(saved, 'musicVol')
   if (m) audio.musicVol = m
   const v = savedStep(saved, 'voiceVol')

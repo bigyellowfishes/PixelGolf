@@ -1,5 +1,7 @@
 import { achievementById } from './ledger/rules'
 import { onSavedSettings, saveSetting, onAchieved } from './ledger/client'
+import { getPlayer } from '@dcl/sdk/players'
+import { playUi } from './sfx'
 
 // The shot feed: "Cooer", little tweet-style notices that pop up at the top of the screen when
 // anyone in the range plays a great shot or a bad one (ui/NotificationsMenu.tsx draws them).
@@ -170,5 +172,8 @@ export function noteShot(who: string, name: string, zone: string, points: number
 onAchieved((a) => {
   const badge = achievementById(a.id)
   if (!badge) return
+  // My own badge: a jingle as well as the post
+  const me = getPlayer()?.userId ?? ''
+  if (me && a.wallet && a.wallet.toLowerCase() === me.toLowerCase()) playUi(badge.elite ? 'score_great' : 'score_good')
   post(true, a.wallet, a.name || 'Someone', line(badge.elite ? 'eliteBadge' : 'badge', { badge: badge.name }))
 })

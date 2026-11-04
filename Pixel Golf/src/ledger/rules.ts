@@ -274,11 +274,12 @@ export const HAT_COLOURS: { id: string; name: string; rgb: { r: number; g: numbe
   { id: 'white', name: 'White', rgb: { r: 0.86, g: 0.86, b: 0.86 } },
   { id: 'black', name: 'Black', rgb: { r: 0.06, g: 0.06, b: 0.06 } }
 ]
-// Each style unlocks at a level, in every colour at once (the unlock ladder: see CATALOGUE)
+// Each style unlocks at a level, in every colour at once, and each colour is bought separately
+// at the style's price (the unlock ladder: see CATALOGUE)
 export const HAT_STYLES: { id: string; name: string; level: number; price: number }[] = [
-  { id: 'cap', name: 'Golf Cap', level: 2, price: 0 },
-  { id: 'visor', name: 'Visor', level: 11, price: 0 },
-  { id: 'bucket', name: 'Bucket Hat', level: 22, price: 0 }
+  { id: 'cap', name: 'Golf Cap', level: 2, price: 75 },
+  { id: 'visor', name: 'Visor', level: 11, price: 150 },
+  { id: 'bucket', name: 'Bucket Hat', level: 22, price: 250 }
 ]
 export const NO_HAT = 'hat-none'
 
@@ -316,32 +317,34 @@ function hats(): Cosmetic[] {
  * The clubhouse shop. Cosmetic only: none of these change how far or how
  * straight a ball flies. Placeholder names and prices until the art exists.
  *
- * The unlock ladder (2026-11-02): everything is free but level locked, so levelling up is what
- * opens the shop. A free item is yours the moment you reach its level (server.ts ownedIds), and
- * the level-up card lists what it unlocked. The ladder runs to level 50 (LEVELS.max): the
+ * The unlock ladder (2026-11-02): every item is level locked, and costs Pixel Points once its level
+ * is reached (bought in the shop; the starter items are free). Prices rise with the level: a round
+ * pays about 20 PP plus 1 per 1,000 True Score (POINTS above), so the top items take a few dozen
+ * rounds of saving. A hat's price is for each colour. A free item (price 0) is yours the moment
+ * you reach its level (server.ts ownedIds), and the level-up card lists what each level opens up. The ladder runs to level 50 (LEVELS.max): the
  * tutorial takes a new player to level 2 (Red Ball and the Golf Cap), and the Pigeon effect is last. Change a number here to move an item up or down the ladder; the server
  * checks the same numbers. The "Tester" code (Settings, Codes) unlocks the lot for one visit.
  */
 export const CATALOGUE: Cosmetic[] = [
   { id: 'ball-classic', kind: 'ballVis', name: 'Classic Ball',  level: 1, price: 0, model: 'assets/Balls/Ball_Classic.glb' },
-  { id: 'ball-red',     kind: 'ballVis', name: 'Red Ball',      level: 2, price: 0, model: 'assets/Balls/Ball_Red.glb' },
-  { id: 'ball-orange',  kind: 'ballVis', name: 'Orange Ball',   level: 5, price: 0, model: 'assets/Balls/Ball_Orange.glb' },
-  { id: 'ball-yellow',  kind: 'ballVis', name: 'Yellow Ball',   level: 9, price: 0, model: 'assets/Balls/Ball_Yellow.glb' },
-  { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 14, price: 0, model: 'assets/Balls/Ball_Green.glb' },
-  { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 20, price: 0, model: 'assets/Balls/Ball_Blue.glb' },
-  { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 30, price: 0, model: 'assets/Balls/Ball_Black.glb' },
+  { id: 'ball-red',     kind: 'ballVis', name: 'Red Ball',      level: 2, price: 50, model: 'assets/Balls/Ball_Red.glb' },
+  { id: 'ball-orange',  kind: 'ballVis', name: 'Orange Ball',   level: 5, price: 150, model: 'assets/Balls/Ball_Orange.glb' },
+  { id: 'ball-yellow',  kind: 'ballVis', name: 'Yellow Ball',   level: 9, price: 250, model: 'assets/Balls/Ball_Yellow.glb' },
+  { id: 'ball-green',   kind: 'ballVis', name: 'Green Ball',    level: 14, price: 450, model: 'assets/Balls/Ball_Green.glb' },
+  { id: 'ball-blue',    kind: 'ballVis', name: 'Blue Ball',     level: 20, price: 650, model: 'assets/Balls/Ball_Blue.glb' },
+  { id: 'ball-black',   kind: 'ballVis', name: 'Black Ball',    level: 30, price: 1100, model: 'assets/Balls/Ball_Black.glb' },
   // Flies once it's hit, instead of rolling (src/pigeonBall.ts)
-  { id: 'ball-pigeon',  kind: 'ballVis', name: 'Pigeon',        level: 45, price: 0, model: 'assets/Balls/Ball_Pigeon.glb' },
+  { id: 'ball-pigeon',  kind: 'ballVis', name: 'Pigeon',        level: 45, price: 2000, model: 'assets/Balls/Ball_Pigeon.glb' },
   // Effects (how the ball flies, BALL_PROFILES below). Shown as "Effects" in the shop; the ids stay
   // as they were so what players own and have equipped is kept.
   { id: 'prop-classic', kind: 'ballProp', name: 'Standard', level: 1, price: 0},
-  { id: 'prop-Styro', kind: 'ballProp', name: 'Lightweight', level: 4, price: 0},
-  { id: 'prop-bouncy', kind: 'ballProp', name: 'Super Bounce', level: 8, price: 0},
-  { id: 'prop-bowling', kind: 'ballProp', name: 'Heavyweight', level: 12, price: 0},
-  { id: 'prop-antigrav', kind: 'ballProp', name: 'Moon Physics', level: 18, price: 0},
-  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang', level: 25, price: 0},
-  { id: 'prop-egg', kind: 'ballProp', name: 'Crazy Wobble', level: 35, price: 0},
-  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon', level: 50, price: 0},
+  { id: 'prop-Styro', kind: 'ballProp', name: 'Lightweight', level: 4, price: 120},
+  { id: 'prop-bouncy', kind: 'ballProp', name: 'Super Bounce', level: 8, price: 250},
+  { id: 'prop-bowling', kind: 'ballProp', name: 'Heavyweight', level: 12, price: 400},
+  { id: 'prop-antigrav', kind: 'ballProp', name: 'Moon Physics', level: 18, price: 600},
+  { id: 'prop-boomerang', kind: 'ballProp', name: 'Boomerang', level: 25, price: 900},
+  { id: 'prop-egg', kind: 'ballProp', name: 'Crazy Wobble', level: 35, price: 1400},
+  { id: 'prop-pigeon', kind: 'ballProp', name: 'Pigeon', level: 50, price: 2500},
   { id: 'club-classic', kind: 'club', name: 'Classic Clubs', level: 1, price: 0 },
   ...hats(),
 ]
@@ -494,6 +497,28 @@ export function isAdminWallet(address: string): boolean {
 export function isAdminName(name: string): boolean {
   const n = (name || '').split('#')[0].trim().toLowerCase()
   return n !== '' && ADMIN.names.some((x) => x.toLowerCase() === n)
+}
+
+/**
+ * Developers (added 2026-11-03): the Developer tab in Settings (the Dev panel and Show barriers),
+ * but NOT Reset ledger, which stays admins only. Admins are developers too. Same rules as ADMIN:
+ * the server checks `wallets` before it does anything; `names` only decides what's drawn.
+ */
+export const DEVELOPERS = {
+  wallets: ['0x191aaa857c8ce4c76f582336101ae2dc55e4a2fa'] as string[],
+  names: ['TomzEvz'] as string[]
+}
+
+/** Whether a wallet can use the developer tools (a developer or an admin). The server's check. */
+export function isDeveloperWallet(address: string): boolean {
+  const a = (address || '').toLowerCase()
+  return isAdminWallet(a) || (a !== '' && DEVELOPERS.wallets.some((w) => w.toLowerCase() === a))
+}
+
+/** Whether a display name is a developer's or an admin's. Only used to show the tools. */
+export function isDeveloperName(name: string): boolean {
+  const n = (name || '').split('#')[0].trim().toLowerCase()
+  return isAdminName(name) || (n !== '' && DEVELOPERS.names.some((x) => x.toLowerCase() === n))
 }
 
 // ---------------------------------------------------------------------------

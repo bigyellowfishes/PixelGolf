@@ -120,7 +120,7 @@ export function showTutorialComplete(score: number, replay = false) {
   state.rewardText = ''
   // A replay is practice: no reward comes from the ledger, so the card is complete as it is
   state.statusText = replay
-    ? forTouch('Practice round, so nothing was saved. Walk up to a free bay to play. Press F there to open the menu.')
+    ? 'Practice round, so nothing was saved.\nWalk up to a free bay to play!'
     : 'Saving your progress...'
   state.bestDisplay = 'none'
   state.rankText = ''
@@ -133,11 +133,8 @@ export function showTutorialReward(r: { xp: number; level: number; unlocked: str
   state.levelDisplay = 'flex'
   state.levelText = `LEVEL ${r.level}`
   state.rewardText = r.xp > 0 ? `+${fmt(r.xp)} XP` : ''
-  state.statusText = forTouch(
-    r.unlocked.length
-      ? `Unlocked: ${r.unlocked.join(', ')}. Walk up to a free bay to play. Press F there to open the menu, and 1, 2 or 3 to change club.`
-      : 'Walk up to a free bay to play for real. Press F there to open the menu, and 1, 2 or 3 to change club.'
-  )
+  // Kept short (2026-11-03): the bay asks for a club when you walk up, so the keys aren't listed here
+  state.statusText = r.unlocked.length ? `Unlocked: ${r.unlocked.join(', ')}\nWalk up to a free bay to play!` : 'Walk up to a free bay to play for real!'
 }
 
 // @ui-action
@@ -269,7 +266,7 @@ export function RoundResult(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.statusText} fontSize={13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 54, margin: { top: 8 } }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.statusText} fontSize={state.title === 'Tutorial complete!' ? 15 : 13} textWrap="wrap" color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 54, margin: { top: 8 } }} />
         <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.rewardText} fontSize={18} color={{ r: 0.165, g: 0.525, b: 0.106, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 28, margin: { top: 4 } }} />
         <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.rankText} fontSize={14} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-center" uiTransform={{ width: 460, height: 22 }} />
 

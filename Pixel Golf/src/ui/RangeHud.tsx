@@ -4,8 +4,10 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
 import { profile, range, hotSecondsLeft, currentCeiling, currentFloor, tutorial, effectiveHot } from '../ledger/client'
 import { hotLook, faded } from '../hotLooks'
-import { getRoundProgress } from '../game'
-import { openLeaderboards } from './LeaderboardMenu'
+import { getRoundProgress, clubChangeAllowed } from '../game'
+import { getSelectedClubType, selectClub } from '../clubSelect'
+import { CLUB_TYPES, ClubType } from '../club'
+import { toggleAchievements } from './LeaderboardMenu'
 import { toggleSettings } from './SettingsMenu'
 import { toggleBackpack } from './BackpackMenu'
 import { windReadout } from '../wind'
@@ -16,6 +18,7 @@ import { engine, UiCanvasInformation } from '@dcl/sdk/ecs'
 import { screenTopLift } from './screenRoom'
 import { anyMenuShowing } from '../menuGuard'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
+import { ringBackground, xpFraction } from './xpRing'
 
 // Shows frame rate and physics time per frame under the card, for testing on phones.
 // Set to false before release.
@@ -116,8 +119,8 @@ function openSettingsPanel({ state, props }: UiAction) {
 
 // @ui-action
 function openBoards({ state, props }: UiAction) {
-  playUi('ui_open')
-  openLeaderboards()
+  // Opens the Achievements menu, or closes it if it's open (it plays its own sound)
+  toggleAchievements()
 }
 
 function fmt(n: number): string {
@@ -130,7 +133,15 @@ function fmt(n: number): string {
   return (n < 0 ? '-' : '') + out
 }
 
+/** The club keys, in order: 1 wedge, 2 iron, 3 driver (the same as the keyboard and the club menu) */
+const CLUB_KEYS: [number, ClubType][] = [
+  [1, 'wedge'],
+  [2, 'iron'],
+  [3, 'driver']
+]
+
 export function RangeHud(props: {}) {
+  const club = getSelectedClubType()
   // Read the live values each frame
   const left = hotSecondsLeft()
   // No hot target during the tutorial
@@ -372,13 +383,73 @@ export function RangeHud(props: {}) {
           <Label font="sans-serif" fontSrc={FONT_BOLD} value={state.multiplierText} fontSize={z(17)} color={{ r: 0.075, g: 0.533, b: 0.722, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(80), height: z(26) }} />
         </UiEntity>
 
+        {/* The club in your hands (2026-11-03): its picture and name, and the 1, 2, 3 keys with the
+            selected one lit. Tapping a key picks that club, when a club can be changed */}
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: z(40),
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: { left: z(6), right: z(8) },
+            margin: { top: z(6) },
+            borderRadius: z(12),
+            borderWidth: 2,
+            borderColor: { r: 0.835, g: 0.863, b: 0.886, a: 1 },
+            // Not on phones: the phone's own club buttons show the club
+            display: onPhone() ? 'none' : 'flex'
+          }}
+          uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
+        >
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+            <UiEntity
+              uiTransform={{ width: z(28), height: z(28) }}
+              uiBackground={{ textureMode: 'stretch', texture: { src: `assets/images/menus/club-${club}.png` } }}
+            />
+            <UiEntity uiTransform={{ flexDirection: 'column', margin: { left: z(4) } }}>
+              <Label font="sans-serif" fontSrc={FONT_BOLD} value="CLUB" fontSize={z(10)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(70), height: z(12) }} />
+              <Label font="sans-serif" fontSrc={FONT_BOLD} value={CLUB_TYPES[club].label} fontSize={z(15)} color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-left" uiTransform={{ width: z(70), height: z(20) }} />
+            </UiEntity>
+          </UiEntity>
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+            {CLUB_KEYS.map(([n, type]) => {
+              const on = type === club
+              return (
+                <UiEntity
+                  key={`club-key-${n}`}
+                  uiTransform={{ width: z(24), height: z(24), margin: { left: z(4) }, justifyContent: 'center', alignItems: 'center', borderRadius: z(7), borderWidth: 2, borderColor: on ? { r: 0.075, g: 0.533, b: 0.722, a: 1 } : { r: 0.788, g: 0.827, b: 0.859, a: 1 } }}
+                  uiBackground={{ color: on ? { r: 0.075, g: 0.533, b: 0.722, a: 1 } : { r: 1, g: 1, b: 1, a: 1 } }}
+                  onMouseDown={() => {
+                    if (on || !clubChangeAllowed()) {
+                      playUi('ui_click')
+                      return
+                    }
+                    selectClub(type)
+                    playUi('ui_select')
+                  }}
+                >
+                  <Label font="sans-serif" fontSrc={FONT_BOLD} value={`${n}`} fontSize={z(13)} color={on ? { r: 1, g: 1, b: 1, a: 1 } : { r: 0.118, g: 0.204, b: 0.259, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(20), height: z(20) }} />
+                </UiEntity>
+              )
+            })}
+          </UiEntity>
+        </UiEntity>
+
         {/* Level and Pixel Points */}
-        <UiEntity uiTransform={{ width: '100%', height: z(30), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: z(8) } }}>
-          <UiEntity
-            uiTransform={{ width: z(64), height: z(26), justifyContent: 'center', alignItems: 'center', borderRadius: z(13) }}
-            uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
-          >
-            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.levelText} fontSize={z(13)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(64), height: z(26) }} />
+        <UiEntity uiTransform={{ width: '100%', height: z(34), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: { top: z(6) } }}>
+          {/* The LV pill, with the XP ring (xpRing.ts) round it: a pale track, filling in blue */}
+          <UiEntity uiTransform={{ width: z(72), height: z(34), justifyContent: 'center', alignItems: 'center' }}>
+            <UiEntity
+              uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: z(72), height: z(34), borderRadius: z(17), borderWidth: z(3), borderColor: { r: 0.78, g: 0.863, b: 0.902, a: 1 } }}
+            />
+            <UiEntity
+              uiTransform={{ width: z(64), height: z(26), justifyContent: 'center', alignItems: 'center', borderRadius: z(13) }}
+              uiBackground={{ color: { r: 0.075, g: 0.533, b: 0.722, a: 1 } }}
+            >
+              <Label font="sans-serif" fontSrc={FONT_REGULAR} value={state.levelText} fontSize={z(13)} color={{ r: 1, g: 1, b: 1, a: 1 }} textAlign="middle-center" uiTransform={{ width: z(64), height: z(26) }} />
+            </UiEntity>
+            <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: z(72), height: z(34) }} uiBackground={ringBackground('pill', xpFraction())} />
           </UiEntity>
           <UiEntity uiTransform={{ width: z(136), height: z(26), flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
             <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Pixel Points" fontSize={z(12)} color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }} textAlign="middle-right" uiTransform={{ width: z(76), height: z(26), display: state.pointsLabelDisplay }} />
@@ -386,7 +457,7 @@ export function RangeHud(props: {}) {
           </UiEntity>
         </UiEntity>
 
-        {/* Leaderboards (trophy), Backpack (clubs, balls, stats) and the Settings cog (on a phone,
+        {/* Achievements (trophy: badges, leaderboard, stats), Backpack (balls, hat, clubs) and the Settings cog (on a phone,
             bottom left instead: phoneButtons below) */}
         {phone ? null : (
           <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: { top: z(10) } }}>

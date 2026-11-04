@@ -3,6 +3,7 @@ import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ZONE_SCORES } from './ledger/rules'
 import { FONT_BOLD } from './fonts'
 import { earn, PIGEON_WATCH_RADIUS } from './achievements'
+import { playAt } from './sfx'
 
 // The pigeons' mini bay (Pidgeon Animation V4.glb, by bay 20) has a little Tee Off panel. This
 // puts a working score screen on it, the same as the real bays' (teeOffPanels.ts), scaled down:
@@ -183,6 +184,11 @@ export function setupPigeonScreen(): void {
       shot++
       score += r.points
       show(r.points === 0 && r.zone === 'Miss' ? '0' : `${r.points >= 0 ? '+' : ''}${formatNumber(r.points)}`, r.zone)
+      // Its ball landing, and a quiet jingle from the little screen (heard only nearby)
+      if (next === due) {
+        playAt('ball_land', CENTRE, 0.5)
+        playAt(r.points > 0 ? 'score_small' : 'score_miss', CENTRE, 0.4)
+      }
       clearIn = shot >= BALLS ? ROUND_HOLD : -1
       // Watched them finish a round: the Pigeon Watcher achievement
       if (shot >= BALLS) {

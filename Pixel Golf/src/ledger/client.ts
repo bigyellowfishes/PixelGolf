@@ -3,7 +3,7 @@ import { getPlayer } from '@dcl/sdk/players'
 
 import { room } from './room'
 import { ShotPath, Vec3, decodePath } from '../ballSim'
-import { WIND, windVector, HOT, Period, PERIODS, levelProgress, multiplierCeiling, multiplierFloor,isAdminName, isAdminWallet, RESET_CONFIRM } from './rules'
+import { WIND, windVector, HOT, Period, PERIODS, levelProgress, multiplierCeiling, multiplierFloor,isAdminName, isAdminWallet, isDeveloperName, isDeveloperWallet, RESET_CONFIRM, LEVELS } from './rules'
 
 /**
  * The scene's side of the ledger.
@@ -45,8 +45,19 @@ export const profile = {
    * 'tutorial' message). Starts true so nothing happens until the server explicitly says false.
    */
   tutorialDone: true,
-  /** The Tester code is on for this visit: everything in the shop is unlocked (Settings, Codes) */
+  /**
+   * The Tester code is on for this visit (Settings, Codes): everything in the shop is unlocked and
+   * you show as level 50 (LEVELS.max) until you leave. Your real XP still counts and is kept.
+   */
   tester: false
+}
+
+/** Sets the level the scene shows from XP: the real one, or the top level for a tester */
+function showLevel(xp: number): void {
+  const lp = levelProgress(xp)
+  profile.level = profile.tester ? LEVELS.max : lp.level
+  profile.levelXp = profile.tester ? 0 : lp.into
+  profile.levelNeed = profile.tester ? 0 : lp.need
 }
 
 /** The level that decides what's unlocked: your level, or everything for a tester */
@@ -449,6 +460,14 @@ export function amIAdmin(): boolean {
   return isAdminWallet(myId()) || isAdminName(myName())
 }
 
+/**
+ * Whether to show this player the developer tools (the Developer tab: Dev panel, Show barriers).
+ * Admins and developers (DEVELOPERS in rules.ts). Reset ledger is amIAdmin only.
+ */
+export function amIDeveloper(): boolean {
+  return isDeveloperWallet(myId()) || isDeveloperName(myName())
+}
+
 /** The dev panel's switches as the server last said (ui/DevPanel.tsx shows them) */
 export const dev = { extra: 0, hotHold: false, windHold: false }
 
@@ -535,13 +554,10 @@ const HERE_SECONDS = 20
 
 export function setupLedgerClient(): void {
   room.onMessage('ledger', (d) => {
-    const lp = levelProgress(d.xp)
     profile.ready = true
     profile.durable = d.durable
     profile.xp = d.xp
-    profile.level = lp.level
-    profile.levelXp = lp.into
-    profile.levelNeed = lp.need
+    showLevel(d.xp)
     profile.points = d.points
     profile.pointsEarned = d.pointsEarned
     profile.best = d.best
@@ -663,6 +679,8 @@ export function setupLedgerClient(): void {
   })
 
   room.onMessage('levelUp', (d) => {
+    // A tester shows as level 50 already, so their real level-ups aren't announced this visit
+    if (profile.tester) return
     const v = { level: d.level, gained: d.gained, unlocked: parse<string[]>(d.unlocked, []) }
     for (const fn of levelFns) fn(v)
   })
@@ -677,6 +695,8 @@ export function setupLedgerClient(): void {
 
   room.onMessage('redeemed', (d) => {
     profile.tester = d.tester
+    showLevel(profile.xp)
+    for (const fn of profileFns) fn(profile)
     for (const fn of redeemedFns) fn({ ok: d.ok, tester: d.tester, message: d.message })
   })
 

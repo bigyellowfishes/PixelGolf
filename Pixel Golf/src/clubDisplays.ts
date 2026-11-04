@@ -1,4 +1,5 @@
-import { engine, Transform, GltfContainer, ColliderLayer, Tween, TweenSequence, TweenLoop, EasingFunction, MeshRenderer, Material, MaterialTransparencyMode } from '@dcl/sdk/ecs'
+import { playAt } from './sfx'
+import { engine, Entity, Transform, GltfContainer, ColliderLayer, Tween, TweenSequence, TweenLoop, EasingFunction, MeshRenderer, Material, MaterialTransparencyMode, Billboard, BillboardMode } from '@dcl/sdk/ecs'
 import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 
 // Spinning clubs on the shop's podiums (Shop/Golf Club Podiums.glb). There are six podiums, three
@@ -6,6 +7,9 @@ import { Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 // the Ruby (assets/Shop/Display Clubs/). Each club stands upright, head down, floating just over
 // its podium, turning slowly and bobbing gently. The motion is done by the explorer (Tween), so it
 // costs the scene nothing per frame. Decoration only: nothing to click.
+//
+// Coming soon: walk up to a podium and a small "COMING SOON" sign pops up over its club (turned to
+// face you), and shrinks away again when you walk off (SIGN_* below).
 //
 // The glow: each club's materials light themselves (emissive, set in the models: the Skull's
 // spirit green, the Ruby's red, the Glass a pale blue), and a soft disc of the same colour glows
@@ -37,11 +41,52 @@ const CLUB_LENGTH = 0.9
 const FLOAT = 0.2
 /** 1.5 = half as big again as the models */
 const SCALE = 1.5
+/** The Coming soon sign: its picture, width (m), how far above the top of the club it floats */
+const SIGN_IMAGE = DIR + 'coming-soon.png'
+const SIGN_WIDTH = 1.1
+const SIGN_ABOVE = 0.45
+/** It pops up within SIGN_SHOW of the podium (m, along the ground) and goes past SIGN_HIDE */
+const SIGN_SHOW = 4
+const SIGN_HIDE = 5
+const SIGN_POP_MS = 260
+
 /** Degrees a second it turns */
 const SPIN_SPEED = 45
 /** The bob: how far up and down (m) and how long one way takes (ms) */
 const BOB = 0.08
 const BOB_MS = 1600
+
+type Sign = { entity: Entity; x: number; z: number; shown: boolean }
+const signs: Sign[] = []
+
+/** A sign growing in (or shrinking away), from where its size is now */
+function popSign(sign: Sign, show: boolean): void {
+  sign.shown = show
+  const t = Transform.getMutable(sign.entity)
+  // A soft pop from the sign as it appears
+  if (show) playAt('ui_open', t.position, 0.6)
+  const from = t.scale
+  const to = show ? Vector3.create(SIGN_WIDTH, SIGN_WIDTH * (160 / 512), 1) : Vector3.create(0, 0, 0)
+  Tween.createOrReplace(sign.entity, {
+    mode: Tween.Mode.Scale({ start: from, end: to }),
+    duration: show ? SIGN_POP_MS : SIGN_POP_MS * 0.7,
+    easingFunction: show ? EasingFunction.EF_EASEOUTBACK : EasingFunction.EF_EASEINQUAD
+  })
+}
+
+let signWait = 0
+function comingSoonSystem(dt: number): void {
+  signWait -= dt
+  if (signWait > 0) return
+  signWait = 0.2
+  const me = Transform.getOrNull(engine.PlayerEntity)
+  if (!me) return
+  for (const sign of signs) {
+    const d = Math.hypot(me.position.x - sign.x, me.position.z - sign.z)
+    if (!sign.shown && d < SIGN_SHOW) popSign(sign, true)
+    else if (sign.shown && d > SIGN_HIDE) popSign(sign, false)
+  }
+}
 
 export function setupClubDisplays(): void {
   PODIUMS.forEach((p, i) => {
@@ -92,5 +137,28 @@ export function setupClubDisplays(): void {
       roughness: 1,
       specularIntensity: 0
     })
+
+    // The Coming soon sign over the club: starts shrunk to nothing, turns to face the camera
+    const sign = engine.addEntity()
+    Transform.create(sign, {
+      position: Vector3.create(p.x, PODIUM_TOP + FLOAT + CLUB_LENGTH * SCALE + BOB + SIGN_ABOVE, p.z),
+      scale: Vector3.create(0, 0, 0)
+    })
+    MeshRenderer.setPlane(sign)
+    Billboard.create(sign, { billboardMode: BillboardMode.BM_Y })
+    const signTex = Material.Texture.Common({ src: SIGN_IMAGE })
+    Material.setPbrMaterial(sign, {
+      texture: signTex,
+      alphaTexture: signTex,
+      emissiveTexture: signTex,
+      emissiveColor: Color4.White(),
+      emissiveIntensity: 1,
+      transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
+      metallic: 0,
+      roughness: 1,
+      specularIntensity: 0
+    })
+    signs.push({ entity: sign, x: p.x, z: p.z, shown: false })
   })
+  engine.addSystem(comingSoonSystem, undefined, 'coming-soon-signs')
 }

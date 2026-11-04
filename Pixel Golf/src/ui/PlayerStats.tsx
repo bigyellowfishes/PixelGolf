@@ -2,7 +2,8 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { profile, boards, stats } from '../ledger/client'
-import { CATALOGUE, Period } from '../ledger/rules'
+import { CATALOGUE, Period, XP, LEVELS } from '../ledger/rules'
+import { playUi } from '../sfx'
 import { HOT_LOOKS } from '../hotLooks'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
@@ -51,6 +52,62 @@ function hoursMinutes(seconds: number): string {
 }
 
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
+
+// "How XP works": a button on YOUR GAME swaps its tiles for what pays XP. The figures are read
+// from ledger/rules.ts (XP and LEVELS), the same ones the server pays, so they can't drift apart.
+let xpHelp = false
+
+function xpLines(): string[] {
+  const z = XP.perZone
+  const zones = ['Red', 'Yellow', 'Green', 'Orange', 'Blue', 'White', 'Black'].map((c) => `${c} ${z[c]}`).join(', ')
+  return [
+    `Every ball in a target: ${zones} XP`,
+    `A ball that misses every target: ${XP.miss} XP. A ball in a bunker: ${XP.bunker} XP`,
+    `Hitting the hot target: +${XP.hotHit} XP on top of the target's own`,
+    `Finishing a round of ten balls: +${XP.roundComplete} XP`,
+    `Beating your best True Score: +${XP.personalBest} XP`,
+    `Daily login bonus: ${XP.dailyLogin} XP, once every ${XP.dailyHours} hours`,
+    `The AFK practice range: ${XP.afkPerTick} XP every ${XP.afkTickSeconds} seconds`,
+    `Level 2 takes ${LEVELS.first} XP. Each level after needs ${LEVELS.step} XP more, up to level ${LEVELS.max}`,
+    'New levels unlock balls, effects and hats in the Pro Shop'
+  ]
+}
+
+function xpHelpButton() {
+  return (
+    <UiEntity
+      uiTransform={{ width: 116, height: 20, justifyContent: 'center', alignItems: 'center', margin: { left: 8 }, borderRadius: 10, borderWidth: 2, borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 } }}
+      uiBackground={{ color: xpHelp ? { r: 0.161, g: 0.694, b: 0.898, a: 1 } : WHITE }}
+      onMouseDown={() => {
+        xpHelp = !xpHelp
+        playUi('ui_click')
+      }}
+    >
+      <Label font="sans-serif" fontSrc={FONT_REGULAR} value={xpHelp ? 'Back to stats' : 'How XP works'} fontSize={11} color={xpHelp ? WHITE : BLUE} textAlign="middle-center" uiTransform={{ width: 110, height: 16 }} />
+    </UiEntity>
+  )
+}
+
+/** What pays XP, in place of the tiles, with where you are on your level at the top */
+function xpHelpPanel() {
+  const top = profile.level >= LEVELS.max
+  const where = !profile.ready
+    ? ''
+    : top
+      ? `Level ${profile.level}: the top level`
+      : `Level ${profile.level}: ${fmt(profile.levelXp)} / ${fmt(profile.levelNeed)} XP to level ${profile.level + 1}`
+  return (
+    <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: 8 } }}>
+      <Label font="sans-serif" fontSrc={FONT_BOLD} value={where} fontSize={14} color={NAVY} textAlign="middle-left" uiTransform={{ width: '100%', height: where ? 22 : 0, margin: { bottom: 4 } }} />
+      {xpLines().map((l, i) => (
+        <UiEntity key={`xp-${i}`} uiTransform={{ width: '100%', flexDirection: 'row', alignItems: 'center', height: 21 }}>
+          <UiEntity uiTransform={{ width: 6, height: 6, borderRadius: 3, margin: { right: 8 } }} uiBackground={{ color: BLUE }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={l} fontSize={12} color={NAVY} textAlign="middle-left" uiTransform={{ width: WIDTH - 32 - 14, height: 20 }} />
+        </UiEntity>
+      ))}
+    </UiEntity>
+  )
+}
 
 /** A tile: a small label over a value, with an optional note under it */
 function tile(key: string, width: number, height: number, label: string, value: string, note = '', highlight = false) {
@@ -187,11 +244,16 @@ export function PlayerStats(props: {}) {
       >
         <UiEntity uiTransform={{ width: '100%', height: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Label font="sans-serif" fontSrc={FONT_BOLD} value="YOUR GAME" fontSize={12} color={BLUE} textAlign="middle-left" uiTransform={{ width: 200, height: 18 }} />
-          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={ok ? sinceText : 'Loading your stats...'} fontSize={11} color={GREY} textAlign="middle-right" uiTransform={{ width: 300, height: 18 }} />
+          <UiEntity uiTransform={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Label font="sans-serif" fontSrc={FONT_REGULAR} value={ok ? sinceText : 'Loading your stats...'} fontSize={11} color={GREY} textAlign="middle-right" uiTransform={{ width: 220, height: 18 }} />
+            {xpHelpButton()}
+          </UiEntity>
         </UiEntity>
 
+        {xpHelp ? xpHelpPanel() : null}
+
         {/* Hits on each target, in its own colour */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { top: 8 } }}>
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', margin: { top: 8 }, display: xpHelp ? 'none' : 'flex' }}>
           {TARGETS.map((c) => {
             const look = HOT_LOOKS[c]
             return (
@@ -217,7 +279,7 @@ export function PlayerStats(props: {}) {
         </UiEntity>
 
         {/* Everything else */}
-        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', margin: { top: 8 } }}>
+        <UiEntity uiTransform={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', margin: { top: 8 }, display: xpHelp ? 'none' : 'flex' }}>
           {tiles.map((t, i) => (
             <UiEntity key={`tile-${i}`} uiTransform={{ margin: { bottom: 6 } }}>
               {t}

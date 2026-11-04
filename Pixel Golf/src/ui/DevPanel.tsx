@@ -1,7 +1,7 @@
 /** @jsx ReactEcs.createElement */
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
-import { range, wind, dev, amIAdmin, sendAdminHot, sendAdminPlayers, sendAdminWind, hotSecondsLeft, currentFloor, currentCeiling } from '../ledger/client'
+import { range, wind, dev, amIDeveloper, sendAdminHot, sendAdminPlayers, sendAdminWind, hotSecondsLeft, currentFloor, currentCeiling } from '../ledger/client'
 import { HOT, ballPoints } from '../ledger/rules'
 import { playUi } from '../sfx'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
@@ -22,7 +22,7 @@ import { noteShot } from '../shotFeed'
 export const devPanel = { open: false }
 
 export function toggleDevPanel(): void {
-  if (!amIAdmin()) return
+  if (!amIDeveloper()) return
   devPanel.open = !devPanel.open
   playUi(devPanel.open ? 'ui_open' : 'ui_close')
 }
@@ -119,7 +119,7 @@ function row(key: string, children: any) {
 }
 
 export function DevPanel(props: {}) {
-  if (!amIAdmin()) return <UiEntity uiTransform={{ display: 'none' }} />
+  if (!amIDeveloper()) return <UiEntity uiTransform={{ display: 'none' }} />
 
   const real = Math.max(1, range.players - dev.extra)
   const floor = currentFloor()
@@ -133,11 +133,11 @@ export function DevPanel(props: {}) {
     : 'none yet'
   const heldDir = WIND_DIRS.find((d) => Math.abs(((wind.dir - d.dir + 540) % 360) - 180) < 1)
 
+  // In the middle of the screen (a full-screen layer that lets clicks through around the panel)
   return (
+    <UiEntity uiTransform={{ positionType: 'absolute', width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', pointerFilter: 'none' }}>
     <UiEntity
       uiTransform={{
-        positionType: 'absolute',
-        position: { left: 16, top: 120 },
         width: WIDTH,
         flexDirection: 'column',
         padding: { top: 12, right: 16, bottom: 12, left: 16 },
@@ -150,7 +150,7 @@ export function DevPanel(props: {}) {
     >
       {/* Title */}
       <UiEntity uiTransform={{ width: '100%', height: 36, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Label font="sans-serif" fontSrc={FONT_BOLD} value="Dev panel (admin)" fontSize={18} color={RED} textAlign="middle-left" uiTransform={{ width: 220, height: 30 }} />
+        <Label font="sans-serif" fontSrc={FONT_BOLD} value="Dev panel" fontSize={18} color={RED} textAlign="middle-left" uiTransform={{ width: 220, height: 30 }} />
         <UiEntity
           uiTransform={{ width: 34, height: 34, justifyContent: 'center', alignItems: 'center', borderRadius: 17, borderWidth: 2, borderColor: RIM }}
           uiBackground={{ color: WHITE }}
@@ -207,6 +207,7 @@ export function DevPanel(props: {}) {
         button('f-bunker', 'Bunker', 115, false, () => fakeShot('bunker')),
         button('f-misses', '3 misses', 115, false, () => fakeShot('misses'))
       ])}
+    </UiEntity>
     </UiEntity>
   )
 }

@@ -1,4 +1,5 @@
-import { engine, Transform } from '@dcl/sdk/ecs'
+import { engine, Transform, PlayerIdentityData } from '@dcl/sdk/ecs'
+import { getPlayer } from '@dcl/sdk/players'
 import { Vector3 } from '@dcl/sdk/math'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { afkTick, tutorial } from './ledger/client'
@@ -27,9 +28,16 @@ const OUTER = 22.2
 const ANGLE_FROM = 180
 const ANGLE_TO = 270
 const FLOOR_Y = 35.06
-/** Practice spots: this far out from the centre, facing the screen */
-const SPOT_RADIUS = 15
-const SPOTS = 6
+/**
+ * Practice spots, facing the screen: two rows round the ring, this far out from the centre and
+ * this many along each, about 2.5 m apart. You get the nearest one nobody is standing on.
+ */
+const ROWS = [
+  { radius: 14, spots: 9 },
+  { radius: 17.5, spots: 11 }
+]
+/** Someone this close to a spot (m, along the ground) is on it */
+const TAKEN_WITHIN = 1.5
 /** Walk this far from your spot and practice stops */
 const WANDER = 1.5
 
@@ -64,19 +72,38 @@ function onGrass(p: Vector3): boolean {
   return r >= INNER && r <= OUTER && a >= ANGLE_FROM && a <= ANGLE_TO && p.y > FLOOR_Y - 2 && p.y < FLOOR_Y + 4
 }
 
-/** The practice spot nearest the player, spread evenly along the ring */
-function nearestSpot(p: Vector3): { at: Vector3; facing: Vector3 } {
-  let best = { at: Vector3.Zero(), facing: Vector3.Zero(), d: Infinity }
-  for (let i = 0; i < SPOTS; i++) {
-    const deg = ANGLE_FROM + ((ANGLE_TO - ANGLE_FROM) * (i + 0.5)) / SPOTS
-    const rad = (deg * Math.PI) / 180
-    const at = Vector3.create(CENTRE.x + Math.cos(rad) * SPOT_RADIUS, FLOOR_Y, CENTRE.z + Math.sin(rad) * SPOT_RADIUS)
-    // Looking out at the screen
-    const facing = Vector3.create(CENTRE.x + Math.cos(rad) * (OUTER - 1), FLOOR_Y + 1.6, CENTRE.z + Math.sin(rad) * (OUTER - 1))
-    const d = Vector3.distance(at, p)
-    if (d < best.d) best = { at, facing, d }
+/** Where everyone else is standing (along the ground) */
+function others(): { x: number; z: number }[] {
+  const me = (getPlayer()?.userId ?? '').toLowerCase()
+  const out: { x: number; z: number }[] = []
+  for (const [entity, who] of engine.getEntitiesWith(PlayerIdentityData)) {
+    if (!who.address || who.address.toLowerCase() === me) continue
+    const t = Transform.getOrNull(entity)
+    if (t) out.push({ x: t.position.x, z: t.position.z })
   }
-  return best
+  return out
+}
+
+/** The free practice spot nearest the player (one nobody else is standing on), so nobody overlaps */
+function nearestSpot(p: Vector3): { at: Vector3; facing: Vector3 } {
+  const people = others()
+  let best = { at: Vector3.Zero(), facing: Vector3.Zero(), d: Infinity }
+  let fallback = best
+  for (const row of ROWS) {
+    for (let i = 0; i < row.spots; i++) {
+      const deg = ANGLE_FROM + ((ANGLE_TO - ANGLE_FROM) * (i + 0.5)) / row.spots
+      const rad = (deg * Math.PI) / 180
+      const at = Vector3.create(CENTRE.x + Math.cos(rad) * row.radius, FLOOR_Y, CENTRE.z + Math.sin(rad) * row.radius)
+      // Looking out at the screen
+      const facing = Vector3.create(CENTRE.x + Math.cos(rad) * (OUTER - 1), FLOOR_Y + 1.6, CENTRE.z + Math.sin(rad) * (OUTER - 1))
+      const d = Vector3.distance(at, p)
+      // Every spot taken: the nearest anyway (only if more than 20 are practising at once)
+      if (d < fallback.d) fallback = { at, facing, d }
+      if (people.some((o) => Math.hypot(o.x - at.x, o.z - at.z) < TAKEN_WITHIN)) continue
+      if (d < best.d) best = { at, facing, d }
+    }
+  }
+  return best.d < Infinity ? best : fallback
 }
 
 /** Yes on the prompt: take a spot and start swinging */

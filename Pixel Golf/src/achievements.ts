@@ -151,9 +151,12 @@ export function setupAchievements(): void {
       earn('tee-time')
     }
     if (profile.rounds >= 100) earn('centurion')
-    if (profile.level >= 10) earn('level-10')
-    if (profile.level >= 25) earn('level-25')
-    if (profile.level >= 50) earn('level-50')
+    // Level badges only for a real level, not the Tester code's level 50
+    if (!profile.tester) {
+      if (profile.level >= 10) earn('level-10')
+      if (profile.level >= 25) earn('level-25')
+      if (profile.level >= 50) earn('level-50')
+    }
     if (profile.points >= 100000) earn('pixel-rich')
 
     // What you own and wear: not while the Tester code has unlocked everything for this visit

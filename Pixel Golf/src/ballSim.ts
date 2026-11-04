@@ -895,6 +895,14 @@ export class PathPlayer {
     this.sample(t)
   }
 
+  /** Whether a bounce has been passed yet, and whether any are still to come (for the rolling sound) */
+  get bounced(): boolean {
+    return this.hitAt > 0
+  }
+  get bouncesLeft(): boolean {
+    return this.hitAt + 1 < this.path.hits.length
+  }
+
   /** Bounces passed since the last call, as impact speeds (for the landing sound). */
   hitsUntil(t: number): number[] {
     const out: number[] = []

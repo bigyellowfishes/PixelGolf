@@ -7,6 +7,8 @@ import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 import { screenRoom, screenTopLift } from './screenRoom'
 import { onPhone } from '../mobile'
 import { anyMenuShowing } from '../menuGuard'
+import { playUi } from '../sfx'
+import { cooLevel } from '../audio'
 
 // "Cooer": the shot feed's notifications (shotFeed.ts), built from the Cooer design
 // (cooer-notifications: ChirpFeed.ts and chirp.css), redrawn here in the scene's UI. Like Chirper
@@ -223,6 +225,7 @@ function animateTo(p: number): void {
 }
 
 export function openFeed(): void {
+  if (state.display !== 'flex') playUi('ui_open')
   state.display = 'flex'
   page = 0
   feed.unread = 0
@@ -234,6 +237,7 @@ export function openFeed(): void {
 }
 
 export function closeFeed(): void {
+  if (state.display === 'flex') playUi('ui_close')
   state.display = 'none'
   animateTo(0)
 }
@@ -272,7 +276,7 @@ function coo(): void {
     cooEntity = engine.addEntity()
     Transform.create(cooEntity, {})
   }
-  AudioSource.createOrReplace(cooEntity, { audioClipUrl: COO, playing: true, loop: false, global: true, volume: COO_VOLUME, currentTime: 0 })
+  AudioSource.createOrReplace(cooEntity, { audioClipUrl: COO, playing: true, loop: false, global: true, volume: COO_VOLUME * cooLevel(), currentTime: 0 })
 }
 
 /** Runs the pop-ups, the drag and the panel's slide. Call once (index.ts). */
@@ -490,7 +494,14 @@ function item(i: FeedItem) {
 
 function smallButton(key: string, label: string, onPress: () => void) {
   return (
-    <UiEntity key={key} uiTransform={{ width: P(70), height: P(22), justifyContent: 'center', alignItems: 'center' }} onMouseDown={onPress}>
+    <UiEntity
+      key={key}
+      uiTransform={{ width: P(70), height: P(22), justifyContent: 'center', alignItems: 'center' }}
+      onMouseDown={() => {
+        playUi('ui_click')
+        onPress()
+      }}
+    >
       <Label font="sans-serif" fontSrc={FONT_BOLD} value={label} fontSize={P(12)} color={BLUE} textAlign="middle-center" uiTransform={{ width: P(70), height: P(20) }} />
     </UiEntity>
   )

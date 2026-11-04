@@ -32,7 +32,7 @@ const CLUB_INFO: Record<ClubType, {
     tag: 'Long game',
     desc: 'Maximum carry for the far greens. The hardest club to keep straight.',
     image: 'assets/images/menus/club-driver.png',
-    position: '1 / 3',
+    position: '3 / 3',
     distance: 10,
     accuracy: 4,
     height: 5
@@ -54,7 +54,7 @@ const CLUB_INFO: Record<ClubType, {
     tag: 'Short game',
     desc: 'High, soft and accurate. Drops onto the closest greens and stops near the pin.',
     image: 'assets/images/menus/club-wedge.png',
-    position: '3 / 3',
+    position: '1 / 3',
     distance: 4,
     accuracy: 9,
     height: 9
@@ -94,7 +94,7 @@ export const state: State = {
   clubTag: 'Long game',
   clubDesc: 'Maximum carry for the far greens. The hardest club to keep straight.',
   clubImage: 'assets/images/menus/club-driver.png',
-  clubPosition: '1 / 3',
+  clubPosition: '3 / 3',
   distanceWidth: '100%',
   distanceValue: '10/10',
   accuracyWidth: '40%',
@@ -204,6 +204,7 @@ export function ClubSelectMenu(props: {}) {
           flexGrow: 1,
           flexDirection: 'row',
           alignItems: 'center',
+          margin: { left: 16 },
           padding: { left: 18, right: 18 },
           borderRadius: 24,
           borderWidth: 2,
@@ -259,7 +260,6 @@ export function ClubSelectMenu(props: {}) {
           flexGrow: 1,
           flexDirection: 'row',
           alignItems: 'center',
-          margin: { left: 16 },
           padding: { left: 18, right: 18 },
           borderRadius: 24,
           borderWidth: 2,
@@ -438,11 +438,11 @@ export function ClubSelectMenu(props: {}) {
               />
             </UiEntity>
             <UiEntity
-              uiTransform={{ width: 42, height: 56 }}
+              uiTransform={{ width: 36, height: 48 }}
               uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/logo.png' } }}
             />
             <UiEntity
-              uiTransform={{ width: 193, height: 28, margin: { left: 12 } }}
+              uiTransform={{ width: 177, height: 15, margin: { left: 12 } }}
               uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/wordmark.png' } }}
             />
             <UiEntity
@@ -673,7 +673,8 @@ export function ClubSelectMenu(props: {}) {
           <UiEntity
             uiTransform={{ width: '100%', height: 132, flexDirection: 'row', alignItems: 'flex-end', margin: { top: 18 } }}
           >
-            <UiEntity {...driverCard}>
+            {/* Left to right: Wedge, 5 Iron, Driver (shortest to longest) */}
+            <UiEntity {...wedgeCard}>
               <UiEntity
                 uiTransform={{
                   width: 84,
@@ -688,26 +689,26 @@ export function ClubSelectMenu(props: {}) {
               >
                 <UiEntity
                   uiTransform={{ width: 64, height: 64 }}
-                  uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/club-driver.png' } }}
+                  uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/club-wedge.png' } }}
                 />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 16 } }}>
                 <Label font="sans-serif" fontSrc={FONT_BOLD}
-                  value="DR"
+                  value="WG"
                   fontSize={14}
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 18 }}
                 />
                 <Label font="sans-serif" fontSrc={FONT_BOLD}
-                  value="Driver"
+                  value="Wedge"
                   fontSize={24}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 32 }}
                 />
                 <Label font="sans-serif" fontSrc={FONT_REGULAR}
-                  value="Long game"
+                  value="Short game"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
                   textAlign="middle-left"
@@ -759,7 +760,7 @@ export function ClubSelectMenu(props: {}) {
               </UiEntity>
             </UiEntity>
 
-            <UiEntity {...wedgeCard}>
+            <UiEntity {...driverCard}>
               <UiEntity
                 uiTransform={{
                   width: 84,
@@ -774,26 +775,26 @@ export function ClubSelectMenu(props: {}) {
               >
                 <UiEntity
                   uiTransform={{ width: 64, height: 64 }}
-                  uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/club-wedge.png' } }}
+                  uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/club-driver.png' } }}
                 />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 16 } }}>
                 <Label font="sans-serif" fontSrc={FONT_BOLD}
-                  value="WG"
+                  value="DR"
                   fontSize={14}
                   color={{ r: 0.051, g: 0.416, b: 0.565, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 18 }}
                 />
                 <Label font="sans-serif" fontSrc={FONT_BOLD}
-                  value="Wedge"
+                  value="Driver"
                   fontSize={24}
                   color={{ r: 0.118, g: 0.204, b: 0.259, a: 1 }}
                   textAlign="middle-left"
                   uiTransform={{ width: '100%', height: 32 }}
                 />
                 <Label font="sans-serif" fontSrc={FONT_REGULAR}
-                  value="Short game"
+                  value="Long game"
                   fontSize={13}
                   color={{ r: 0.337, g: 0.388, b: 0.435, a: 1 }}
                   textAlign="middle-left"

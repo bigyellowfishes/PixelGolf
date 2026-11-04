@@ -31,6 +31,11 @@ const CLEAR = { r: 1, g: 1, b: 1, a: 0 }
 
 const WIDTH = 400
 const WIDTH_PHONE = 470
+/**
+ * How far in from the right edge it sits on the Hats tab: just left of the range card (16 from the
+ * edge and 240 wide, ui/RangeHud.tsx) with a gap, so it doesn't cover the card (2026-11-04)
+ */
+const HAT_RIGHT = 16 + 240 + 24
 
 function fmt(n: number): string {
   const s = String(Math.abs(Math.round(n)))
@@ -86,21 +91,38 @@ function tab(label: string, kind: CosmeticKind, width: number) {
   )
 }
 
-// --- The Hats tab: a row per style, a swatch per colour ----------------------
+// --- The Hats tab: a row per style, a swatch per colour, then No hat ---------
+// Clicking a swatch only picks it (ringed in blue). Confirm then wears it if it's yours, or buys
+// it (buying puts it straight on; the server says why if it can't).
 
-/** Click a swatch: wear it if it's yours, otherwise buy it (the server says why if it can't) */
+/** The hat picked but not confirmed yet (null: nothing picked, the ring shows what you're wearing) */
+let pickedHat: string | null = null
+
+function wornHat(): string {
+  return profile.equipped.hat ?? NO_HAT
+}
+
+/** The swatch ringed in blue: the one picked, or else the one being worn */
+function ringedHat(): string {
+  return pickedHat ?? wornHat()
+}
+
 function pickHat(item: Cosmetic) {
-  const owned = profile.owned.indexOf(item.id) >= 0
-  if (owned && profile.equipped[item.kind] === item.id) {
-    playUi('ui_click')
-    return
-  }
-  if (owned) equip(item)
+  pickedHat = item.id === wornHat() ? null : item.id
+  shop.notice = ''
+  playUi('ui_click')
+}
+
+// @ui-action
+function confirmHat() {
+  const item = pickedHat ? itemById(pickedHat) : undefined
+  if (!item || item.id === wornHat()) return
+  if (item.id === NO_HAT || profile.owned.indexOf(item.id) >= 0) equip(item)
   else buy(item)
 }
 
 function swatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
-  const on = profile.equipped[item.kind] === item.id
+  const on = ringedHat() === item.id
   const locked = unlockLevel() < item.level
   return (
     <UiEntity
@@ -110,6 +132,24 @@ function swatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
       onMouseDown={() => pickHat(item)}
     >
       <UiEntity uiTransform={{ width: on ? 20 : 22, height: on ? 20 : 22, borderRadius: 11 }} uiBackground={{ color: { ...rgb, a: locked ? 0.3 : 1 } }} />
+    </UiEntity>
+  )
+}
+
+/** No hat: a swatch like the colours, with a strike through it (as in the backpack) */
+function noHatSwatch() {
+  const none = itemById(NO_HAT)
+  const on = ringedHat() === NO_HAT
+  return (
+    <UiEntity
+      key="sw-hat-none"
+      uiTransform={{ width: 32, height: 32, margin: { left: 3 }, justifyContent: 'center', alignItems: 'center', borderRadius: 16, borderWidth: on ? 3 : 2, borderColor: on ? BLUE : RIM }}
+      uiBackground={{ color: on ? PALE_BLUE : WHITE }}
+      onMouseDown={() => {
+        if (none) pickHat(none)
+      }}
+    >
+      <UiEntity uiTransform={{ width: 22, height: 22 }} uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/icon-nohat.png' } }} />
     </UiEntity>
   )
 }
@@ -134,19 +174,41 @@ function styleRow(style: (typeof HAT_STYLES)[number], width: number) {
 }
 
 function hatsAisle(width: number) {
-  const none = itemById(NO_HAT)
-  const bare = (profile.equipped.hat ?? NO_HAT) === NO_HAT
+  // Forget the pick once it's on (or the shop has closed)
+  if (!shop.open || pickedHat === wornHat()) pickedHat = null
+  const picked = pickedHat ? itemById(pickedHat) : undefined
+  const ready = !!picked
+  const buying = !!picked && picked.id !== NO_HAT && profile.owned.indexOf(picked.id) < 0
+  const bare = wornHat() === NO_HAT
   return (
     <UiEntity uiTransform={{ width: '100%', flexDirection: 'column' }}>
       {HAT_STYLES.map((s) => styleRow(s, width))}
+      {/* No hat: one struck-through swatch, lined up under the first colour */}
       <UiEntity
-        uiTransform={{ width: '100%', height: 34, margin: { top: 10 }, justifyContent: 'center', alignItems: 'center', borderRadius: 17, borderWidth: 2, borderColor: bare ? GREEN : BLUE }}
-        uiBackground={{ color: bare ? GREEN : WHITE }}
-        onMouseDown={() => {
-          if (none && !bare) equip(none)
-        }}
+        uiTransform={{ width: '100%', height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: { left: 12, right: 8 }, margin: { top: 6 }, borderRadius: 14 }}
+        uiBackground={{ color: WHITE }}
       >
-        <Label font="sans-serif" fontSrc={FONT_REGULAR} value="No hat" fontSize={13} color={bare ? WHITE : BLUE} textAlign="middle-center" uiTransform={{ width: 200, height: 28 }} />
+        <UiEntity uiTransform={{ flexDirection: 'column' }}>
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value="No hat" fontSize={15} color={NAVY} textAlign="middle-left" uiTransform={{ width: width - 314, height: 20 }} />
+          <Label font="sans-serif" fontSrc={FONT_REGULAR} value={bare ? 'Wearing' : ''} fontSize={11} color={GREEN} textAlign="middle-left" uiTransform={{ width: width - 314, height: 16 }} />
+        </UiEntity>
+        <UiEntity uiTransform={{ width: HAT_COLOURS.length * 35, flexDirection: 'row' }}>{noHatSwatch()}</UiEntity>
+      </UiEntity>
+      {/* Confirm: wears (or buys) the picked swatch */}
+      <UiEntity
+        uiTransform={{ width: '100%', height: 34, margin: { top: 10 }, justifyContent: 'center', alignItems: 'center', borderRadius: 17, borderWidth: 2, borderColor: ready ? BLUE : RIM, pointerFilter: ready ? 'block' : 'none' }}
+        uiBackground={{ color: ready ? BLUE : WHITE }}
+        onMouseDown={() => confirmHat()}
+      >
+        <Label
+          font="sans-serif"
+          fontSrc={FONT_REGULAR}
+          value={buying && picked!.price > 0 ? `Confirm: ${fmt(picked!.price)} PP` : 'Confirm'}
+          fontSize={13}
+          color={ready ? WHITE : GREY}
+          textAlign="middle-center"
+          uiTransform={{ width: 200, height: 28 }}
+        />
       </UiEntity>
       <Label font="sans-serif" fontSrc={FONT_REGULAR}
         value="Everyone here can see your hat."
@@ -205,7 +267,8 @@ export function ShopMenu(props: {}) {
         positionType: 'absolute',
         flexDirection: 'column',
         justifyContent: 'center',
-        alignItems: 'center',
+        // On the Hats tab it moves over to the right, like the hat fit panel, so you can see yourself in the hat
+        alignItems: hatsTab ? 'flex-end' : 'center',
         pointerFilter: 'none',
         display: shop.open ? 'flex' : 'none',
         zIndex: 12
@@ -215,6 +278,7 @@ export function ShopMenu(props: {}) {
         uiTransform={{
           width,
           flexDirection: 'column',
+          margin: { right: hatsTab ? (phone ? 12 : HAT_RIGHT) : 0 },
           padding: { top: 14, right: 16, bottom: 16, left: 16 },
           borderRadius: 24,
           borderWidth: 3,

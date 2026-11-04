@@ -327,7 +327,8 @@ export function resetTutorialSteps(): void {
 //   shot 3  AIM    (they turn the camera themselves)
 //   shot 4  WIND   (a slight crosswind, TUTORIAL_WIND, on the flags and the range card too),
 //                  beaten with the curve they learnt on shot 2: bend it into the wind
-//   shot 5  HOT TARGET (the orange target is the hot target for this shot, with its marker)
+//   shot 5  HOT TARGET (the green target is the hot target for this shot, with its marker; it
+//                  was the orange one until 2026-11-03, the same one the first shots aim at)
 // A lesson is picked by how many shots of the round are already counted.
 const LESSON_POWER = 0
 const LESSON_CURVE = 1
@@ -342,7 +343,7 @@ const LESSON_MULTI = 4
  */
 const TUTORIAL_WIND = { dir: 206, speed: 3 }
 /** The lesson hot target on the last tutorial shot */
-const TUTORIAL_HOT = 'Orange'
+const TUTORIAL_HOT = 'Green'
 
 // The tutorial's wind and hot target follow the shot it's on (ledger/client.ts tutorialLesson)
 // The shot count goes up the moment the ball is hit, so while a ball is in the air or rolling
@@ -378,7 +379,7 @@ function tutorialPrompt(g: Game): string {
       if (n === LESSON_POWER) return 'Welcome to Pixel Golf! Press E to start.'
       if (n === LESSON_AIM) return 'Now aim yourself: turn the camera towards a target, then press E.'
       if (n === LESSON_WIND) return 'WIND! The flags show which way it blows. Use your CURVE to fight it. Press E.'
-      if (n === LESSON_MULTI) return 'Last shot! Orange is the HOT TARGET: +20,000. Press E.'
+      if (n === LESSON_MULTI) return 'Last shot! Green is the HOT TARGET: +20,000. Press E.'
       if (last) return 'Last shot! Press E to take it.'
       return 'Nice! Press E to take your next shot.'
     case 'Swing_Height':
@@ -386,7 +387,7 @@ function tutorialPrompt(g: Game): string {
       if (n === LESSON_CURVE) return 'Press E at the line to lock your power.'
       if (n === LESSON_AIM) return 'The indicator shows your aim. Turn the camera to adjust, then press E for power.'
       if (n === LESSON_WIND) return 'Wind pushes the ball sideways. Lock your power, then curve against it. Press E.'
-      if (n === LESSON_MULTI) return 'Land on orange for +20,000 points. Press E.'
+      if (n === LESSON_MULTI) return 'Land on green for +20,000 points. Press E.'
       return ''
     case 'Swing_Turn':
       if (n === LESSON_CURVE) return 'New: CURVE. The middle hits straight, either side bends the ball. Press E in the middle.'
@@ -1735,6 +1736,8 @@ export let shotSpeed = 1
 export function setShotSpeed(speed: number): void {
   if (SHOT_SPEEDS.indexOf(speed) < 0 || speed === shotSpeed) return
   shotSpeed = speed
+  // A click, pitched up a little with each step faster
+  playUi('ui_click', 1, 0.9 + speed * 0.1)
   if (activeGame) activeGame.applySpeed()
   // Turned right up mid-shot: the commentator notices (now and then)
   if (speed === 3 && activeGame && activeGame.shotPlaying()) sayLine('speed')

@@ -7,7 +7,7 @@ import { achievementCount } from '../achievements'
 import { playUi } from '../sfx'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
 
-// The backpack's Badges tab: every achievement (ACHIEVEMENTS in ledger/rules.ts) as its round medal,
+// The Achievements menu's Badges tab (ui/LeaderboardMenu.tsx): every achievement (ACHIEVEMENTS in ledger/rules.ts) as its round medal,
 // in colour once earned and grey with a padlock until then, and the one picked shows big underneath
 // with what earns it and when you got it. It fits the room the backpack gives it: up to 7 across
 // and 3 down on desktop, fewer on a phone or a screen held upright (more pages instead).

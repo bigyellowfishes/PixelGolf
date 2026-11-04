@@ -4,6 +4,7 @@ import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { getPlayer } from '@dcl/sdk/players'
 import { useInteraction } from './interaction'
 import { openClubSelect } from './ClubSelectMenu'
+import { ringBackground } from './xpRing'
 import { playUi } from '../sfx'
 import { roundInProgress, abandonRound } from '../game'
 import { forTouch } from '../mobile'
@@ -37,9 +38,33 @@ export const state: State = {
 
 type UiAction = { state: State; props: Parameters<typeof GameModeMenu>[0]; value?: unknown }
 
+// The level badge's XP ring (xpRing.ts): it fills slowly up to where you are each time the menu opens.
+/** How fast the ring fills (of the whole ring, per second) */
+const XP_RING_SPEED = 0.45
+let ringShown = 0
+let ringClock = 0
+
+/** How much of the ring to draw this frame (0 to 1), easing up towards the XP earned */
+function ringNow(): number {
+  const target = state.xpNext > 0 ? Math.max(0, Math.min(1, state.xp / state.xpNext)) : 0
+  const now = Date.now()
+  const dt = ringClock ? Math.min(0.1, (now - ringClock) / 1000) : 0
+  ringClock = now
+  // Levelled up (the XP went back down): fill again from empty
+  if (target < ringShown - 0.001) ringShown = 0
+  ringShown = Math.min(target, ringShown + XP_RING_SPEED * dt)
+  return ringShown
+}
+
+
 /** Opens the Pixel Golf menu. force: open it even within a second of another menu closing. */
 export function openPixelGolfMenu(force = false) {
   if (!force && state.display !== 'flex' && menuReopenBlocked()) return
+  // The XP ring fills up again each time the menu opens
+  if (state.display !== 'flex') {
+    ringShown = 0
+    ringClock = 0
+  }
   // Always opens on Pixel Golf, ready to play
   if (state.display !== 'flex') state.view = 'golf'
   state.display = 'flex'
@@ -238,11 +263,11 @@ export function GameModeMenu(props: {}) {
           </UiEntity>
           <UiEntity uiTransform={{ height: 74, flexDirection: 'row', alignItems: 'center' }}>
             <UiEntity
-              uiTransform={{ width: 42, height: 56 }}
+              uiTransform={{ width: 36, height: 48 }}
               uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/logo.png' } }}
             />
             <UiEntity
-              uiTransform={{ width: 193, height: 28, margin: { left: 12 } }}
+              uiTransform={{ width: 177, height: 15, margin: { left: 12 } }}
               uiBackground={{ textureMode: 'stretch', texture: { src: 'assets/images/menus/wordmark.png' } }}
             />
             <UiEntity
@@ -412,6 +437,8 @@ export function GameModeMenu(props: {}) {
               }}
               uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
             >
+              {/* The LV badge, with the XP ring filling round its edge */}
+              <UiEntity uiTransform={{ width: 58, height: 58, flexShrink: 0 }}>
               <UiEntity
                 uiTransform={{
                   width: 58,
@@ -421,7 +448,7 @@ export function GameModeMenu(props: {}) {
                   alignItems: 'center',
                   borderRadius: 18,
                   borderWidth: 3,
-                  borderColor: { r: 0.161, g: 0.694, b: 0.898, a: 1 }
+                  borderColor: { r: 0.78, g: 0.863, b: 0.902, a: 1 }
                 }}
                 uiBackground={{ color: { r: 0.839, g: 0.949, b: 0.988, a: 1 } }}
               >
@@ -439,6 +466,11 @@ export function GameModeMenu(props: {}) {
                   textAlign="middle-center"
                   uiTransform={{ width: 50, height: 28 }}
                 />
+              </UiEntity>
+              <UiEntity
+                uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: 58, height: 58 }}
+                uiBackground={ringBackground('badge', ringNow())}
+              />
               </UiEntity>
               <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column', margin: { left: 14 } }}>
                 <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', justifyContent: 'space-between' }}>

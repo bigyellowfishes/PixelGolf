@@ -10,6 +10,10 @@ import { courseSurfaceAt } from './ballSim'
 // The countdown itself is on the range card. The server picks the target and rotates it every
 // 30 seconds for everyone (ledger/server.ts); in the tutorial it's the lesson target on its last
 // shot (effectiveHot). Hidden while nothing is hot.
+//
+// The tutorial (2026-11-03): until its hot target lesson, the same ring lies round the target it
+// asks you to aim at (TUTORIAL_TARGET, the SHOOT HERE target in tutorialVisuals.ts), in white, so
+// it's clear which hole is meant. When that target turns hot on the lesson, the ring turns gold.
 const RIM_TEXTURE = 'assets/hot/rim.png'
 
 // Model For Vegas Style Sky Light 
@@ -24,6 +28,10 @@ const MODEL = 'assets/Models/Ring/Ring.glb'
 const RIM_TEXTURE_FOR: { [colour: string]: string } = { Black: 'assets/hot/rim-black.png' }
 /** The glow's colour (gold). Any colour works: it's tinted in code. */
 const RIM_COLOUR = Color3.create(1, 0.76, 0.1)
+/** The tutorial's aim-here ring, before the target turns hot: white */
+const AIM_COLOUR = Color3.create(1, 1, 1)
+/** The target the tutorial asks you to shoot at (the same as TARGET_ZONE in tutorialVisuals.ts) */
+const TUTORIAL_TARGET = 'Orange'
 /**
  * The texture is a ring whose solid band sits at 81 to 90% of its half-width and fades out to
  * the edge. RIM_SPAN sets how far past the target's edge the texture reaches (1.2 = 20% wider),
@@ -62,15 +70,22 @@ const BOB_HEIGHT = 0.5
 const BOB_SECONDS = 5
 const SPIN_SPEED = 10
 
+/** The sky ring model (Ring.glb) is 15.6 m across its radius at scale 1 */
+const RING_MODEL_RADIUS = 15.625
+/** The sky ring's radius as a share of the target's, and the most it gets (m) */
+const RING_FIT = 1
+const RING_RADIUS_MAX = 25
+
 const HIDDEN = Vector3.create(0, -100, 0)
 
 let rimTexture = RIM_TEXTURE
+let rimColour = RIM_COLOUR
 
 function rimMaterial(rim: Entity, glow: number): void {
   Material.setPbrMaterial(rim, {
     texture: Material.Texture.Common({ src: rimTexture }),
-    albedoColor: Color4.create(RIM_COLOUR.r, RIM_COLOUR.g, RIM_COLOUR.b, 1),
-    emissiveColor: RIM_COLOUR,
+    albedoColor: Color4.create(rimColour.r, rimColour.g, rimColour.b, 1),
+    emissiveColor: rimColour,
     emissiveTexture: Material.Texture.Common({ src: rimTexture }),
     emissiveIntensity: glow,
     transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
@@ -98,6 +113,9 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
   })
 
   let shownZone = ''
+  let shownHot = false
+  /** The sky ring shows only over a hot target, not the tutorial's white aim ring */
+  let ringOn = false
   let showing = false
   let clock = 0
   let yaw = 0
@@ -105,9 +123,15 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
   let scale = Vector3.One()
 
   engine.addSystem((dt) => {
-    const zone = ZONE_OVERRIDE ? ZONE_OVERRIDE : effectiveHot()
-    if (zone !== shownZone) {
+    const hotZone = ZONE_OVERRIDE ? ZONE_OVERRIDE : effectiveHot()
+    // In the tutorial, before its hot lesson: the white ring round the target it asks for
+    const zone = hotZone || (tutorial.active ? TUTORIAL_TARGET : '')
+    const hot = !!hotZone
+    if (zone !== shownZone || hot !== shownHot) {
       shownZone = zone
+      shownHot = hot
+      rimColour = hot ? RIM_COLOUR : AIM_COLOUR
+      ringOn = hot
       const ent = zone ? zoneEntity(zone) : undefined
       const t = ent ? Transform.getOrNull(ent) : null
       if (!t) {
@@ -126,8 +150,11 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
         //
         const targetRadius = Math.min(Math.abs(t.scale.x), Math.abs(t.scale.z)) / 2
         const r = Math.min(SIZE_MAX, Math.max(SIZE_MIN, targetRadius * SIZE))
-        scale = Vector3.create(r, r, r)
-        base = Vector3.create(t.position.x, FLAG_TOP + FLAG_CLEARANCE + r, t.position.z)
+        // The sky ring: as wide as the target, standing on the ground round it (worked out below,
+        // once the grass height is known). It used to float 8 m up and wider than the target, so
+        // from the bays, high above, it looked as if it stood over a hole further back.
+        const across = Math.min(RING_RADIUS_MAX, targetRadius * RING_FIT) / RING_MODEL_RADIUS
+        scale = Vector3.create(across, r, across)
         // The rim's height: the highest real grass just outside the target's edge, round it
         const hole = courseSurfaceAt(x, z) ?? t.position.y
         let grass = hole
@@ -151,6 +178,9 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
         rt.position = Vector3.create(x, grass + RIM_LIFT, z)
         rt.rotation = Quaternion.multiply(t.rotation, Quaternion.fromEulerDegrees(90, 0, 0))
         rt.scale = Vector3.create(rx * 2 * RIM_SPAN, rz * 2 * RIM_SPAN, 1)
+        // The sky ring's foot on the grass (the model's base is 1 unit below its origin)
+        base = Vector3.create(x, grass + r - BOB_HEIGHT * 2, z)
+        if (!ringOn) Transform.getMutable(Ring).position = HIDDEN
         showing = true
         //console.log(`[hot] rim on ${zone} at ${(grass + RIM_LIFT).toFixed(1)} m`)
       }
@@ -168,7 +198,7 @@ export function setupHotTargetMarker(zoneEntity: (zone: string) => Entity | unde
     const wave = 0.5 + 0.5 * Math.sin((clock / period) * Math.PI * 2)
     rimMaterial(rim, low + (high - low) * wave)
     
-    //
+    if (!ringOn) return
     yaw = (((yaw + SPIN_SPEED * dt) % 360) + 360) % 360
     const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
     const tr = Transform.getMutable(Ring)

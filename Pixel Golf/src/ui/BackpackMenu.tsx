@@ -2,11 +2,9 @@
 import ReactEcs from '@dcl/sdk/react-ecs'
 import { UiEntity, Label } from '@dcl/sdk/react-ecs'
 import { useInteraction } from './interaction'
-import { PlayerStats } from './PlayerStats'
-import { profile, equipCosmetic, buyCosmetic, unlockLevel } from '../ledger/client'
+import { profile, equipCosmetic } from '../ledger/client'
 import { CATALOGUE, Cosmetic, CosmeticKind, HAT_COLOURS, HAT_STYLES, NO_HAT, itemById } from '../ledger/rules'
 import { openHatFit } from './HatFitPanel'
-import { AchievementsTab } from './AchievementsTab'
 import { CLUB_TYPES, ClubType } from '../club'
 import { getSelectedClubType, selectClub } from '../clubSelect'
 import { clubChangeAllowed } from '../game'
@@ -20,13 +18,13 @@ import { screenRoom } from './screenRoom'
 //   - Hat: pick a Pixel Golf hat, and Adjust fit to move or size it (ui/HatFitPanel.tsx, on the
 //     right of the screen so you can see your avatar; closing it comes back here)
 //   - Clubs: wedge, iron or driver, the same as keys 1, 2 and 3 (and only when they'd work)
-//   - Badges: your achievements (ui/AchievementsTab.tsx)
-//   - Stats: your Player Stats page
+// Badges and Stats moved to the Achievements menu, with the leaderboards (the trophy button,
+// ui/LeaderboardMenu.tsx), 2026-11-03.
 // It's a menu like the others: F closes it, and no shot starts while it's open (index.ts).
 // It shrinks to fit a smaller screen (a phone, or one held upright): the tabs narrow, the Balls
-// columns stack, the club cards shrink, and the Badges tab picks how many fit (screenRoom.ts).
+// columns stack and the club cards shrink (screenRoom.ts).
 
-export type BackpackTab = 'balls' | 'hat' | 'clubs' | 'badges' | 'stats'
+export type BackpackTab = 'balls' | 'hat' | 'clubs'
 export const state = { display: 'none' as 'flex' | 'none', tab: 'balls' as BackpackTab }
 
 const NAVY = { r: 0.118, g: 0.204, b: 0.259, a: 1 }
@@ -165,8 +163,9 @@ function clubCard(type: ClubType, w: number) {
 
 function wearHat(item: Cosmetic): void {
   if (profile.equipped.hat === item.id) return
-  if (profile.owned.indexOf(item.id) >= 0) equipCosmetic(item.id)
-  else buyCosmetic(item.id)
+  // Only hats you own: buying is done in the shop (hats cost Pixel Points), never by accident here
+  if (profile.owned.indexOf(item.id) < 0) return
+  equipCosmetic(item.id)
   playUi('ui_click')
 }
 
@@ -179,7 +178,7 @@ function hatSwatch(item: Cosmetic, rgb: { r: number; g: number; b: number }) {
       uiBackground={{ color: on ? PALE_BLUE : WHITE }}
       onMouseDown={() => wearHat(item)}
     >
-      <UiEntity uiTransform={{ width: on ? 16 : 18, height: on ? 16 : 18, borderRadius: 9 }} uiBackground={{ color: { ...rgb, a: unlockLevel() < item.level ? 0.3 : 1 } }} />
+      <UiEntity uiTransform={{ width: on ? 16 : 18, height: on ? 16 : 18, borderRadius: 9 }} uiBackground={{ color: { ...rgb, a: profile.owned.indexOf(item.id) >= 0 ? 1 : 0.25 } }} />
     </UiEntity>
   )
 }
@@ -236,6 +235,7 @@ function hatTab() {
           <Label font="sans-serif" fontSrc={FONT_BOLD} value="Adjust fit" fontSize={15} color={wearing ? WHITE : GREY} textAlign="middle-center" uiTransform={{ width: 200, height: 30 }} />
         </UiEntity>
         <Label font="sans-serif" fontSrc={FONT_REGULAR} value={wearing ? `Wearing the ${item!.name}` : 'No hat on'} fontSize={13} color={GREY} textAlign="middle-left" uiTransform={{ width: 318, height: 26, margin: { top: 8 } }} />
+        <Label font="sans-serif" fontSrc={FONT_REGULAR} value="Faded colours are in the shop." fontSize={12} color={GREY} textAlign="middle-left" uiTransform={{ width: 318, height: 20 }} />
       </UiEntity>
 
     </UiEntity>
@@ -258,7 +258,7 @@ export function BackpackMenu(props: {}) {
   const height = Math.min(HEIGHT, room.h - 24)
   const narrow = width < NARROW
   const pad = narrow ? 12 : 24
-  const tabW = Math.min(124, Math.floor((width - 16) / 5) - (narrow ? 6 : 12))
+  const tabW = Math.min(150, Math.floor((width - 16) / 3) - (narrow ? 6 : 12))
   // The room inside for the tab showing (less the frame, header, tabs and padding)
   const innerW = width - 8 - pad * 2
   const innerH = height - 8 - 64 - 64 - 18
@@ -272,6 +272,8 @@ export function BackpackMenu(props: {}) {
       <UiEntity
         uiTransform={{ positionType: 'absolute', position: { top: -1500, left: -2000 }, width: 6000, height: 4000, pointerFilter: 'block' }}
         uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+        // Clicking outside the panel (the backpack button included) closes it
+        onMouseDown={() => closeBackpack()}
       />
       <UiEntity
         uiTransform={{ width, height, flexDirection: 'column', borderRadius: 28, borderWidth: 4, borderColor: WHITE, overflow: 'hidden' }}
@@ -306,8 +308,6 @@ export function BackpackMenu(props: {}) {
           {tabButton('Balls', 'balls', tabW, narrow)}
           {tabButton('Hat', 'hat', tabW, narrow)}
           {tabButton('Clubs', 'clubs', tabW, narrow)}
-          {tabButton('Badges', 'badges', tabW, narrow)}
-          {tabButton('Stats', 'stats', tabW, narrow)}
         </UiEntity>
 
         {/* The tab showing */}
@@ -333,8 +333,6 @@ export function BackpackMenu(props: {}) {
               />
             </UiEntity>
           ) : null}
-          {state.tab === 'badges' ? <AchievementsTab width={innerW} height={innerH} /> : null}
-          {state.tab === 'stats' ? <PlayerStats /> : null}
         </UiEntity>
       </UiEntity>
     </UiEntity>

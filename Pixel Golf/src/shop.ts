@@ -13,7 +13,7 @@ import { forTouch } from './mobile'
 import { playUi } from './sfx'
 import { menuReopenBlocked } from './menuGuard'
 import { CosmeticKind } from './ledger/rules'
-import { tutorial, onRefused } from './ledger/client'
+import { tutorial, onRefused, onProfile } from './ledger/client'
 
 /**
  * The two shopkeepers, behind the shop counter at fixed spots (SHOP_NPCS position and facing).
@@ -256,6 +256,13 @@ export function setupShop(): void {
     if (!shop.open) return
     shop.notice = reason
     shop.noticeUntil = Date.now() + 5000
+  })
+  // Something bought in the shop: a little jingle (the ledger comes back with one more owned)
+  let ownedCount = -1
+  onProfile((p) => {
+    const n = p.owned.length
+    if (ownedCount >= 0 && n > ownedCount && shop.open) playUi('score_good')
+    ownedCount = n
   })
   SHOP_NPCS.forEach((npc, i) => spawnKeeper(npc, i))
   engine.addSystem(updateKeepers, undefined, 'shop-keepers')

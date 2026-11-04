@@ -1,5 +1,6 @@
 import { engine, Entity, Transform, AudioSource } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
+import { sfxLevel } from './audio'
 
 // Sound effects. The clips are in assets/sounds/.
 //
@@ -21,6 +22,8 @@ export type Sfx =
   | 'ui_select'
   | 'ui_open'
   | 'ui_close'
+  | 'flag_clank'
+  | 'ring_chime'
 
 const SOUND_DIR = 'assets/sounds/'
 
@@ -39,7 +42,9 @@ const VOLUME: Record<Sfx, number> = {
   ui_click: 0.45,
   ui_select: 0.5,
   ui_open: 0.45,
-  ui_close: 0.45
+  ui_close: 0.45,
+  flag_clank: 0.8,
+  ring_chime: 0.55
 }
 
 // A few sources of each kind, used in turn, so sounds can overlap
@@ -66,6 +71,10 @@ function nextSource(global: boolean): Entity {
 }
 
 function play(e: Entity, name: Sfx, global: boolean, volume: number, pitch: number): void {
+  // The Sound effects volume in Settings (Audio): switched off, nothing plays
+  const level = sfxLevel()
+  if (level <= 0) return
+  volume *= level
   AudioSource.createOrReplace(e, {
     audioClipUrl: SOUND_DIR + name + '.mp3',
     playing: true,

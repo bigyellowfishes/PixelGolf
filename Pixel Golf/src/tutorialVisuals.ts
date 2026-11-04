@@ -2,11 +2,11 @@ import {
   engine,
   Entity,
   Transform,
-  TextShape,
   Billboard,
   BillboardMode,
-  Font,
-  TextAlignMode,
+  MeshRenderer,
+  Material,
+  MaterialTransparencyMode,
   AvatarModifierArea,
   AvatarModifierType,
   PlayerIdentityData
@@ -17,7 +17,6 @@ import { getPlayer } from '@dcl/sdk/players'
 import { Game } from './game'
 import { tutorial, solo, leaveSoloBay, tutorialLesson } from './ledger/client'
 import { SHOP_NPC_IDS } from './shop'
-import { FONT_BOLD } from './fonts'
 
 /**
  * What the tutorial looks like, as opposed to how it runs (tutorial.ts).
@@ -71,11 +70,40 @@ const BOB_SECONDS = 2
 // and can see everyone again
 const SOLO_LEAVE_DISTANCE = 12
 
-// Pixel Golf blue with a white outline, like the menus' header tabs
-const MARKER_COLOUR = Color4.create(1, 1, 1, 1)
-const MARKER_OUTLINE = Color4.create(0.075, 0.533, 0.722, 1)
+// The words are a picture (2026-11-03), so they can glow: white Lato Bold with a Pixel Golf blue
+// outline and a soft halo, on a plane that turns to face you. 1024 x 256, the letters 44% of its
+// height, their foot 28% up from its bottom.
+const MARKER_IMAGE = 'assets/images/tutorial/shoot-here.png'
+const MARKER_ASPECT = 4
+const MARKER_LETTERS = 0.44
+const MARKER_FOOT = 0.28
+/** The glow pulses between these, once every MARKER_PULSE_SECONDS (like the hot target's ring) */
+const MARKER_GLOW_MIN = 1.2
+const MARKER_GLOW_MAX = 3
+const MARKER_PULSE_SECONDS = 1.2
 
 const HIDDEN = Vector3.create(0, -100, 0)
+
+// Where the tutorial and solo bays' private boxes are, for rangePrivacy.ts. The range's own hiding
+// area overlaps both bays, and it shows anyone at or behind the line of balls: where two areas
+// overlapped, that let players in the tutorial bay be seen (2026-11-04). The range area now asks
+// here first and keeps hidden anyone these boxes hide.
+type Box = { centre: Vector3; rotation: Quaternion; size: Vector3 }
+let tutorialBox: Box | null = null
+let soloBox: Box | null = null
+
+function inBox(b: Box, p: Vector3): boolean {
+  const rel = Vector3.create(p.x - b.centre.x, p.y - b.centre.y, p.z - b.centre.z)
+  const local = Vector3.rotate(rel, Quaternion.create(-b.rotation.x, -b.rotation.y, -b.rotation.z, b.rotation.w))
+  return Math.abs(local.x) <= b.size.x / 2 && Math.abs(local.y) <= b.size.y / 2 && Math.abs(local.z) <= b.size.z / 2
+}
+
+/** Whether the tutorial or solo bay's box hides this player standing here (everyone in the tutorial bay; the solo bay's own players) */
+export function hiddenInPrivateBay(address: string, p: Vector3): boolean {
+  if (tutorialBox && inBox(tutorialBox, p)) return true
+  if (soloBox && inBox(soloBox, p) && solo.players.indexOf(address.toLowerCase()) >= 0) return true
+  return false
+}
 
 export function setupTutorialVisuals(
   bay19: Game | undefined,
@@ -97,6 +125,7 @@ export function setupTutorialVisuals(
   const bayRotation = Quaternion.fromEulerDegrees(0, yaw, 0)
   const bayCentre = Vector3.create(tee.x - BAY_BACK, tee.y + BAY_HEIGHT / 2 - 1, tee.z)
   const baySize = Vector3.create(BAY_DEPTH, BAY_HEIGHT, BAY_WIDTH)
+  tutorialBox = { centre: bayCentre, rotation: bayRotation, size: baySize }
 
   const privacy = engine.addEntity()
   Transform.create(privacy, { position: bayCentre, rotation: bayRotation })
@@ -129,6 +158,7 @@ export function setupTutorialVisuals(
       position: Vector3.create(t20.x - BAY_BACK, t20.y + BAY_HEIGHT / 2 - 1, t20.z),
       rotation: Quaternion.fromEulerDegrees(0, yaw20, 0)
     })
+    soloBox = { centre: Vector3.create(t20.x - BAY_BACK, t20.y + BAY_HEIGHT / 2 - 1, t20.z), rotation: Quaternion.fromEulerDegrees(0, yaw20, 0), size: baySize }
     AvatarModifierArea.create(soloPrivacy, {
       area: baySize,
       excludeIds: [],
@@ -161,17 +191,27 @@ export function setupTutorialVisuals(
   const marker = engine.addEntity()
   Transform.create(marker, { position: HIDDEN })
   Billboard.create(marker, { billboardMode: BillboardMode.BM_Y })
-  TextShape.create(marker, {
-    text: '',
-    fontSize: 30,
-    font: Font.F_SANS_SERIF,
-    fontSrc: FONT_BOLD,
-    textColor: MARKER_COLOUR,
-    outlineColor: MARKER_OUTLINE,
-    outlineWidth: 0.2,
-    textAlign: TextAlignMode.TAM_BOTTOM_CENTER,
-    textWrapping: false
-  })
+  // The glowing words, sized once the target is known (below)
+  const words = engine.addEntity()
+  Transform.create(words, { parent: marker, scale: Vector3.Zero() })
+  MeshRenderer.setPlane(words)
+  const wordsTex = Material.Texture.Common({ src: MARKER_IMAGE })
+  const wordsGlow = (glow: number) =>
+    Material.setPbrMaterial(words, {
+      texture: wordsTex,
+      alphaTexture: wordsTex,
+      emissiveTexture: wordsTex,
+      emissiveColor: Color4.White(),
+      emissiveIntensity: glow,
+      transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND,
+      castShadows: false,
+      metallic: 0,
+      roughness: 1,
+      specularIntensity: 0
+    })
+  wordsGlow(MARKER_GLOW_MIN)
+  let wordsScale = Vector3.Zero()
+  let wordsLift = 0
   let markerBase: Vector3 | null = null
   let markerShown = false
   let clock = 0
@@ -245,8 +285,10 @@ export function setupTutorialVisuals(
       if (t) {
         const width = Math.max(Math.abs(t.scale.x), Math.abs(t.scale.z))
         const height = Math.min(MARKER_MAX, Math.max(MARKER_MIN, width * MARKER_SIZE))
-        // Letters are about 0.072 m tall per font size unit
-        TextShape.getMutable(marker).fontSize = height / 0.072
+        // The picture's size for letters this tall, its letters' foot at the marker
+        const planeH = height / MARKER_LETTERS
+        wordsScale = Vector3.create(planeH * MARKER_ASPECT, planeH, 1)
+        wordsLift = planeH / 2 - planeH * MARKER_FOOT
         markerBase = Vector3.create(t.position.x, FLAG_TOP + MARKER_CLEARANCE + BOB_HEIGHT, t.position.z)
       }
     }
@@ -254,11 +296,18 @@ export function setupTutorialVisuals(
     const showMarker = inTutorial && !tutorialLesson.hot
     if (showMarker !== markerShown) {
       markerShown = showMarker
-      TextShape.getMutable(marker).text = showMarker ? MARKER_TEXT : ''
+      const wt = Transform.getMutable(words)
+      wt.scale = showMarker ? wordsScale : Vector3.Zero()
+      wt.position = Vector3.create(0, wordsLift, 0)
     }
     if (showMarker && markerBase) {
       const bob = Math.sin((clock / BOB_SECONDS) * Math.PI * 2) * BOB_HEIGHT
       Transform.getMutable(marker).position = Vector3.create(markerBase.x, markerBase.y + bob, markerBase.z)
+      const wt = Transform.getMutable(words)
+      wt.scale = wordsScale
+      wt.position = Vector3.create(0, wordsLift, 0)
+      const wave = 0.5 + 0.5 * Math.sin((clock / MARKER_PULSE_SECONDS) * Math.PI * 2)
+      wordsGlow(MARKER_GLOW_MIN + (MARKER_GLOW_MAX - MARKER_GLOW_MIN) * wave)
     } else if (Transform.get(marker).position.y !== HIDDEN.y) {
       Transform.getMutable(marker).position = HIDDEN
     }

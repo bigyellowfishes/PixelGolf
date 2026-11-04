@@ -18,6 +18,7 @@ import {
   multiplierFloor,
   validBall,
   isAdminWallet,
+  isDeveloperWallet,
   RESET_CONFIRM,
   TUTORIAL_LEVEL,
   xpToReach
@@ -977,11 +978,12 @@ export function runLedger(): void {
     sendLedger(address, wallet)
   })
 
-  // Dev panel (admin only): the hot target, pretend players, the wind
+  // Dev panel (developers and admins: DEVELOPERS and ADMIN in rules.ts): the hot target, pretend
+  // players, the wind. Reset ledger (below) stays admins only.
   const adminOnly = (address: string | undefined): address is string => {
     if (!address) return false
-    if (isAdminWallet(address)) return true
-    void room.send('refused', { reason: 'Only admins can use the dev panel. Your wallet is not on the admin list.' }, { to: [address] })
+    if (isDeveloperWallet(address)) return true
+    void room.send('refused', { reason: 'Only developers can use the dev panel. Your wallet is not on the list.' }, { to: [address] })
     return false
   }
   room.onMessage('adminHot', (data, context) => {
@@ -1241,7 +1243,7 @@ export function runLedger(): void {
     }
     const wallet = await load(address)
     testers.add(address)
-    void room.send('redeemed', { ok: true, tester: true, message: 'Tester mode: everything is unlocked until you leave.' }, { to: [address] })
+    void room.send('redeemed', { ok: true, tester: true, message: 'Tester mode: level 50 and everything unlocked until you leave.' }, { to: [address] })
     sendLedger(address, wallet)
   })
 

@@ -80,6 +80,8 @@ import { afk, setupAfk } from './afk'
 import { setupMobileControls } from './mobile'
 import { setupClubSync } from './clubSync'
 import { showToast } from './ui/RangeHud'
+import { setupLogoHover } from './logoHover'
+import { ballBounce, ballRoll, ballStopped, setBallSoundZones } from './ballSounds'
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -256,11 +258,18 @@ function setupLedger(): void {
     showToast(`Level ${l.level}!${unlocked}`, 6)
   })
   onAward((a) => {
+    playUi('score_good')
     const parts = [a.xp > 0 ? `+${a.xp} XP` : '', a.points > 0 ? `+${a.points} Pixel Points` : ''].filter((x) => x)
     showToast(`${a.reason}  ${parts.join('  ')}`, 5)
   })
-  onBigRoll((r) => showToast(`${r.name} rolled x${r.roll}!`, 5))
-  onRefused((reason) => showToast(reason, 5))
+  onBigRoll((r) => {
+    playUi('ui_select')
+    showToast(`${r.name} rolled x${r.roll}!`, 5)
+  })
+  onRefused((reason) => {
+    playUi('score_miss', 0.6)
+    showToast(reason, 5)
+  })
   onLedgerReset((by) => showToast(`The ledger has been reset by ${by}. Everyone starts again from the tutorial.`, 8))
 
   // The floating 2X over whichever target is hot
@@ -333,16 +342,19 @@ function playShots(dt: number): void {
     b.pos.x = p.position.x
     b.pos.y = p.position.y
     b.pos.z = p.position.z
+    ballRoll(b.name, p, b.pos, dt * b.speed)
     b.rot.x = p.rotation.x
     b.rot.y = p.rotation.y
     b.rot.z = p.rotation.z
     b.rot.w = p.rotation.w
-    for (const impact of p.hitsUntil(b.clock)) {
-      playAt('ball_land', { x: b.pos.x, y: b.pos.y, z: b.pos.z }, Math.min(1, impact / 12))
-    }
+    // Bounces: a thud, a clank off a flag's pole, a chime the first time it lands in a ring (ballSounds.ts)
+    for (const impact of p.hitsUntil(b.clock)) ballBounce(b.name, p, b.pos, impact)
     drawBall(b)
     // At the end the ball stays put on its last keyframe until the game moves it
-    if (b.clock >= p.duration) b.player = null
+    if (b.clock >= p.duration) {
+      b.player = null
+      ballStopped(b.name)
+    }
   }
 }
 
@@ -377,6 +389,7 @@ function predictRoll(power: number): number {
 function makePhysicsBridge(b: BallRig): Physics {
   const stop = () => {
     b.player = null
+    ballStopped(b.name)
     b.sim = null
     b.onSimmed = null
   }
@@ -393,6 +406,7 @@ function makePhysicsBridge(b: BallRig): Physics {
     },
     freeze() {
       b.player = null
+      ballStopped(b.name)
     },
     simulate(launch, done) {
       // Start the roll from where the model is now, so the ball doesn't snap round
@@ -598,6 +612,9 @@ export function main() {
   // Other players can't walk into a bay someone holds (not the tutorial or solo bay)
   setupBayBarriers()
   setupRangePrivacy()
+  setupLogoHover()
+  // The ball's chime when it lands in a ring: the targets' scoring boxes, without the bunkers
+  setBallSoundZones(() => Object.entries(ScoreZones).filter(([k, e]) => !!e && !k.startsWith('Bunker')).map(([, e]) => e as Entity))
   // The plaza: the turning golf cart, the top three on the podium, and seats to sit on
   setupPlaza()
   // Pixel Golf hats on everyone wearing one (clothes.ts)

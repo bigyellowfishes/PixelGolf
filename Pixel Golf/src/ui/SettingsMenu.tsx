@@ -5,21 +5,22 @@ import { useInteraction } from './interaction'
 import { ballCamEnabled, orbitCamEnabled, promptsEnabled, toggleBallCam, toggleOrbitCam, togglePrompts } from '../game'
 import { playUi } from '../sfx'
 import { menuReopenBlocked } from '../menuGuard'
-import { amIAdmin, sendAdminReset, sendRedeem, onRedeemed, profile } from '../ledger/client'
+import { amIAdmin, amIDeveloper, sendAdminReset, sendRedeem, onRedeemed, profile } from '../ledger/client'
 import { toggleDevPanel, devPanel } from './DevPanel'
 import { forTouch } from '../mobile'
 import { FONT_BOLD, FONT_REGULAR } from '../fonts'
-import { audio, VOLUME_STEPS, toggleMusic, setMusicVolume, toggleVoice, setVoiceVolume } from '../audio'
+import { audio, VOLUME_STEPS, toggleMusic, setMusicVolume, toggleVoice, setVoiceVolume, toggleSfx, setSfxVolume, toggleCoo, setCooVolume } from '../audio'
 import { feed, toggleIgnoreFeed } from '../shotFeed'
+import { barrierView, toggleShowBarriers } from '../showBarriers'
 
 // The Settings panel, opened by the cog button on the range card (ui/RangeHud.tsx), in tabs:
 //   - Visual: Ball cam (only here now: key 1 picks the wedge), Orbit camera, Prompts, and Ignore
 //     notifications (the shot feed pills stop popping up: shotFeed.ts)
-//   - Audio: Music and Commentary, each with an on/off switch and a volume bar (audio.ts)
+//   - Audio: Music, Commentary, Sound effects and Cooer, each with an on/off switch and a volume bar (audio.ts)
 //   - Codes: Redeem a code. "Tester" unlocks everything in the shop for this visit (CODES in
 //     ledger/server.ts, which checks it)
-//   - Developer (admins only, ADMIN in ledger/rules.ts): the Dev panel, and Reset ledger, which
-//     takes two presses
+//   - Developer (developers and admins, DEVELOPERS and ADMIN in ledger/rules.ts): the Dev panel and
+//     Show barriers; and, for admins only, Reset ledger, which takes two presses
 
 export type SettingsTab = 'visual' | 'audio' | 'codes' | 'developer'
 
@@ -34,8 +35,10 @@ export interface State {
   promptsText: string
   ballCamLabel: string
   orbitCamLabel: string
-  /** Show the admin row. Only decides what's drawn: the server checks the wallet. */
+  /** Show the admin row (Reset ledger). Only decides what's drawn: the server checks the wallet. */
   isAdmin: boolean
+  /** Show the Developer tab (Dev panel, Show barriers): developers and admins. The server checks the wallet. */
+  isDeveloper: boolean
   /** The Reset button has been pressed once and is waiting for the second press. */
   resetArmed: boolean
   resetLabel: string
@@ -62,6 +65,7 @@ export const state: State = {
   ballCamLabel: 'On',
   orbitCamLabel: 'Off',
   isAdmin: false,
+  isDeveloper: false,
   resetArmed: false,
   resetLabel: 'Reset',
   buttonDisplay: 'flex',
@@ -166,10 +170,10 @@ function soundRow(key: string, title: string, on: boolean, step: number, onToggl
       key={key}
       uiTransform={{
         width: '100%',
-        height: 88,
+        height: 76,
         flexDirection: 'row',
         alignItems: 'center',
-        margin: { top: 14 },
+        margin: { top: 10 },
         padding: { left: 20, right: 18 },
         borderRadius: 20,
         borderWidth: 2,
@@ -260,8 +264,9 @@ export function SettingsMenu(props: {}) {
   state.promptsLabel = promptsEnabled ? 'On' : 'Off'
   state.promptsText = 'Instructions on screen, like how to set your power. The tutorial always shows them.'
   state.isAdmin = amIAdmin()
+  state.isDeveloper = amIDeveloper()
   // The Developer tab is only there for admins
-  if (state.tab === 'developer' && !state.isAdmin) state.tab = 'visual'
+  if (state.tab === 'developer' && !state.isDeveloper) state.tab = 'visual'
   state.resetArmed = Date.now() < resetArmedUntil
   state.resetLabel = state.resetArmed ? 'Sure?' : 'Reset'
   state.ballCamText = 'Follow the ball after each shot.'
@@ -422,6 +427,8 @@ export function SettingsMenu(props: {}) {
         <UiEntity
           uiTransform={{ positionType: 'absolute', position: { top: -1500, left: -2000 }, width: 6000, height: 4000, pointerFilter: 'block' }}
           uiBackground={{ color: { r: 0, g: 0, b: 0, a: 0.35 } }}
+          // Clicking outside the panel (the cog included) closes it
+          onMouseDown={() => closeSettings({ state, props: {} })}
         />
         <UiEntity
           uiTransform={{
@@ -483,7 +490,7 @@ export function SettingsMenu(props: {}) {
             {tabButton('Visual', 'visual', visualTab)}
             {tabButton('Audio', 'audio', audioTab)}
             {tabButton('Codes', 'codes', codesTab)}
-            {state.isAdmin ? tabButton('Developer', 'developer', developerTab) : null}
+            {state.isDeveloper ? tabButton('Developer', 'developer', developerTab) : null}
           </UiEntity>
 
           {/* Rows */}
@@ -673,6 +680,8 @@ export function SettingsMenu(props: {}) {
             <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: -14 }, display: state.tab === 'audio' ? 'flex' : 'none' }}>
               {soundRow('music', 'Music', audio.musicOn, audio.musicVol, toggleMusic, setMusicVolume)}
               {soundRow('voice', 'Commentary', audio.voiceOn, audio.voiceVol, toggleVoice, setVoiceVolume)}
+              {soundRow('sfx', 'Sound effects', audio.sfxOn, audio.sfxVol, toggleSfx, setSfxVolume)}
+              {soundRow('coo', 'Cooer coo', audio.cooOn, audio.cooVol, toggleCoo, setCooVolume)}
             </UiEntity>
 
             {/* ---- Codes ---- */}
@@ -734,7 +743,7 @@ export function SettingsMenu(props: {}) {
               <Label
                 font="sans-serif"
                 fontSrc={FONT_REGULAR}
-                value="Tester mode is on: everything in the shop is unlocked until you leave."
+                value="Tester mode is on: you're level 50 and the whole shop is unlocked until you leave."
                 fontSize={13}
                 textWrap="wrap"
                 color={GREY}
@@ -744,7 +753,37 @@ export function SettingsMenu(props: {}) {
             </UiEntity>
 
             {/* ---- Developer (admins only) ---- */}
-            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: -14 }, display: state.tab === 'developer' && state.isAdmin ? 'flex' : 'none' }}>
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', margin: { top: -14 }, display: state.tab === 'developer' && state.isDeveloper ? 'flex' : 'none' }}>
+            {/* Show barriers: draws every invisible wall (showBarriers.ts) */}
+            <UiEntity
+              uiTransform={{ width: '100%', height: 88, flexDirection: 'row', alignItems: 'center', margin: { top: 14 }, padding: { left: 20, right: 18 }, borderRadius: 20, borderWidth: 2, borderColor: EDGE }}
+              uiBackground={{ color: WHITE }}
+            >
+              <UiEntity uiTransform={{ flexGrow: 1, flexDirection: 'column' }}>
+                <Label font="sans-serif" fontSrc={FONT_BOLD} value="Show barriers" fontSize={20} color={NAVY} textAlign="middle-left" uiTransform={{ width: '100%', height: 28 }} />
+                <Label
+                  font="sans-serif"
+                  fontSrc={FONT_REGULAR}
+                  value="Draws every invisible wall (model colliders) and the bay boxes that hide players (red)."
+                  fontSize={13}
+                  textWrap="wrap"
+                  color={GREY}
+                  textAlign="top-left"
+                  uiTransform={{ width: 330, height: 40, margin: { top: 4 } }}
+                />
+              </UiEntity>
+              <Label font="sans-serif" fontSrc={FONT_REGULAR} value={barrierView.on ? 'On' : 'Off'} fontSize={14} color={GREY} textAlign="middle-right" uiTransform={{ width: 36, height: 38, margin: { right: 10 } }} />
+              <UiEntity
+                uiTransform={{ width: 76, height: 38, flexDirection: 'row', justifyContent: barrierView.on ? 'flex-end' : 'flex-start', alignItems: 'center', padding: { left: 4, right: 4 }, borderRadius: 19 }}
+                uiBackground={{ color: barrierView.on ? GREEN : OFF }}
+                onMouseDown={() => {
+                  toggleShowBarriers()
+                  playUi('ui_click')
+                }}
+              >
+                <UiEntity uiTransform={{ width: 30, height: 30, borderRadius: 15 }} uiBackground={{ color: WHITE }} />
+              </UiEntity>
+            </UiEntity>
 
             {/* Admin: the dev panel (hot target, pretend players, wind). Only drawn for admins */}
             <UiEntity
@@ -758,12 +797,12 @@ export function SettingsMenu(props: {}) {
                 borderRadius: 20,
                 borderWidth: 2,
                 borderColor: { r: 0.773, g: 0.192, b: 0.192, a: 1 },
-                display: state.isAdmin ? 'flex' : 'none'
+                display: state.isDeveloper ? 'flex' : 'none'
               }}
               uiBackground={{ color: { r: 1, g: 1, b: 1, a: 1 } }}
             >
               <Label font="sans-serif" fontSrc={FONT_BOLD}
-                value="Dev panel (admin)"
+                value="Dev panel"
                 fontSize={20}
                 color={{ r: 0.773, g: 0.192, b: 0.192, a: 1 }}
                 textAlign="middle-left"
